@@ -1,0 +1,35 @@
+{
+	"pages": [
+		{
+			"path": "pages/index/index",
+			"style": {
+				"navigationBarTitleText": "武汉公交信息实时查询",
+				"navigationStyle": "custom"
+			}
+		},
+		{
+			"path": "pages/line/line",
+			"style": {
+				"navigationBarTitleText": "线路详情"
+			}
+		},
+		{
+			"path": "pages/map/map",
+			"style": {
+				"navigationBarTitleText": "实时车辆"
+			}
+		},
+		{
+			"path": "pages/settings/settings",
+			"style": {
+				"navigationBarTitleText": "地图服务设置"
+			}
+		}
+	],
+	"globalStyle": {
+		"navigationBarTextStyle": "white",
+		"navigationBarTitleText": "武汉公交信息实时查询",
+		"navigationBarBackgroundColor": "#0b1020",
+		"backgroundColor": "#0b1020"
+	}
+}
