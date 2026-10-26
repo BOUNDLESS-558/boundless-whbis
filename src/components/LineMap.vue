@@ -97,6 +97,31 @@
             :stroke-width="b.selected ? 3 : 2.2"
           />
         </g>
+        <!-- 全市线网走向：远景按方向色合并成两条巨路径，近景逐条；始终在车点层之下 -->
+        <path
+          v-for="r in cityNetPaths"
+          :key="'cn' + r.key"
+          :d="r.d"
+          fill="none"
+          :stroke="r.color"
+          :stroke-width="r.w"
+          :opacity="r.op"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        />
+        <!-- 全市实时分布：速度分色车点 + 像素网格聚合团（仅在其它图层之上、线网之下） -->
+        <g v-for="d in cityDots" :key="'ct' + d.key" style="cursor: pointer" @click="onCityDotTap(d)">
+          <circle v-if="d.located" class="bus-pulse" :cx="d.x" :cy="d.y" :r="d.r" fill="none" :stroke="d.color" stroke-width="2.4" />
+          <circle :cx="d.x" :cy="d.y" :r="d.r + 6" :fill="d.color" opacity="0.18" />
+          <circle
+            :cx="d.x"
+            :cy="d.y"
+            :r="d.r"
+            :fill="d.color"
+            stroke="#ffffff"
+            :stroke-width="d.bus ? 1.8 : 2.4"
+          />
+        </g>
       </svg>
       <!-- 站名 / 车号文字：SVG 里的 <text> 会被 uni-app 编译成 uni-text 而无法渲染，故用 HTML 层叠加 -->
       <view class="label-layer">
@@ -119,14 +144,37 @@
         >
           <text>{{ b.label }}</text>
         </view>
+        <!-- 聚合团的车辆数：SVG 里的 <text> 渲染不出来，同样走 HTML 层 -->
+        <view
+          v-for="c in cityCounts"
+          :key="'cc' + c.key"
+          class="city-count"
+          :style="{ left: c.x + 'px', top: c.y + 'px' }"
+        >
+          <text>{{ c.n }}</text>
+        </view>
+        <!-- 全市近景的自编号标签（只在缩放门槛以上出现，且做过碰撞避让） -->
+        <view
+          v-for="t in cityTags"
+          :key="'tg' + t.key"
+          class="city-tag"
+          :class="{ sel: t.sel }"
+          :style="{ left: t.x + 'px', top: t.y + 'px', color: t.color }"
+        >
+          <text>{{ t.text }}</text>
+        </view>
       </view>
       <!-- 空态提示（不拦截手势） -->
-      <view class="canvas-empty" v-if="!svgStops.length && !svgBuses.length">
+      <view class="canvas-empty" v-if="!cityOn && !svgStops.length && !svgBuses.length">
         <text class="empty-big">🚌</text>
         <text class="empty-txt">{{ lineNo ? '正在加载线路走向…' : '输入线路号查询，即可绘制走向与在运车辆' }}</text>
       </view>
-      <!-- 图例 -->
-      <view class="schematic-legend">
+      <view class="canvas-empty" v-else-if="cityOn && !cityBusy && !cityDots.length">
+        <text class="empty-big">🌐</text>
+        <text class="empty-txt">{{ cityFilterNo ? '筛选「' + cityFilterNo + '」没有匹配的车辆' : '快照里没有车辆（可能已收班，点 ↻ 重扫试试）' }}</text>
+      </view>
+      <!-- 图例（线路态：上下行走向；全市态换成下面的车速 + 线网图例） -->
+      <view class="schematic-legend" v-if="!cityOn">
         <text class="legend-item"><text class="ln up"></text>上行走向</text>
         <text class="legend-item"><text class="ln down"></text>下行走向</text>
         <text class="legend-item"><text class="dot stop"></text>站点 / 车辆</text>
@@ -137,14 +185,12 @@
          触屏无 hover，单击车图标直接看详情浮窗 -->
     <view class="bus-hover" v-if="hoverTip" :style="{ left: hoverTip.x + 'px', top: hoverTip.y + 'px' }">
       <text class="bh-no">{{ hoverTip.no || '…' }}</text>
+      <text class="bh-line" v-if="hoverTip.line">{{ hoverTip.line }}</text>
     </view>
 
     <!-- 左上角控制卡：搜索 / 主操作 / 视图工具 / 方向与线路，全部收进一张玻璃卡片，
          区内用细分割线断开 —— 之前四个独立胶囊各自带阴影，浮在地图上分不出层级 -->
     <view class="ctrl">
-      <!-- ⓪ 设置齿轮：常驻卡片右上角（绝对定位，不占行） -->
-      <view class="ctrl-cfg" @click="goSettings" title="地图服务设置">⚙</view>
-
       <!-- ◎ 宿主注入的首块（首页地图视图：视图分段 + 线路搜索联想）。
          顶栏卡不再浮在地图外面，而是并入这张控制卡，与方向行 / 视图工具行共用一个卡壳 -->
       <slot name="top"></slot>
@@ -169,9 +215,9 @@
       <view class="ctrl-div" v-if="!embedded"></view>
 
       <!-- ② 方向与线路：直接选方向 + 当前线路号 + 营运公司徽标（必须单行）
-           嵌入态此行是卡片首行，右侧让位给齿轮（pad-cfg）；
-           实时车辆挂载即自动加载，刷新统一走车辆面板的 ↻/间隔下拉，不再放「一键查询」按钮 -->
-      <view class="ctrl-dir" :class="{ 'pad-cfg': embedded && !hasTopSlot }">
+           实时车辆挂载即自动加载，刷新统一走车辆面板的 ↻/间隔下拉，不再放「一键查询」按钮。
+           全市公交视图下整行隐藏：上下行属于「当前这一条线」，与全市线网不是一个作用域 -->
+      <view class="ctrl-dir" v-if="!cityOn">
         <view class="dir-tab" :class="{ active: dirFilter === 2 }" @click="setDirView(2)">全部</view>
         <view class="dir-tab up" :class="{ active: dirFilter === 0 }" @click="setDirView(0)">上行</view>
         <view class="dir-tab down" :class="{ active: dirFilter === 1 }" @click="setDirView(1)">下行</view>
@@ -198,15 +244,74 @@
       <view class="ctrl-view">
         <view class="tool-btn sq" @click="zoomBy(0.6)" title="放大">＋</view>
         <view class="tool-btn sq" @click="zoomBy(-0.6)" title="缩小">－</view>
-        <view class="tool-btn sm" @click="resetView" title="全览整条线路">⤢ 全览</view>
+        <view class="tool-btn sm" @click="resetView" :title="cityOn ? '全览全市在运车辆' : '全览整条线路'">⤢ 全览</view>
         <view class="tool-btn sm" :class="{ on: showStopLabels }" @click="toggleLabels">站名</view>
         <view class="tool-btn sm" v-if="!useMap" :class="{ on: showBaseMap }" @click="toggleBaseMap">底图</view>
       </view>
-      <view class="view-alert" v-if="routeAlert">{{ routeAlert }}</view>
+      <view class="view-alert" v-if="routeAlert && !cityOn">{{ routeAlert }}</view>
+
+      <!-- 全市公交区：指标区（数字重 / 标签轻）+ 查线路 + 查车 + 拉取操作。
+           只在全市视图出现，不跟线路态的视图工具行抢位置；卡片加高是安全的（fitRect 读实测 bottom） -->
+      <block v-if="cityOn">
+        <view class="ctrl-div"></view>
+        <view class="ctrl-city">
+          <view class="cc-figs">
+            <view class="cc-fig">
+              <text class="f-num">{{ cityFig.count }}</text>
+              <text class="f-lab">辆在运</text>
+            </view>
+            <view class="cc-fig">
+              <text class="f-num">{{ cityFig.lines }}</text>
+              <text class="f-lab">条线路</text>
+            </view>
+            <view class="cc-fig">
+              <text class="f-num">{{ cityFig.main }}</text>
+              <text class="f-sub" v-if="cityFig.sub">{{ cityFig.sub }}</text>
+              <text class="f-lab">{{ cityFig.lab }}</text>
+            </view>
+            <!-- 已筛选某条线：不再占掉一个整按钮位，挂在指标末尾一枚小徽标上 -->
+            <view class="cc-chip" v-if="cityFilterNo" :title="'只看 ' + cityFilterNo + ' 路，点 ✕ 看回全市'">
+              <text class="chip-txt">已筛选 {{ cityFilterNo }}</text>
+              <text class="chip-x" @click="clearCityQuery">✕</text>
+            </view>
+          </view>
+          <view class="cc-meta">
+            <text class="cm-item">{{ cityStampText }} · {{ cityNetNote }}</text>
+          </view>
+          <text class="cc-warn" v-if="cityWarnText">⚠ {{ cityWarnText }}</text>
+          <view class="cc-bar" v-if="cityBusy"><view class="cc-bar-in" :style="{ width: cityProgress + '%' }"></view></view>
+        </view>
+        <view class="ctrl-city-row">
+          <input class="cc-input" v-model="cityQueryNo" type="text" placeholder="线路号，如 578 / 电1" placeholder-class="cc-ph" confirm-type="search" @confirm="cityQueryLine" />
+          <view class="cc-btn" @click="cityQueryLine">查线路</view>
+        </view>
+        <view class="ctrl-city-row">
+          <input class="cc-input" v-model="cityFindNo" type="text" placeholder="自编号，如 3240" placeholder-class="cc-ph" confirm-type="search" @confirm="cityFind" />
+          <view class="cc-btn" @click="cityFind">查车</view>
+          <view class="cc-btn ghost" :class="{ on: cityShowOrgId }" title="近景给每辆车标出自编号" @click="toggleCityTags">自编号</view>
+        </view>
+        <view class="ctrl-city-row">
+          <view class="cc-btn ghost" v-if="!cityBusy" :title="'重新拉取全网（约 ' + cityCost + ' 个请求）'" @click="runCity(true)">↻ 重扫</view>
+          <view class="cc-btn ghost" v-else title="中止本轮拉取（保留已扫到的部分结果）" @click="cancelCity">✕ 中止</view>
+          <view class="cc-btn ghost" :class="{ on: cityFollow > 0 }" :title="cityFollowTitle" @click="cycleCityFollow">{{ cityFollowLabel }}</view>
+        </view>
+      </block>
     </view>
 
-    <!-- 右侧栏：实时车辆面板在上，发车时刻表面板独立挂在它下方（两张卡各自成块，不共用一个面板壳） -->
-    <view class="side-col">
+    <!-- 全市图例：线网走向 + 车速分档，两种渲染模式共用，贴左下角（线路态的走向图例此时已隐藏） -->
+    <view class="city-legend" v-if="cityOn">
+      <text class="cl-head">全市线网 / 车速 km/h</text>
+      <text class="cl-item"><text class="cl-line up"></text>上行走向</text>
+      <text class="cl-item"><text class="cl-line down"></text>下行走向</text>
+      <text class="cl-item" v-for="(bnd, i) in cityBands" :key="'cb' + i">
+        <text class="cl-dot" :style="{ background: bnd.color }"></text>{{ bnd.label }}
+      </text>
+      <text class="cl-tip">点车点看详情 · 点数字团放大</text>
+    </view>
+
+    <!-- 右侧栏：实时车辆面板在上，发车时刻表面板独立挂在它下方（两张卡各自成块，不共用一个面板壳）。
+         全市态整栏隐藏：这里的内容属于「当前这一条线」，与全市分布不是一个作用域，且要把画面让给车点 -->
+    <view class="side-col" v-if="!cityOn">
       <!-- 实时车辆面板（可折叠，列表随视角方向过滤） -->
       <view class="panel" :class="{ collapsed: panelCollapsed }">
         <view class="panel-header">
@@ -243,7 +348,8 @@
           <text class="pt-hint">{{ refreshSec > 0 ? '自动刷新中' : '仅点 ↻ 时拉取' }}</text>
         </view>
         <view class="panel-body" v-show="!panelCollapsed">
-          <scroll-view class="bus-list" scroll-y v-if="shownBuses.length">
+          <!-- 普通 view + overflow-y 自己滚：不用 <scroll-view>，它在 flex 限高下内层会涨到内容高（宿主 overflow 可视），车一多就画到卡外面 -->
+          <view class="bus-list" v-if="shownBuses.length">
             <view class="bus-item" v-for="(bus, i) in shownBuses" :key="bus.dir + '-' + i" @click="selectBus(bus)">
               <view class="bus-left">
                 <!-- ★ 自编号（由 MD5 加密值还原，如 3240）+ 方向徽标 -->
@@ -258,7 +364,7 @@
                 <view class="bus-time">🕐 {{ bus.time }}</view>
               </view>
             </view>
-          </scroll-view>
+          </view>
           <view class="empty" v-else>当前{{ dirFilterLabel === '全部' ? '' : dirFilterLabel }}没有在线车辆</view>
         </view>
       </view>
@@ -286,7 +392,7 @@
       >
         <view class="sheet-title">
           <text class="sheet-grip">⣿</text>
-          <text class="sheet-line">{{ lineName }}</text>
+          <text class="sheet-line">{{ sheetTitle }}</text>
           <text class="sheet-dir" :class="'d' + selectedBus.dir">{{ selectedBus.dir === 0 ? '上行' : '下行' }}</text>
         </view>
         <view class="sheet-actions">
@@ -299,6 +405,7 @@
           <view class="sheet-close" @click.stop="closeSheet" title="关闭">✕</view>
         </view>
       </view>
+      <view class="sheet-row" v-if="cityOn"><text class="sk">所属线路</text><text class="sv">{{ selectedBus.no }} 路 · {{ selectedBus.dir === 0 ? '上行' : '下行' }}</text></view>
       <view class="sheet-row"><text class="sk">所属营运公司</text><text class="sv">{{ busCompanyText(selectedBus) }}</text></view>
       <view class="sheet-row"><text class="sk">自编号</text><text class="sv">{{ selectedBus.orgId || '未知（编号字典还原中…）' }}</text></view>
       <view class="sheet-row"><text class="sk">车速</text><text class="sv">{{ selectedBus.gpsSpeed }} km/h</text></view>
@@ -307,6 +414,8 @@
       <view class="sheet-row"><text class="sk">经纬度（GCJ-02）</text><text class="sv">{{ selectedBus.lng }}, {{ selectedBus.lat }}</text></view>
       <view class="sheet-btns">
         <view class="sheet-btn" @click="focusBus(selectedBus)" title="居中并把地图放到最大，精确查看这辆车">📍 在地图上定位</view>
+        <!-- 全市态下的出口：从一辆车跳到它所属的线路（看得到走向、站点与同线其他车） -->
+        <view class="sheet-btn go" v-if="cityOn && selectedBus.code" @click="openCityLine(selectedBus)" :title="'切换到 ' + selectedBus.no + ' 路地图'">🗺 打开 {{ selectedBus.no }} 路</view>
       </view>
     </view>
 
@@ -323,6 +432,11 @@ import { fetchRealTime, fetchLine, decryptBusId, onBusIdReady } from '../utils/a
 import { fetchRoadRoute } from '../utils/osrm.js'
 import { APP_CONFIG, buildLineCode, useNativeMap } from '../config.js'
 import { assetUrl } from '../utils/asset.js'
+import {
+  citySweepCost, sweepCity, loadSnapshot, loadLastSnapshot, snapshotAge,
+  findBusByOrgId, refreshOrgIds, clusterPoints, SPEED_BANDS, CITY_FRESH_MS,
+  cityWarned, markCityWarned, loadCityNet, netSearchLines, bboxIntersects,
+} from '../utils/cityBus.js'
 import LinePlan from './LinePlan.vue'
 
 // —— 方向配色（全站统一）：上行 = 青蓝，下行 = 玫红 ——
@@ -338,6 +452,33 @@ const DIR_STYLE = {
 // 刷新间隔选项（秒）：0 = 手动刷新，其余为自动刷新周期。选择结果持久化，下次进地图页沿用。
 const REFRESH_OPTS = [0, 15, 20, 30]
 const REFRESH_KEY = 'whbis:map-refresh-sec'
+// —— 全市实时分布 ——
+// 自动跟随档位（分钟）：0 = 手动。一轮扫描 ≈ 1535 个请求（生产环境全部走 Worker 反代），
+// 所以不给 15/30 秒这种线路态档位，最低 5 分钟且默认关闭，配额代价写在按钮提示里。
+const CITY_FOLLOW_OPTS = [0, 5, 15, 30]
+const CITY_FOLLOW_KEY = 'whbis:city-follow-sec'
+// 聚合网格边长（px）：原生 marker 是 DOM 节点，成本高→网格稀一点；自绘走 SVG，可以密一点
+const CITY_CELL_NATIVE = 52
+const CITY_CELL_SVG = 34
+// 放大到该级别以上就不再聚合（视野里本来没几辆车，聚合反而遮住个体）
+const CITY_CLUSTER_MIN_ZOOM = 15
+// 原生 marker id 分段：站点 5000~6999、本线车辆 20000/30000 段，全市车点用 5 万/6 万段避开
+const CITY_DOT_ID = 50000
+const CITY_CLUSTER_ID = 60000
+// —— 全市线网底图的绘制预算 ——
+// 远景（整个武汉市）1187 个方向逐条画会生成 1100+ 个 <path>，每次拖帧都要重建一遍 vnode；
+// 低于该缩放时按方向色合并成两条巨型 path（全市尺度下网络靠密度表达，单条颜色本来也看不清）
+const CITY_NET_FUSE_ZOOM = 12.6
+// 近景逐条绘制时的方向数上限（视口裁剪后本就剩不了几条，再多彩虹也会糊成一团）
+const CITY_NET_MAX_PATHS = 260
+// 单次渲染的投影点预算：超了就按整条线等距抽稀（远景本就看不出弯折）
+const CITY_NET_MAX_PTS = 16000
+// 原生 <map> 的折线条数上限：uni-h5 每条折线都是独立覆盖物，200 条已明显吃力
+const CITY_NET_MAX_NATIVE = 180
+// 自编号标签门槛：全市 1300 辆车全标会糊屏，缩放到近景才标且有数量上限
+const CITY_TAG_MIN_ZOOM = 13.4
+const CITY_TAG_MIN_SCALE = 15.4
+const CITY_TAG_MAX = 120
 const CN_ORG = ['', '第一', '第二', '第三', '第四', '第五', '第六', '第七', '第八', '第九']
 // 营运公司：由自编号首位推断（1 → 武汉公交集团第一公司）
 function orgCompanyOf(b) {
@@ -412,6 +553,8 @@ export default {
     embedded: { type: Boolean, default: false },
     // 宿主已把地图铺满整屏时不再需要「全屏查看」键（首页地图视图即如此）
     fsEnabled: { type: Boolean, default: true },
+    // 全市公交视图由宿主顶部分段驱动（判据只留在宿主一处，组件不再自带开关）
+    cityMode: { type: Boolean, default: false },
   },
   data() {
     return {
@@ -473,10 +616,48 @@ export default {
       isFullscreen: false,
       // 刚定位过的车辆：在自绘图上画一圈扩散波，告诉用户“就是这一个点”
       locatedBus: null,
+      // 全市快照内容被就地改写过的计数（refreshOrgIds 不走响应式 setter，靠它推 marker 重算）
+      cityDirty: 0,
+      // —— 全市实时分布（快照 = 分布图数据源 + 自编号反查索引）——
+      cityOn: false,
+      // 扫描进行中（按钮上显百分比，并换成「取消」）
+      cityBusy: false,
+      cityProgress: 0,
+      // 扫描进行中的实时计数（仅用于统计行文案）
+      cityFound: 0,
+      // 快照里的车辆（已按 busId 去重）
+      cityBuses: [],
+      // 本轮扫描元信息：{ at, ms, total, done, failed, lines, count, partial }
+      cityMeta: null,
+      // 按线路号筛选（缩小到某条线的车，不重新请求）
+      cityFilterNo: '',
+      // 自编号查车输入框
+      cityFindNo: '',
+      // 自动跟随间隔（分钟，0=手动）
+      cityFollow: 0,
+      // 自绘模式下的全市圆点/聚合团（屏幕坐标，由 renderSchematic 算出）
+      cityDots: [],
+      // 全市线网走向路径（自绘模式）：[{ key, d, color, w, op }]
+      cityNetPaths: [],
+      // 全市自编号标签（自绘模式，走 HTML 标签层）：[{ key, x, y, text, color, sel }]
+      cityTags: [],
+      // 线网统计（只放文案要用的字段；几何本体挂 this._net，5w 个数字进 data 会拖慢每帧）
+      cityNetStat: null,
+      cityNetBusy: false,
+      // 线网就绪计数：_net 非响应式，靠它推原生折线重算
+      cityNetTick: 0,
+      // 线路号查询输入（点「查线路」才落到 cityFilterNo，避免边打字边重排千条走向）
+      cityQueryNo: '',
+      // 线路号查询命中线网时的条目（统计行要显示它的方向数/站数）
+      cityHitLine: null,
+      // 近景是否给单车标自编号
+      cityShowOrgId: true,
+      // 原生视野变更计数：_view 是普通属性（非响应式），全市聚合要靠它触发重算
+      viewTick: 0,
     }
   },
   computed: {
-    // 宿主是否注入了 top 插槽：决定首块让位齿轮的是插槽内容还是方向行
+    // 宿主是否注入了 top 插槽
     hasTopSlot() {
       return !!this.$slots.top
     },
@@ -516,8 +697,81 @@ export default {
       if (failed) return '贴路服务暂不可用，当前为站间直连；可点“刷新”重试'
       return ''
     },
+    // 详情窗标题：全市态显示这辆车自己的线路，线路态显示当前线路
+    sheetTitle() {
+      if (this.cityOn) return (this.selectedBus && this.selectedBus.no) || ''
+      return this.lineName
+    },
+    // —— 全市实时分布 ——
+    // 快照里经线路筛选后的车辆（纯本地过滤，不发请求）
+    cityShown() {
+      if (!this.cityOn) return []
+      const q = String(this.cityFilterNo || '').trim()
+      if (!q) return this.cityBuses
+      return this.cityBuses.filter((b) => String(b.no).includes(q) || String(b.lineName || '').includes(q))
+    },
+    // 聚合团的车辆数标签：SVG 里的 <text> 渲染不出来，单独走 HTML 标签层
+    cityCounts() {
+      return this.cityDots.filter((d) => !d.bus)
+    },
+    cityBands() {
+      return SPEED_BANDS
+    },
+    // 一轮扫描要发多少个请求（按钮提示里写清楚代价）
+    cityCost() {
+      return citySweepCost()
+    },
+    // 统计区的三个指标格：把一句话拆成「数字 + 标签」，扫描中把方向格换成实时进度
+    cityFig() {
+      const m = this.cityMeta
+      if (this.cityBusy) {
+        return { count: this.cityFound, lines: m ? m.lines : '—', main: this.cityProgress + '%', sub: '', lab: '扫描进度' }
+      }
+      if (!m) return { count: '—', lines: '—', main: '—', sub: '', lab: '个方向' }
+      return { count: m.count, lines: m.lines, main: m.done, sub: '/ ' + m.total, lab: '个方向' }
+    },
+    // 时间戳只留“什么时候”，耗时是开发指标（已写在完成 toast 里），不占用户一行
+    cityStampText() {
+      const m = this.cityMeta
+      if (!m) return '尚未拉取'
+      const at = new Date(m.at)
+      const hh = (n) => String(n).padStart(2, '0')
+      return `${hh(at.getHours())}:${hh(at.getMinutes())}:${hh(at.getSeconds())} 更新`
+    },
+    // 需要用户动手的异常单独成行（琥珀色），不再混在统计里被当成普通数字扫过去
+    cityWarnText() {
+      const m = this.cityMeta
+      if (!m) return '点「↻ 重扫」拉取全网在运车辆'
+      const bits = []
+      if (m.partial) bits.push(`本轮已中止，${m.failed || 0} 个方向未完成`)
+      const age = Math.round(snapshotAge(m) / 60000)
+      if (age >= 5) bits.push(`快照已过 ${age} 分钟，位置仅供参考`)
+      return bits.join(' · ')
+    },
+    cityFollowLabel() {
+      return this.cityFollow ? `自动跟随 ${this.cityFollow}分` : '自动跟随 关'
+    },
+    cityFollowTitle() {
+      if (!this.cityFollow) return '自动跟随：关（每次手动重扫）'
+      return `每 ${this.cityFollow} 分钟重扫一次全网：约 ${Math.round((this.cityCost * 24 * 60) / this.cityFollow / 1000)}k 次请求/天，慎用`
+    },
+    // 线网底图的状态文案（原生模式下要明说「视野内只绘这么多条」，否则用户会以为全市只这些线）
+    cityNetNote() {
+      if (this.cityNetBusy) return '线网底图加载中…'
+      const st = this.cityNetStat
+      if (!st) return '线网底图缺失（跑 npm run scan:net 生成）'
+      if (this.cityFilterNo && this.cityHitLine) {
+        const d = this.cityHitLine.dirs.length
+        return `${this.cityHitLine.no} · ${d} 方向 · 最多 ${this.cityHitLine.stops} 站`
+      }
+      if (this.cityFilterNo) return `筛选「${this.cityFilterNo}」· 无走向数据`
+      if (this.useMap) return `线网 ${st.count} 条（视野内最多绘 ${CITY_NET_MAX_NATIVE} 条）`
+      return `线网 ${st.count} 条 · ${st.dirCount} 方向 · ${st.stopCount} 站`
+    },
     // 地图标记：站点（圆点 + 站名常显）+ 车辆（七行信息卡分色）；用 computed 以便自编号字典就绪后自动刷新
     markers() {
+      // 全市态：整张地图只放车点（裁剪 + 聚合后），站点与本线车辆全部让位
+      if (this.cityOn) return this.cityNativeMarkers()
       const dirs = this.dirFilter === 2 ? [0, 1] : [this.dirFilter]
       const STOP_ID = 5000
       const stopMarkers = []
@@ -586,6 +840,7 @@ export default {
     // 每方向两层：白色外描边 + 方向色主线；下行主线用虚线，与上行贴近时也能分辨
     // 注意绘制顺序：先铺完所有外描边再画主线，否则后画方向的粗外描边会把先画方向的主线整条盖住
     polylines() {
+      if (this.cityOn) return this.cityNativeNet()
       const dirs = this.dirFilter === 2 ? [0, 1] : [this.dirFilter]
       const split = dirs.length > 1 ? 14 : 0
       const casings = []
@@ -608,6 +863,32 @@ export default {
         lines.push({ points: pts, color: st.svgStroke, width: 5, arrowLine: true })
       })
       return [...casings, ...lines]
+    },
+    // 全市态的原生折线：视野裁剪 + 条数封顶。
+    // uni-h5 每条折线都是一个独立覆盖物，1000 多条会把地图彻底拖死，所以只绘视野内的前 180 条
+    // （统计行会明说这个上限，不让用户误以为全市就这些线；完整线网请用“走向图”渲染方式）
+    cityNativeNet() {
+      void this.viewTick
+      void this.cityNetTick
+      void this.cityDirty
+      const net = this._net
+      if (!net) return []
+      const vp = this._cityViewport()
+      const rect = this._cityRect(vp.w, vp.h)
+      const dirs = this.pickCityDirs(rect, CITY_NET_MAX_NATIVE)
+      const out = []
+      for (const d of dirs) {
+        if (d.n < 2) continue
+        const step = Math.max(1, Math.ceil(d.n / 80))
+        const points = []
+        for (let i = 0; i < d.n; i += step) points.push({ latitude: d.p[i * 2 + 1], longitude: d.p[i * 2] })
+        const last = d.n - 1
+        if (last % step !== 0) points.push({ latitude: d.p[last * 2 + 1], longitude: d.p[last * 2] })
+        if (points.length < 2) continue
+        const st = DIR_STYLE[d.dir]
+        out.push({ points, color: st.inner, width: this.cityFilterNo ? 5 : 2, arrowLine: false })
+      }
+      return out
     },
     // 所属营运公司：由当前视角在线车辆自编号（orgId）首位推断，1 → 武汉公交集团第一营运公司，依次类推
     operatorCompanies() {
@@ -653,6 +934,11 @@ export default {
         const no = v.split('-')[1] || ''
         if (no) this.loadByLine(no, this.direction)
       }
+    },
+    // 全市公交视图：宿主顶部分段是唯一入口，本组件不再自带开关
+    cityMode(v) {
+      if (v) { if (!this.cityOn) this.enterCity() }
+      else if (this.cityOn) this.exitCity()
     },
   },
   mounted() {
@@ -713,6 +999,8 @@ export default {
       this.unbindHover()
       this.unbindSheetDrag()
       if (this._locTimer) clearTimeout(this._locTimer)
+      // 在途的全网扫描：卸载后没人再消费它的结果，直接停掉（已扫到的部分不写缓存）
+      if (this._cityToken) this._cityToken.cancelled = true
       this.stopAutoRefresh()
     },
     // 组件化入口：从 props 读取线路并首次加载（页面形态下由 mounted 调用）
@@ -732,8 +1020,14 @@ export default {
       } catch (e) { /* 忽略 */ }
       this.$nextTick(() => this.measureUi())
       this.loadRefreshPref()
-      this.loadAllStops()
-      this.loadLive()
+      this.loadCityPref()
+      if (this.cityMode) {
+        // 全市公交视图不依赖选线：本线站点/轨迹/车辆一条都不拉（没线路时拉了只会拿到 420100--0 这种垃圾编码）
+        this.enterCity()
+      } else {
+        this.loadAllStops()
+        this.loadLive()
+      }
       // 编号字典就绪后刷新自编号显示（双方向缓存都要补）
       onBusIdReady(() => {
         for (const dir of [0, 1]) {
@@ -742,6 +1036,8 @@ export default {
             orgId: decryptBusId(b.busId) || b.orgId || '',
           }))
         }
+        // 全市快照可能扫于字典就绪之前，这里统一补一遍自编号明文
+        if (this.cityBuses.length && refreshOrgIds(this.cityBuses)) this.cityDirty++
         // 自编号就绪后标记图文会变化，原生模式重建地图保证渲染一致；自绘模式标记走 SVG/HTML 图层，无需重建
         if (this.useMap) this.mapKey++
         // 自编号就绪后营运公司徽章才出现，控制卡会变高 → 重新量取占位
@@ -829,10 +1125,6 @@ export default {
         }
         check()
       })
-    },
-    // 打开地图服务设置：不在组件内跳转，改为向宿主页派发事件，由 line/map 页用内联抽屉呈现
-    goSettings() {
-      this.$emit('openSettings')
     },
     // 返回上一页（嵌入式形态下由首页承载，不需要返回，直接忽略）
     goBack() {
@@ -1145,18 +1437,576 @@ export default {
     // 重建定时器（0 = 手动，不建定时器）
     restartAutoRefresh() {
       this.stopAutoRefresh()
-      if (!this.refreshSec) return
-      this._autoTimer = setInterval(() => {
-        // 详情弹层打开时跳过，别把正在看的车辆信息刷没了
-        if (this.selectedBus) return
-        this.loadLive(true)
-      }, this.refreshSec * 1000)
+      if (this.refreshSec) {
+        this._autoTimer = setInterval(() => {
+          // 详情弹层打开时跳过，别把正在看的车辆信息刷没了
+          if (this.selectedBus) return
+          this.loadLive(true)
+        }, this.refreshSec * 1000)
+      }
+      // 全市自动跟随：与线路刷新各自独立（一轮扫描代价高，档位最低 5 分钟且默认关）
+      if (this.cityOn && this.cityFollow > 0) {
+        this._cityTimer = setInterval(() => {
+          if (this.cityBusy || this.selectedBus) return
+          this.runCity(true)
+        }, this.cityFollow * 60000)
+      }
     },
     stopAutoRefresh() {
       if (this._autoTimer) {
         clearInterval(this._autoTimer)
         this._autoTimer = null
       }
+      if (this._cityTimer) {
+        clearInterval(this._cityTimer)
+        this._cityTimer = null
+      }
+    },
+    // —— 全市公交视图：线网底图 / 快照 / 图层 / 双查询 ——
+    async enterCity() {
+      this.cityOn = true
+      this.selectedBus = null
+      // 全市取景与本线取景是两套，进来先作废上一次的自适应标记与视野
+      this.camInited = false
+      this._userMoved = false
+      this._view = null
+      this.loadCityPref()
+      // 线网是静态资产（不占 API 配额），与快照并行拉取：到位后自己重排
+      this.ensureCityNet()
+      this.restartAutoRefresh()
+      // 有旧快照就先拿出来看（零请求），只有真要扫的时候才告知代价
+      const last = loadLastSnapshot()
+      if (last) {
+        this.applyCity(last)
+        this.fitCity()
+        const mins = Math.max(1, Math.round(snapshotAge(last) / 60000))
+        uni.showToast({ title: `展示 ${mins} 分钟前的快照 · 点 ↻ 可重扫`, icon: 'none' })
+        return
+      }
+      // 还没扫过：先把视野摆到全市线网，这一分钟等待里至少有个画面而不是空屏
+      this.fitCity()
+      if (!cityWarned()) {
+        const go = await this.confirmCitySweep()
+        if (!go) {
+          // 用户不认这笔代价：交回宿主退出本视图（档位判据只留在宿主一处）
+          this.$emit('exit-city')
+          return
+        }
+      }
+      await this.runCity(false)
+    },
+    exitCity() {
+      this.cancelCity()
+      this.cityOn = false
+      this.cityDots = []
+      this.cityNetPaths = []
+      this.cityTags = []
+      this.cityFilterNo = ''
+      this.cityQueryNo = ''
+      this.cityFindNo = ''
+      this.cityHitLine = null
+      this.selectedBus = null
+      // 回到线路视图：清掉全市视野与“用户已移动”标记，重新量占位并自适应整条线
+      this.camInited = false
+      this._userMoved = false
+      this._view = null
+      this.restartAutoRefresh()
+      if (this.useMap) this.mapKey++
+      this.$nextTick(() => this.measureUi())
+    },
+    // 首次使用的代价告知：后端没有全市接口，一轮 = cityCost 个请求（线网底图是静态文件，不计在内）
+    confirmCitySweep() {
+      return new Promise((resolve) => {
+        markCityWarned()
+        uni.showModal({
+          title: '全市公交：拉取在运车辆',
+          content: `线网走向读本地静态底图（零请求）；但后端没有全市车辆接口，车辆位置需逐方向拉取：本次约发 ${this.cityCost} 个请求、耗时 1 分钟左右。之后 90 秒内重复进入直接复用缓存。`,
+          confirmText: '开始扫描',
+          cancelText: '只看线网',
+          success: (r) => resolve(!!r.confirm),
+          fail: () => resolve(true),
+        })
+      })
+    },
+    loadCityPref() {
+      try {
+        const v = Number(uni.getStorageSync(CITY_FOLLOW_KEY))
+        if (CITY_FOLLOW_OPTS.includes(v)) this.cityFollow = v
+        const t = uni.getStorageSync('whbis:city-tags')
+        if (t !== '' && t != null) this.cityShowOrgId = Number(t) !== 0
+      } catch (e) { /* 存储不可用保持默认 */ }
+    },
+    // 载入全市线网底图。几何本体挂 this._net 而不是 data：五万多个数字进 Vue 深代理
+    // 会拖慢每一帧，而且它加载完就不再变，变的只是相机。
+    ensureCityNet() {
+      if (this._net) return Promise.resolve(this._net)
+      if (this._netPromise) return this._netPromise
+      this.cityNetBusy = true
+      this._netPromise = loadCityNet()
+        .then((net) => {
+          this.cityNetBusy = false
+          this._netPromise = null
+          if (!net) return null
+          // 预投影：经纬度一次性换成 Mercator 单位坐标，重绘时只剩「减相机 + 乘缩放」
+          for (const d of net.dirs) {
+            const n = d.n
+            const mu = new Float64Array(n)
+            const mv = new Float64Array(n)
+            for (let i = 0; i < n; i++) {
+              mu[i] = mercX(d.p[i * 2])
+              mv[i] = mercY(d.p[i * 2 + 1])
+            }
+            d.mu = mu
+            d.mv = mv
+          }
+          this._net = net
+          this.cityNetStat = { count: net.count, dirCount: net.dirCount, stopCount: net.stopCount, updated: net.updated }
+          this.cityNetTick++
+          if (!this.cityOn) return net
+          // 底图比快照晚到时，不该把用户已经拖到的视野抢回来
+          if (!this.camInited) this.fitCity()
+          else this.renderSchematic()
+          if (this.useMap) this.mapKey++
+          return net
+        })
+        .catch(() => {
+          this.cityNetBusy = false
+          this._netPromise = null
+          return null
+        })
+      return this._netPromise
+    },
+    // 当前视口的经纬矩形（两种渲染模式的视野来源不同：原生看 _view，自绘看 cam）
+    _cityRect(w, h) {
+      let s
+      let u0
+      let v0
+      if (this.useMap) {
+        const v = this._view || {}
+        s = zoomScale(v.scale || this.mapScale || 13)
+        const c = v.center || this.mapCenter
+        u0 = mercX(c.lng) - (w / 2) / s
+        v0 = mercY(c.lat) - (h / 2) / s
+      } else {
+        s = zoomScale(this.cam.zoom)
+        u0 = this.cam.u - this.projCenter.x / s
+        v0 = this.cam.v - this.projCenter.y / s
+      }
+      return {
+        minLng: invMercX(u0),
+        maxLng: invMercX(u0 + w / s),
+        // Mercator 的 v 向南增大，所以矩形上边 v0 对应最高纬度
+        minLat: invMercY(v0 + h / s),
+        maxLat: invMercY(v0),
+      }
+    },
+    // 视口内要绘的方向：先按包围盒裁剪，超预算时留站点多的（主干线视觉权重更高）
+    pickCityDirs(rect, cap) {
+      const net = this._net
+      if (!net) return []
+      const q = String(this.cityFilterNo || '').trim()
+      const hit = []
+      for (const d of net.dirs) {
+        if (q && String(d.no) !== q && String(d.code) !== q) continue
+        if (!bboxIntersects(d.bb, rect)) continue
+        hit.push(d)
+      }
+      if (hit.length <= cap) return hit
+      hit.sort((a, b) => b.n - a.n)
+      return hit.slice(0, cap)
+    },
+    // 全市线网走向（自绘模式）：远景按方向色合并成两条巨路径，近景逐条；
+    // 命中线路号筛选时永远逐条加重，否则单条走向会被网络纹理漫掉。
+    renderCityNet(s, w, h) {
+      const net = this._net
+      if (!net) {
+        this.cityNetPaths = []
+        return
+      }
+      const rect = this._cityRect(w, h)
+      const fuse = this.cam.zoom < CITY_NET_FUSE_ZOOM
+      const detail = !!String(this.cityFilterNo || '').trim() || !fuse
+      const dirs = this.pickCityDirs(rect, fuse && !detail ? net.dirCount : CITY_NET_MAX_PATHS)
+      let total = 0
+      for (const d of dirs) total += d.n
+      // 点预算：整张网络的投影点数封顶，超出就按整条线等距抽稀
+      const step = total > CITY_NET_MAX_PTS ? Math.ceil(total / CITY_NET_MAX_PTS) : 1
+      const cu = this.cam.u
+      const cv = this.cam.v
+      const cx = this.projCenter.x
+      const cy = this.projCenter.y
+      const buf = [[], []]
+      const per = []
+      for (const d of dirs) {
+        const n = d.n
+        if (n < 2) continue
+        const seg = []
+        for (let i = 0; i < n; i += step) {
+          const x = (d.mu[i] - cu) * s + cx
+          const y = (d.mv[i] - cv) * s + cy
+          seg.push((i === 0 ? 'M' : 'L') + x.toFixed(1) + ' ' + y.toFixed(1))
+        }
+        if ((n - 1) % step !== 0) {
+          const x = (d.mu[n - 1] - cu) * s + cx
+          const y = (d.mv[n - 1] - cv) * s + cy
+          seg.push('L' + x.toFixed(1) + ' ' + y.toFixed(1))
+        }
+        if (detail) per.push({ key: d.code + '-' + d.dir, d: seg.join(''), color: DIR_STYLE[d.dir].svgStroke, w: 4, op: 1 })
+        else buf[d.dir].push(seg.join(''))
+      }
+      const paths = per
+      // 合并层的参数：远景细淡（1000 多条叠在一起靠密度说话），近景逐条才会加重
+      for (const dir of [1, 0]) {
+        if (!buf[dir].length) continue
+        paths.unshift({ key: 'fuse' + dir, d: buf[dir].join(''), color: DIR_STYLE[dir].svgStroke, w: 1.3, op: 0.6 })
+      }
+      this.cityNetPaths = paths
+    },
+    // 自编号标签（自绘模式）：只在近景出现，并做像素级避让，数量封顶
+    buildCityTags(dots) {
+      if (!this.cityShowOrgId) return []
+      if (this.cam.zoom < CITY_TAG_MIN_ZOOM) return []
+      const cands = dots.filter((d) => d.bus && d.bus.orgId)
+      // 选中/刚定位的车优先占位，其余按速度档高到低（快车的自编号更有意义）
+      cands.sort((a, b) => (this._tagPri(b.bus) - this._tagPri(a.bus)) || (b.bus.band - a.bus.band))
+      const taken = []
+      const out = []
+      for (const d of cands) {
+        if (out.length >= CITY_TAG_MAX) break
+        const text = String(d.bus.orgId)
+        const bw = textW(text) * 0.8
+        const y = d.y - 17
+        const box = { x1: d.x - bw / 2, x2: d.x + bw / 2, y1: y - 6, y2: y + 6 }
+        if (taken.some((b) => !(box.x2 <= b.x1 || b.x2 <= box.x1 || box.y2 <= b.y1 || b.y2 <= box.y1))) continue
+        taken.push(box)
+        out.push({ key: text + '-' + d.bus.busId, x: d.x, y, text, color: SPEED_BANDS[d.bus.band].color, sel: d.bus === this.selectedBus })
+      }
+      return out
+    },
+    _tagPri(bus) {
+      if (bus === this.selectedBus) return 3
+      if (bus === this.locatedBus) return 2
+      return 1
+    },
+    toggleCityTags() {
+      this.cityShowOrgId = !this.cityShowOrgId
+      try {
+        uni.setStorageSync('whbis:city-tags', this.cityShowOrgId ? 1 : 0)
+      } catch (e) { /* 忽略 */ }
+      this.renderSchematic()
+      if (this.useMap) this.mapKey++
+    },
+    // 跑一轮全网扫描（force = 跳过新鲜期缓存直接重扫）
+    async runCity(force) {
+      if (this.cityBusy) return
+      if (!this.cityOn) this.cityOn = true
+      if (!force) {
+        const fresh = loadSnapshot(CITY_FRESH_MS)
+        if (fresh) {
+          this.applyCity(fresh)
+          this.fitCity()
+          return
+        }
+      }
+      this.cityBusy = true
+      this.cityProgress = 0
+      this.cityFound = 0
+      const token = { cancelled: false }
+      this._cityToken = token
+      try {
+        const snap = await sweepCity({
+          token,
+          onProgress: (p) => {
+            this.cityProgress = Math.round((p.done / p.total) * 100)
+            this.cityFound = p.buses
+          },
+        })
+        // 中途已退出全市（或切了线路）就别把结果往线路上盖
+        if (!this.cityOn) return
+        this.applyCity(snap)
+        // 被取消/有失败方向时不抢用户视野（他可能已经在看某一角）
+        if (!snap.partial) this.fitCity()
+        uni.showToast({
+          title: snap.partial ? `已中止：拿到 ${snap.count} 辆` : `全市扫描完成：${snap.count} 辆在运`,
+          icon: 'none',
+        })
+      } catch (e) {
+        uni.showToast({ title: '扫描失败：' + ((e && e.message) || e), icon: 'none' })
+      } finally {
+        this.cityBusy = false
+        this.cityProgress = 0
+        this._cityToken = null
+      }
+    },
+    cancelCity() {
+      if (this._cityToken) this._cityToken.cancelled = true
+    },
+    // 把快照装进视图（不动视野，交给调用方决定要不要 fit）
+    applyCity(snap) {
+      this.cityMeta = {
+        at: snap.at,
+        ms: snap.ms,
+        total: snap.total,
+        done: snap.done,
+        failed: snap.failed,
+        lines: snap.lines,
+        count: snap.count,
+        partial: !!snap.partial,
+      }
+      this.cityBuses = snap.buses || []
+      // 详情窗可能开着上一批的对象，跟到新对象上，跟不到就关掉
+      if (this.selectedBus) {
+        const again = this.cityBuses.find((b) => b.busId === this.selectedBus.busId)
+        this.selectedBus = again || null
+      }
+      if (this.useMap) this.mapKey++
+      else this.renderSchematic()
+    },
+    // 全市视野：筛选命中某条线时按那条线取景，否则按车辆包围盒；两者都还没到位就落到线网整体
+    fitCity() {
+      const q = String(this.cityFilterNo || '').trim()
+      const pts = []
+      const net = this._net
+      if (q && net) {
+        for (const d of net.dirs) {
+          if (String(d.no) !== q && String(d.code) !== q) continue
+          for (let i = 0; i + 1 < d.p.length; i += 2) pts.push({ lat: d.p[i + 1], lng: d.p[i] })
+        }
+      }
+      const list = q ? this.cityShown : this.cityBuses
+      if (!pts.length) {
+        if (!list.length) {
+          // 刚进视图、连快照都没有：用线网整体包围盒，至少把武汉市框住
+          const bb = net && net.bbox
+          if (!bb) return
+          this._userMoved = false
+          this.fitPoints([{ lat: bb[1], lng: bb[0] }, { lat: bb[3], lng: bb[2] }])
+          this.camInited = true
+          return
+        }
+        // 一千多辆全进包围盒没必要，等距抽 200 个点足够定边界
+        const step = Math.max(1, Math.ceil(list.length / 200))
+        for (let i = 0; i < list.length; i += step) pts.push({ lat: list[i].lat, lng: list[i].lng })
+      } else {
+        // 命中线路的在运车辆一并包进来（它们可能在端点外的区间车上）
+        for (const b of list) pts.push({ lat: b.lat, lng: b.lng })
+      }
+      this._userMoved = false
+      this.fitPoints(pts)
+      this.camInited = true
+    },
+    // 全市态的原生标记：先按当前视野裁剪，再做像素网格聚合，最后按速度分档取图标。
+    // 1300 个 DOM marker 会把 <map> 拖垮，聚合后稳定在两三百个。
+    cityNativeMarkers() {
+      void this.viewTick // _view 不是响应式的，靠这个计数感知平移/缩放后重算
+      void this.cityDirty // 自编号补完也算内容变更
+      const list = this.cityShown
+      const hit = new Map()
+      this._cityHit = hit
+      if (!list.length) return []
+      // 裁剪区用宿主 <map> 的实测矩形：嵌入态下它不是整窗，this.canvas 只作兜底
+      const vp = this._cityViewport()
+      const w = vp.w
+      const h = vp.h
+      const items = []
+      const pad = 40
+      for (const b of list) {
+        const p = this._projectTo(b.lat, b.lng, w, h)
+        if (p.x < -pad || p.y < -pad || p.x > w + pad || p.y > h + pad) continue
+        items.push({ x: p.x, y: p.y, b })
+      }
+      const scale = (this._view && this._view.scale) || this.mapScale || 13
+      const cell = scale >= CITY_CLUSTER_MIN_ZOOM ? 0 : CITY_CELL_NATIVE
+      // 近景才给单车标自编号：1300 个 label 覆盖物会把 <map> 压死
+      const showTag = this.cityShowOrgId && scale >= CITY_TAG_MIN_SCALE
+      let tagCount = 0
+      const out = []
+      clusterPoints(items, cell).forEach((c, i) => {
+        if (c.bus) {
+          const id = CITY_DOT_ID + i
+          const marker = {
+            id,
+            latitude: c.bus.lat,
+            longitude: c.bus.lng,
+            // 同样不传 title：uni-h5 会在点击时把 title 生成的 callout 切到可见
+            iconPath: assetUrl(`/static/bus-city-${c.bus.band}.png`),
+            width: 15,
+            height: 15,
+          }
+          if (showTag && tagCount < CITY_TAG_MAX && c.bus.orgId) {
+            tagCount++
+            marker.label = {
+              content: String(c.bus.orgId),
+              color: '#0B1020',
+              fontSize: 10,
+              borderRadius: 8,
+              bgColor: 'rgba(255, 255, 255, 0.95)',
+              padding: 3,
+              textAlign: 'center',
+              borderColor: 'rgba(0, 0, 0, 0)',
+              borderWidth: 0,
+            }
+          }
+          out.push(marker)
+          hit.set(id, { bus: c.bus })
+        } else {
+          const id = CITY_CLUSTER_ID + i
+          const ll = this._unproject(c.x, c.y, w, h)
+          out.push({
+            id,
+            latitude: ll.lat,
+            longitude: ll.lng,
+            iconPath: assetUrl('/static/bus-city-cluster.png'),
+            width: 30,
+            height: 30,
+            label: {
+              content: String(c.n),
+              color: '#FFFFFF',
+              fontSize: 11,
+              fontWeight: 'bold',
+              borderRadius: 12,
+              bgColor: 'rgba(99, 102, 241, 0.92)',
+              padding: 3,
+              textAlign: 'center',
+              borderColor: 'rgba(0, 0, 0, 0)',
+              borderWidth: 0,
+            },
+          })
+          hit.set(id, { lat: ll.lat, lng: ll.lng, n: c.n })
+        }
+      })
+      return out
+    },
+    // 全市裁剪/聚合用的视口尺寸：优先取当前渲染宿主元素的实测矩形
+    _cityViewport() {
+      const host = this._hoverHostEl()
+      const r = host && host.getBoundingClientRect ? host.getBoundingClientRect() : null
+      if (r && r.width > 1 && r.height > 1) return { w: r.width, h: r.height }
+      return this.canvas
+    },
+    // 屏幕像素 → 经纬度（_projectTo 的逆运算）：聚合团要把它换算回中心点才能定位
+    _unproject(x, y, w, h) {
+      if (this.useMap) {
+        const v = this._view || {}
+        const s = zoomScale(v.scale || this.mapScale || 13)
+        const c = v.center || this.mapCenter
+        return {
+          lat: invMercY(mercY(c.lat) + (y - h / 2) / s),
+          lng: invMercX(mercX(c.lng) + (x - w / 2) / s),
+        }
+      }
+      const s = zoomScale(this.cam.zoom)
+      return {
+        lat: invMercY(this.cam.v + (y - this.projCenter.y) / s),
+        lng: invMercX(this.cam.u + (x - this.projCenter.x) / s),
+      }
+    },
+    // 自绘模式下的车点/聚合团点击
+    onCityDotTap(d) {
+      if (this._suppressClick) return
+      if (d.bus) {
+        this.selectBus(d.bus)
+        return
+      }
+      // 聚合团：以该点为锚放大，把团展开成单车
+      this.zoomAt(d.x, d.y, 1.2)
+    },
+    // 自编号查车：正向 MD5 在快照里命中（无需等编号字典）
+    cityFind() {
+      const q = String(this.cityFindNo || '').trim()
+      if (!q) {
+        uni.showToast({ title: '请输入车辆自编号', icon: 'none' })
+        return
+      }
+      const b = findBusByOrgId(q, this.cityBuses)
+      if (!b) {
+        uni.showToast({ title: `快照里没有自编号 ${q} 的车（已收班/回场，或不在本次扫描里）`, icon: 'none' })
+        return
+      }
+      // 筛选会把它藏起来，先整组清掉再定位（连线路号输入框一起，否则输入框还留着上一次的筛选）
+      this.cityFilterNo = ''
+      this.cityQueryNo = ''
+      this.cityHitLine = null
+      this.selectBus(b)
+      this.focusBus(b)
+    },
+    // 线路号查走向：命中线网就把画面收到那条线（只绘它的两个方向）；
+    // 底图里没有这条几何、但快照里有它的车时退化成「只筛车」，两者都空才报未命中
+    cityQueryLine() {
+      const raw = String(this.cityQueryNo || '').trim()
+      if (!raw) {
+        uni.showToast({ title: '请输入线路号，如 578 / 电1', icon: 'none' })
+        return
+      }
+      const hit = netSearchLines(raw, 1)[0] || null
+      if (!hit) {
+        const inSnap = this.cityBuses.some((b) => String(b.no).includes(raw) || String(b.code) === raw)
+        if (!inSnap) {
+          uni.showToast({ title: `线网与在运车辆里都没有「${raw}」`, icon: 'none' })
+          this.clearCityQuery()
+          return
+        }
+        this.cityHitLine = null
+        this.cityFilterNo = raw
+        this._applyCityFilter(true)
+        uni.showToast({ title: `「${raw}」暂无走向数据，已按在运车辆筛选`, icon: 'none' })
+        return
+      }
+      // 归一成线网里的真实线路号：lineCode 与展示线路号不是一回事（1001 是电1、2001 是 J1），
+      // 拿用户敲进去的数字段去精确匹配会一条都不中
+      this.cityQueryNo = hit.no
+      this.cityHitLine = hit
+      this.cityFilterNo = hit.no
+      this.selectedBus = null
+      this._applyCityFilter(true)
+      uni.showToast({ title: `${hit.no} 路 · ${hit.dirs.length} 个方向 · 已定位走向`, icon: 'none' })
+    },
+    // 清除线路筛选，看回全市（不动视野：用户可能正盯着某个角落）
+    clearCityQuery() {
+      if (!this.cityFilterNo && !this.cityHitLine) {
+        this.cityQueryNo = ''
+        return
+      }
+      this.cityQueryNo = ''
+      this.cityHitLine = null
+      this.cityFilterNo = ''
+      this._applyCityFilter(false)
+    },
+    // 筛选一变就要重取景 + 重算图层：原生靠重建 <map>（折线是 computed），自绘直接排一次
+    _applyCityFilter(fit) {
+      if (fit) {
+        this.camInited = false
+        this._userMoved = false
+        this.fitCity()
+      }
+      if (this.useMap) this.mapKey++
+      else this.renderSchematic()
+    },
+    // 循环切换自动跟随：关 → 5 → 15 → 30 分钟
+    cycleCityFollow() {
+      const i = CITY_FOLLOW_OPTS.indexOf(this.cityFollow)
+      const next = CITY_FOLLOW_OPTS[(i + 1 + CITY_FOLLOW_OPTS.length) % CITY_FOLLOW_OPTS.length]
+      this.cityFollow = next
+      try {
+        uni.setStorageSync(CITY_FOLLOW_KEY, next)
+      } catch (e) { /* 忽略 */ }
+      this.restartAutoRefresh()
+      uni.showToast({
+        title: next ? `已开启：每 ${next} 分钟重扫全网（请求量较大）` : '已关闭自动跟随',
+        icon: 'none',
+      })
+    },
+    // 从一辆车跳到它所属的线路（交给宿主换线，同时退出全市图层）
+    openCityLine(bus) {
+      if (!bus || !bus.code) return
+      this.exitCity()
+      this.$emit('pick-line', {
+        lineCode: buildLineCode(bus.code, bus.dir),
+        lineName: bus.no || bus.code,
+        direction: Number(bus.dir || 0),
+        startStop: '',
+        endStop: '',
+      })
     },
     // 原生地图平移/缩放后记住视野，供自动刷新重建地图时还原
     onRegionChange(e) {
@@ -1167,6 +2017,8 @@ export default {
         center: { lat: Number(c.latitude), lng: Number(c.longitude) },
         scale: d.scale != null ? Number(d.scale) : this.mapScale,
       }
+      // 全市聚合以屏幕像素为网格，视野一变裁剪与团心全部跟着变，必须 bump 一下才能重算 marker
+      if (this.cityOn) this.viewTick++
     },
     // —— 自绘走向图：画布尺寸 / 相机 / 手势交互 ——
     syncCanvasSize() {
@@ -1189,11 +2041,12 @@ export default {
       q.select('.side-col').boundingClientRect()
       q.select('.schematic-legend').boundingClientRect()
       q.select('.schematic').boundingClientRect()
+      q.select('.city-legend').boundingClientRect()
       q.exec((res) => {
         const arr = res || []
         const prevCtrl = this.uiRects.ctrl
         const prevSide = this.uiRects.side
-        this.uiRects = { ctrl: arr[0] || null, side: arr[1] || null, legend: arr[2] || null }
+        this.uiRects = { ctrl: arr[0] || null, side: arr[1] || null, legend: arr[2] || arr[4] || null }
         // H5 有原生标题栏（--window-top），窗口高度不等于画布高度，以实际画布矩形为准
         const box = arr[3]
         const prevCanvas = this.canvas
@@ -1229,6 +2082,8 @@ export default {
     },
     // 相机自适应到整条线路（含在线车辆），并让线路中心落在可绘制区域中心
     fitRoute() {
+      // 全市态下“全览”览的是车点包围盒，不能拿本线站点把视野拽回去
+      if (this.cityOn) { this.fitCity(); return }
       const pts = []
       ;[0, 1].forEach((d) => {
         ;(this.stopsByDir[d] || []).forEach((st) => {
@@ -1238,6 +2093,10 @@ export default {
         })
       })
       this.shownBuses.forEach((b) => pts.push({ lat: b.lat, lng: b.lng }))
+      this.fitPoints(pts)
+    },
+    // 把一组点装进可绘制区（线路全览与全市分布共用同一套换算）
+    fitPoints(pts) {
       if (!pts.length) { this.renderSchematic(); return }
       const us = pts.map((p) => mercX(p.lng))
       const vs = pts.map((p) => mercY(p.lat))
@@ -1288,7 +2147,7 @@ export default {
       if (this.useMap) this.mapKey++
     },
     resetView() {
-      // 全览：清掉“用户已调整视角”标记并重新自适应
+      // 全览：清掉“用户已调整视角”标记并重新自适应（全市态下览的是车点包围盒）
       this._userMoved = false
       this.camInited = false
       // 先重新量取占位，再自适应（控制卡可能已经变了高度）
@@ -1463,6 +2322,11 @@ export default {
       if (!w || !h) return
       // 0) 底图瓦片（随相机平移缩放重算）
       this.renderTiles()
+      // 全市态：线网 + 车点 + 自编号；站点与本线车辆全部让位，否则一千多个点压在线路上什么都看不清
+      if (this.cityOn) {
+        this.renderCityLayer()
+        return
+      }
       const dirs = this.dirFilter === 2 ? [0, 1] : [this.dirFilter]
       const s = zoomScale(this.cam.zoom)
       const sx = (lng) => (mercX(lng) - this.cam.u) * s + this.projCenter.x
@@ -1658,7 +2522,12 @@ export default {
         return out
       })()
 
-      // 6) 经纬网格：间距换算到像素后再取整档，随相机移动
+      this.gridLines = this.buildGrid(s, w, h)
+    },
+    // 经纬网格：间距换算到像素后再取整档，随相机移动。
+    // 有底图时不画（底图自带路网背景），免得两层线打架；线路态与全市态共用。
+    buildGrid(s, w, h) {
+      if (this.showBaseMap) return []
       const uMin = this.cam.u - this.projCenter.x / s
       const uMax = uMin + w / s
       const vMin = this.cam.v - this.projCenter.y / s
@@ -1674,8 +2543,44 @@ export default {
         const y = (v - this.cam.v) * s + this.projCenter.y
         grid.push({ key: 'v' + v.toFixed(6), x1: 0, y1: y, x2: w, y2: y })
       }
-      // 有底图时不需要经纬网格（底图自带路网背景），免得两层线打架
-      this.gridLines = this.showBaseMap ? [] : grid
+      return grid
+    },
+    // 全市图层（自绘模式）：先铺线网走向，再按视野裁剪→像素网格聚合→速度分档画车点，最后补近景自编号。
+    // 站名与本线车辆此时清空（它们属于单条线路的作用域）。
+    renderCityLayer() {
+      const vp = this._cityViewport()
+      const w = vp.w
+      const h = vp.h
+      const s = zoomScale(this.cam.zoom)
+      this.svgRoutes = []
+      this.routeArrows = []
+      this.svgStops = []
+      this.labelStops = []
+      this.svgBuses = []
+      // 线网在下、车点在上
+      this.renderCityNet(s, w, h)
+      const items = []
+      const pad = 40
+      for (const b of this.cityShown) {
+        const x = (mercX(b.lng) - this.cam.u) * s + this.projCenter.x
+        const y = (mercY(b.lat) - this.cam.v) * s + this.projCenter.y
+        if (x < -pad || y < -pad || x > w + pad || y > h + pad) continue
+        items.push({ x, y, b })
+      }
+      const cell = this.cam.zoom >= CITY_CLUSTER_MIN_ZOOM ? 0 : CITY_CELL_SVG
+      this.cityDots = clusterPoints(items, cell).map((c, i) => ({
+        key: (c.bus ? 'b' : 'g') + i,
+        x: c.x,
+        y: c.y,
+        // 单车点半径 6（与线路态车辆圆点同量级），聚合团 14 以容纳数字标签
+        r: c.bus ? 6 : 14,
+        n: c.n,
+        color: c.bus ? SPEED_BANDS[c.bus.band].color : '#6366F1',
+        bus: c.bus || null,
+        located: !!c.bus && this.locatedBus === c.bus,
+      }))
+      this.cityTags = this.buildCityTags(this.cityDots)
+      this.gridLines = this.buildGrid(s, w, h)
     },
     // 原生地图的标记点击（单击 / 双击都可，双击就是连点两次）。
     // ⚠ uni-h5 的 markertap 是自定义事件：normalizeCustomEvent 只返回 { type, timeStamp, target, currentTarget, detail }，
@@ -1685,6 +2590,22 @@ export default {
       const raw = detail.markerId != null ? detail.markerId : (e && e.markerId)
       const id = Number(raw)
       if (!Number.isFinite(id)) return
+      // 全市态：车点 5 万段、聚合团 6 万段（命中信息在 cityNativeMarkers 里顺手记进 _cityHit）
+      if (this.cityOn && id >= CITY_DOT_ID) {
+        const hit = this._cityHit && this._cityHit.get(id)
+        if (!hit) return
+        if (hit.bus) this.selectBus(hit.bus)
+        else {
+          // 聚合团：以团心为中心放大两档，把团展开成单车
+          const base = (this._view && this._view.scale) || this.mapScale || 13
+          const scale = clampNum(Math.round(base) + 2, 9, 18)
+          this._view = { center: { lat: hit.lat, lng: hit.lng }, scale }
+          this.mapCenter = { lat: hit.lat, lng: hit.lng }
+          this.mapScale = scale
+          this.mapKey++
+        }
+        return
+      }
       // 站点标记：id = 5000 + dir*1000 + 序号
       if (id >= 5000 && id < 10000) {
         const dir = Math.floor((id - 5000) / 1000)
@@ -1862,6 +2783,42 @@ export default {
       if (!host) return
       // 拖地图时不弹浮标（否则平移路上会一路闪）
       if (this._drag && this._drag.moved) return
+      if (this.cityOn) {
+        // 全市态命中池换成快照里的车点；点位密，半径收到 14px，免得鼠标一滑就跳到邻车
+        const pool = this.cityShown
+        if (!pool.length) {
+          if (this.hoverTip) this.hoverTip = null
+          return
+        }
+        const r = host.getBoundingClientRect()
+        const px = e.clientX - r.left
+        const py = e.clientY - r.top
+        let best = 14
+        let hit = null
+        pool.forEach((b) => {
+          const p = this._projectTo(b.lat, b.lng, r.width, r.height)
+          const d = Math.hypot(p.x - px, p.y - py)
+          if (d < best) { best = d; hit = { bus: b, p } }
+        })
+        if (!hit) {
+          if (this.hoverTip) this.hoverTip = null
+          return
+        }
+        const lift = this.useMap ? 30 : 20
+        const page = (typeof document !== 'undefined' && document.querySelector('.lmap-page')) || host
+        const pr = page.getBoundingClientRect()
+        const tip = {
+          x: Math.round(hit.p.x + r.left - pr.left),
+          y: Math.round(hit.p.y + r.top - pr.top - lift),
+          no: hit.bus.orgId || '',
+          // 全市态光有自编号不知道是哪路，补一行线路与方向
+          line: `${hit.bus.no} ${hit.bus.dir === 0 ? '上行' : '下行'}`,
+        }
+        const old = this.hoverTip
+        if (old && old.no === tip.no && old.line === tip.line && Math.abs(old.x - tip.x) < 1 && Math.abs(old.y - tip.y) < 1) return
+        this.hoverTip = tip
+        return
+      }
       if (!this.shownBuses.length) {
         if (this.hoverTip) this.hoverTip = null
         return
@@ -2257,15 +3214,12 @@ export default {
   margin: 0 8rpx;
   background: rgba(255, 255, 255, 0.09);
 }
-/* 搜索行：卡片内的一条凹槽，不再是自带阴影的独立胶囊；
-   右侧留出齿轮位（52rpx + 间距），避免独立页的「查询」按钮钻到齿轮底下 */
+/* 搜索行：卡片内的一条凹槽，不再是自带阴影的独立胶囊 */
 .ctrl-search {
   display: flex;
   align-items: center;
   gap: 10rpx;
   padding: 6rpx;
-  /* ⚠ 必须写在 padding 简写之后，否则被简写覆盖 */
-  padding-right: 72rpx;
   background: rgba(255, 255, 255, 0.06);
   border: 2rpx solid rgba(255, 255, 255, 0.1);
   border-radius: 18rpx;
@@ -2321,31 +3275,6 @@ export default {
 .ctrl-go:active {
   filter: brightness(1.12);
 }
-/* 地图设置入口（齿轮）：绝对定位在控制卡右上角，不占文档行；
-   卡片 padding 12rpx + 首行高约 64rpx，取 18rpx 偏移让齿轮与首行垂直居中。
-   ⚠ z-index 必须高于插槽里的 .mod-main（50）：裸形态顶栏整行宽度铺满卡片（齿轮位只是它的 padding），
-   压在下面会让齿轮永远点不动（命中全部落在 .view-row 上） */
-.ctrl-cfg {
-  position: absolute;
-  top: 18rpx;
-  right: 18rpx;
-  z-index: 60;
-  width: 52rpx;
-  height: 52rpx;
-  line-height: 52rpx;
-  text-align: center;
-  border-radius: 14rpx;
-  font-size: 28rpx;
-  color: rgba(255, 255, 255, 0.72);
-  background: rgba(255, 255, 255, 0.07);
-  cursor: pointer;
-  transition: transform 0.28s, background 0.18s, color 0.18s;
-}
-.ctrl-cfg:hover {
-  color: #fff;
-  background: rgba(129, 140, 248, 0.32);
-  transform: rotate(60deg);
-}
 /* 方向分段条：卡片底部一块凹槽，三个 tab 与线路信息同排 */
 .ctrl-dir {
   display: flex;
@@ -2360,10 +3289,6 @@ export default {
   background: rgba(255, 255, 255, 0.06);
   border: 2rpx solid rgba(255, 255, 255, 0.1);
   border-radius: 18rpx;
-}
-/* 嵌入态方向行是卡片首行：右侧让位给绝对定位的齿轮 */
-.ctrl-dir.pad-cfg {
-  padding-right: 72rpx;
 }
 .dir-tab {
   /* 固定行高 + 双轴 flex 居中：只用 padding 撑高时中文基线会偏，且选中加粗后文字会上下跳 */
@@ -2532,11 +3457,14 @@ export default {
   /* 高于刷新下拉遮罩（19），低于车辆详情窗（30） */
   z-index: 20;
 }
-/* 实时车辆面板（毛玻璃，右侧栏的第一块） */
+/* 实时车辆面板（毛玻璃，右侧栏的第一块）
+   不写 overflow: hidden —— 刷新间隔下拉是绝对定位挂在卡内的，一剪裁就被卡底截断；
+   高度由 max-height 顶住，列内溢出全部交给 .bus-list 自己滚 */
 .panel {
   position: relative;
+  flex: 0 1 auto;
   min-height: 0;
-  max-height: 54vh;
+  max-height: 52vh;
   display: flex;
   flex-direction: column;
   background: rgba(11, 16, 32, 0.72);
@@ -2618,8 +3546,8 @@ export default {
 .plan-side {
   flex: 0 1 auto;
   min-height: 0;
-  /* 上下行两组同屏，给得比单方向宽裕一档，超额部分由列表自己滚 */
-  max-height: 38vh;
+  /* 上下行两组同屏 + 动辄几十班，给到 46vh；再长由列表自己滚 */
+  max-height: 46vh;
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -2631,6 +3559,10 @@ export default {
   border-radius: 32rpx;
   padding: 28rpx;
   box-shadow: 0 16rpx 48rpx rgba(0, 0, 0, 0.4);
+}
+/* 车辆卡折起来时，把腾出的高度整块让给时刻卡（同列相邻兄弟，纯 CSS 就能接上） */
+.panel.collapsed + .plan-side {
+  max-height: 66vh;
 }
 .panel-title {
   font-size: 30rpx;
@@ -2766,20 +3698,38 @@ export default {
   }
 }
 .bus-list {
-  flex: 1;
+  flex: 1 1 auto;
   min-height: 0;
   width: 100%;
+  /* 自己当滚动容器（与 LinePlan 的 .plan-body 同一套路）：
+     overscroll-behavior: contain 防止滚到尽头后惯性带动外层地图页 */
+  overflow-y: auto;
+  overflow-x: hidden;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.26) transparent;
 }
-/* 窄屏时列表限高，配合底部横栏布局 */
+.bus-list::-webkit-scrollbar {
+  width: 8rpx;
+}
+.bus-list::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.26);
+  border-radius: 999rpx;
+}
+.bus-list::-webkit-scrollbar-track {
+  background: transparent;
+}
+/* 窄屏（手机）：整列只有 62vh，两张卡对半分，各自滚各自 */
 @media (max-width: 720px) {
   .panel.collapsed {
     max-height: none;
   }
-  .bus-list {
-    max-height: 26vh;
+  .panel {
+    max-height: 34vh;
   }
   .plan-side {
-    max-height: 32vh;
+    max-height: 28vh;
   }
 }
 .bus-item {
@@ -2872,14 +3822,14 @@ export default {
   padding: 0 20rpx;
   font-size: 21rpx;
 }
-/* 已开启（站名 / 底图）：用上行青表示“开着”，与靛蓝青的主行动作区分开 */
+/* 已开启（站名 / 底图）：统一用靛蓝——青蓝已被征用为上行色，不能再当普通开关色用 */
 .tool-btn.on {
-  color: #a5f3fc;
-  background: rgba(34, 211, 238, 0.18);
-  border-color: rgba(34, 211, 238, 0.5);
+  color: #c7d2fe;
+  background: rgba(99, 102, 241, 0.22);
+  border-color: rgba(129, 140, 248, 0.55);
 }
 .tool-btn.on:hover {
-  background: rgba(34, 211, 238, 0.28);
+  background: rgba(99, 102, 241, 0.32);
 }
 /* 走向尚未贴路（计算中/失败）的提示，避免把站间直连当成真实走向 */
 .view-alert {
@@ -3066,5 +4016,283 @@ export default {
   color: #fff;
   background: linear-gradient(135deg, #6366f1, #06b6d4);
   border: none;
+}
+/* 全市详情窗的“打开这条线路”：主行动用靛蓝青渐变（与定位键的次操作拉开） */
+.sheet-btn.go {
+  color: #fff;
+  background: linear-gradient(135deg, #6366f1, #06b6d4);
+  border: none;
+}
+/* —— 全市实时分布 —— */
+/* 统计行：卡片内的一行小字，不自带背景/描边（控制卡是“整卡包裹”，子块再套壳就退回碎片感） */
+.ctrl-city {
+  display: flex;
+  flex-direction: column;
+  gap: 8rpx;
+  padding: 2rpx 10rpx 0;
+}
+/* 指标组：数字重、标签轻，靠字号与透明度分层；格子之间一条极淡竖线断开，不各自套背景 */
+.cc-figs {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  row-gap: 6rpx;
+}
+.cc-fig {
+  display: flex;
+  align-items: baseline;
+  padding: 0 16rpx;
+}
+.cc-fig:first-child {
+  padding-left: 4rpx;
+}
+.cc-fig + .cc-fig {
+  border-left: 2rpx solid rgba(255, 255, 255, 0.09);
+}
+.f-num {
+  font-size: 36rpx;
+  font-weight: 800;
+  line-height: 1.1;
+  color: #fff;
+  letter-spacing: -0.6rpx;
+  font-variant-numeric: tabular-nums;
+}
+/* 分母（已完成/总方向）：同一个数字的后半段，压小压淡到不抢主体 */
+.f-sub {
+  font-size: 20rpx;
+  font-weight: 600;
+  line-height: 1;
+  color: rgba(255, 255, 255, 0.36);
+  font-variant-numeric: tabular-nums;
+}
+.f-lab {
+  margin-left: 8rpx;
+  font-size: 19rpx;
+  line-height: 1;
+  color: rgba(255, 255, 255, 0.5);
+  white-space: nowrap;
+}
+/* 已筛选徽标：琥珀色表示“现在看到的是子集”，✕ 就在它里面，不必去按钮行找 */
+.cc-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 10rpx;
+  margin-left: 12rpx;
+  padding: 4rpx 14rpx;
+  border-radius: 999rpx;
+  background: rgba(245, 158, 11, 0.14);
+  border: 2rpx solid rgba(251, 191, 36, 0.4);
+}
+.chip-txt {
+  font-size: 19rpx;
+  font-weight: 700;
+  line-height: 1.3;
+  color: #fcd34d;
+  white-space: nowrap;
+}
+.chip-x {
+  font-size: 20rpx;
+  line-height: 1.3;
+  color: rgba(252, 211, 77, 0.7);
+  cursor: pointer;
+}
+/* 元信息：时间戳 + 线网规模，整行小字且允许自然换行（旧版挂在按钮行右侧会撑出卡片） */
+.cc-meta {
+  display: flex;
+  flex-wrap: wrap;
+  padding: 0 4rpx;
+}
+.cm-item {
+  font-size: 19rpx;
+  line-height: 1.6;
+  color: rgba(255, 255, 255, 0.44);
+}
+/* 快照过期 / 本轮中止：单独一行琥珀色，与上面的灰色元信息拉开优先级 */
+.cc-warn {
+  padding: 0 4rpx;
+  font-size: 19rpx;
+  line-height: 1.5;
+  color: #fbbf24;
+}
+/* 扫描进度条：扫描中才出现，走满后由统计文本接手 */
+.cc-bar {
+  height: 6rpx;
+  border-radius: 3rpx;
+  overflow: hidden;
+  background: rgba(255, 255, 255, 0.1);
+}
+.cc-bar-in {
+  height: 100%;
+  border-radius: 3rpx;
+  background: linear-gradient(90deg, #6366f1, #22d3ee);
+  transition: width 0.25s ease-out;
+}
+/* 筛选 / 查车行：两个输入框 + 三个次操作键，窄屏允许换行 */
+.ctrl-city-row {
+  display: flex;
+  align-items: center;
+  gap: 10rpx;
+  flex-wrap: wrap;
+  padding: 0 4rpx 2rpx;
+}
+.cc-input {
+  flex: 1 1 180rpx;
+  min-width: 0;
+  height: 56rpx;
+  padding: 0 16rpx;
+  box-sizing: border-box;
+  font-size: 22rpx;
+  color: #fff;
+  background: rgba(255, 255, 255, 0.06);
+  border: 2rpx solid rgba(255, 255, 255, 0.12);
+  border-radius: 14rpx;
+}
+.cc-ph {
+  color: rgba(255, 255, 255, 0.34);
+}
+/* 与视图工具行的 .tool-btn.sm 同尺寸，保持卡片内动作键一致 */
+.cc-btn {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 56rpx;
+  padding: 0 20rpx;
+  box-sizing: border-box;
+  font-size: 21rpx;
+  line-height: 1;
+  white-space: nowrap;
+  color: rgba(255, 255, 255, 0.86);
+  background: rgba(255, 255, 255, 0.07);
+  border: 2rpx solid rgba(255, 255, 255, 0.1);
+  border-radius: 14rpx;
+  cursor: pointer;
+  transition: background 0.18s, border-color 0.18s, transform 0.12s;
+}
+.cc-btn:hover {
+  background: rgba(255, 255, 255, 0.14);
+  border-color: rgba(255, 255, 255, 0.2);
+}
+.cc-btn:active {
+  transform: scale(0.97);
+}
+.cc-btn.ghost:hover {
+  background: rgba(99, 102, 241, 0.22);
+}
+/* 自动跟随已开启：用靛蓝而不是上行的青，避免与方向色抢语义 */
+.cc-btn.on {
+  color: #c7d2fe;
+  background: rgba(99, 102, 241, 0.22);
+  border-color: rgba(129, 140, 248, 0.55);
+}
+/* 车速图例：贴左下角，与线路态的走向图例互斥（同样进 fitRect 的可绘制区计算） */
+.city-legend {
+  position: absolute;
+  left: 24rpx;
+  bottom: 24rpx;
+  z-index: 9;
+  display: flex;
+  flex-direction: column;
+  gap: 8rpx;
+  padding: 14rpx 20rpx;
+  border-radius: 20rpx;
+  background: rgba(11, 16, 32, 0.68);
+  border: 2rpx solid rgba(255, 255, 255, 0.12);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  font-size: 20rpx;
+  color: rgba(255, 255, 255, 0.7);
+}
+.cl-head {
+  font-size: 20rpx;
+  font-weight: 700;
+  color: rgba(255, 255, 255, 0.5);
+}
+.cl-item {
+  display: flex;
+  align-items: center;
+}
+.cl-dot {
+  width: 14rpx;
+  height: 14rpx;
+  border-radius: 50%;
+  margin-right: 10rpx;
+  border: 2rpx solid rgba(255, 255, 255, 0.85);
+  box-sizing: border-box;
+  display: inline-block;
+}
+/* 线网走向色卡：与 DIR_STYLE.svgStroke 同色（青蓝上行 / 玫红下行） */
+.cl-line {
+  width: 22rpx;
+  height: 4rpx;
+  border-radius: 2rpx;
+  margin-right: 10rpx;
+  display: inline-block;
+}
+.cl-line.up { background: #22d3ee; }
+.cl-line.down { background: #fb7185; }
+.cl-tip {
+  margin-top: 4rpx;
+  font-size: 18rpx;
+  color: rgba(255, 255, 255, 0.4);
+}
+/* 聚合团里的车辆数（自绘模式的 HTML 文字层，与 stop-label 同一坐标系） */
+.city-count {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+  font-size: 20rpx;
+  font-weight: 800;
+  line-height: 1;
+  color: #fff;
+  font-variant-numeric: tabular-nums;
+  text-shadow: 0 2rpx 6rpx rgba(0, 0, 0, 0.75);
+}
+/* 全市近景的自编号标签：深色贴片 + 车速档文字色（与车点同一套语义）；
+   位置以标签中心为锚，与 buildCityTags 里的碰撞盒（y±6px）一致 */
+.city-tag {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+  padding: 2rpx 10rpx;
+  border-radius: 999rpx;
+  font-size: 18rpx;
+  font-weight: 700;
+  line-height: 1.5;
+  white-space: nowrap;
+  background: rgba(11, 16, 32, 0.74);
+  border: 2rpx solid rgba(255, 255, 255, 0.16);
+  font-variant-numeric: tabular-nums;
+}
+/* 当前详情窗里那辆车的自编号加重，避免在几十个标签里找不到 */
+.city-tag.sel {
+  background: rgba(99, 102, 241, 0.9);
+  border-color: rgba(255, 255, 255, 0.85);
+  color: #fff !important;
+}
+.city-tag uni-text,
+.city-tag text {
+  white-space: nowrap;
+}
+/* 悬停浮标第二行：所属线路（全市态才有） */
+.bh-line {
+  margin-left: 12rpx;
+  font-size: 20rpx;
+  line-height: 1;
+  color: rgba(255, 255, 255, 0.6);
+  white-space: nowrap;
+}
+/* 窄屏：图例收到两列并降低字体，免得占掉半个画面 */
+@media (max-width: 720px) {
+  .city-legend {
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6rpx 18rpx;
+    max-width: calc(100vw - 48rpx);
+  }
+  .cl-tip {
+    display: none;
+  }
 }
 </style>

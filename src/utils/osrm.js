@@ -18,7 +18,7 @@
  * 段21 1.12km→0.25km），因此修复梯次为：
  *   贴走廊直接用 → 加途经点重算 → 换端点吸附候选重算 → 站间直线。
  * （实测 foot/walking 配置在 demo 服务器上返回的就是 car 几何、alternatives 与 exclude=motorway
- *  在 demo 上也拿不到额外结果，均不再使用）
+ *  在 demo 上也拿不到额外结果，均不再使用；对应的临时探针已随路线否决删除）
  */
 import { gcj02ToWgs84, wgs84ToGcj02, distance } from './geo.js'
 

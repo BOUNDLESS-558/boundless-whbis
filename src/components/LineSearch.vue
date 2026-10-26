@@ -14,7 +14,7 @@
 
     <!-- 视图分段行：切换 实时地图 / 实时线路 / 时刻表 / 线路库。
          分段项由宿主页给（views），本组件只管高亮与上抛，不掺业务状态；
-         plain（并入地图左上控制卡）时不设自己的卡壳、不显示状态文案与齿轮（齿轮由 .ctrl-cfg 承担） -->
+         plain（并入地图左上控制卡）时不设自己的卡壳、不显示状态文案 -->
     <view class="mod-row view-row" v-if="views.length">
       <view class="seg-groove">
         <view
@@ -26,7 +26,6 @@
         >{{ plain ? (v.short || v.label) : v.label }}</view>
       </view>
       <text class="vr-meta" v-if="meta && !plain">{{ meta }}</text>
-      <view class="ab-gear" v-if="!plain" @click="$emit('open-settings')" title="地图服务设置">⚙</view>
     </view>
 
     <view class="mod-div" v-if="views.length && !plain"></view>
@@ -101,13 +100,13 @@ export default {
     // 紧凑态：收起品牌行与快捷行，只留分段 + 搜索，把高度让给地图
     compact: { type: Boolean, default: false },
     // 裸形态：宿主已给出卡壳（首页地图视图把它放进 LineMap 的 .ctrl 里）——
-    // 自己不再带玻璃背景、不留左右内边距、不重复状态文案与齿轮
+    // 自己不再带玻璃背景、不留左右内边距、不重复状态文案
     plain: { type: Boolean, default: false },
     // 当前线路号：顶栏实例与地图态实例是两个不同的组件，冷启动选完线整块换挂载，
     // 若不把宿主的线路号灌进来，搜索框会在切视图那一刻被清空（用户视角是「刚输的没了」）
     lineNoProp: { type: String, default: '' },
   },
-  emits: ['pick', 'view-change', 'open-settings'],
+  emits: ['pick', 'view-change'],
   data() {
     return {
       lineNo: this.lineNoProp || '',
@@ -230,9 +229,9 @@ export default {
 .mod-main.is-plain .mod-row {
   padding: 0;
 }
-/* 首行右侧让位给 .ctrl 右上角绝对定位的齿轮（与 .ctrl-search 同一口径） */
+/* 首行右侧不再让位（齿轮已移除），裸形态顶栏整行铺满卡片 */
 .mod-main.is-plain .view-row {
-  padding-right: 72rpx;
+  padding-right: 0;
 }
 .mod-main.is-plain .seg-tab {
   height: 48rpx;
@@ -320,7 +319,7 @@ export default {
   background: rgba(255, 255, 255, 0.05);
   border: 2rpx solid rgba(255, 255, 255, 0.09);
 }
-/* 视图分段行：凹槽分段 + 右侧状态文案 + 齿轮（齿轮复用顶栏同款类名，全站一个视觉语言） */
+/* 视图分段行：凹槽分段 + 右侧状态文案 */
 .view-row {
   padding: 16rpx 22rpx;
   gap: 16rpx;
@@ -372,29 +371,6 @@ export default {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-}
-.ab-gear {
-  flex: 0 0 auto;
-  width: 60rpx;
-  height: 60rpx;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: 16rpx;
-  font-size: 28rpx;
-  color: rgba(255, 255, 255, 0.72);
-  background: rgba(255, 255, 255, 0.06);
-  border: 2rpx solid rgba(255, 255, 255, 0.10);
-  cursor: pointer;
-  transition: background 0.18s, color 0.18s, border-color 0.18s, transform 0.15s;
-}
-.ab-gear:hover {
-  background: rgba(129, 140, 248, 0.16);
-  color: #fff;
-  border-color: rgba(129, 140, 248, 0.45);
-}
-.ab-gear:active {
-  transform: scale(0.94);
 }
 /* 搜索行：兼做联想面板的定位容器（面板浮在这一行下沿，不撑高布局） */
 .search-row {

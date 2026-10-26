@@ -16,6 +16,10 @@
  *   node scripts/scan-lines.mjs --merge             # 与现有 JSON 合并（分批扫描累加）
  *   node scripts/scan-lines.mjs --no-dir1           # 跳过反向复核（请求量减半，dirs 只记 [0]）
  *   node scripts/scan-lines.mjs --out other.json    # 改输出路径
+ *   node scripts/scan-lines.mjs --net               # 只生全市线网底图 src/static/network.json（站点坐标串）
+ *
+ * --net 单独一条道：它读已生成的 lines.json 拿“哪些线在营运”，再逐方向把站点经纬度拉回来，
+ * 产物是地图全市视图的线网底图（静态资产，走 HTTP 缓存，不占运行时 API 配额）。
  *
  * 注意：这是**数据生成器**，不是回归探针 —— 项目里唯一允许主动写文件的 script，
  * 因为它的产物（线路库 JSON）本身就是用户要求交付的数据资产。
@@ -61,12 +65,14 @@ const VERIFY_DIR1 = !has('no-dir1')
 const MERGE = has('merge')
 // 只对现有 JSON 重跑第 6 步（编号规整 / 白名单 / 去重），不联网；改完后处理逻辑时用它
 const NORMALIZE_ONLY = has('normalize-only')
-const OUT = path.resolve(argOf('out', 'src/data/lines.json'))
+// 全市线网底图模式（产物是 src/static/network.json，与线路库互不干扰）
+const NET = has('net')
+const OUT = path.resolve(argOf('out', NET ? 'src/static/network.json' : 'src/data/lines.json'))
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
 
-/** 探测一条线路的某个方向；返回 { ok, dto, stops } 或 { ok:false, reason } */
-async function probe(code, dir) {
+/** 探测一条线路的某个方向；返回 { ok, dto, stops } 或 { ok:false, reason }；withPts 时附带站点坐标串 */
+async function probe(code, dir, withPts) {
   for (let attempt = 0; attempt < 3; attempt++) {
     try {
       const res = await fetch(BASE + '/line', {
@@ -82,7 +88,19 @@ async function probe(code, dir) {
         // ⚠ 不能把“站点为空”当成不存在：实测 2/3/5/11/19 路都是 20000 + 有 lineName、但 stopDetailList 为空
         // （服务端站点数据缺失）。只要 lineName 回来就是真实线路，站数记 0 由另一个方向补。
         if (!dto || !dto.lineName) return { ok: false, reason: 'empty' }
-        return { ok: true, dto, stops: stops.length }
+        const r = { ok: true, dto, stops: stops.length }
+        if (withPts) {
+          const pts = []
+          for (const s of stops) {
+            const la = parseFloat(s.latitude)
+            const ln = parseFloat(s.longitude)
+            // 缺坐标的站后端回的是 0.0/0.0：不挡的话 bbox 会拉到几内亚湾，走向还会穿到海里去
+            if (isNaN(la) || isNaN(ln) || la < 24 || la > 54 || ln < 73 || ln > 135) continue
+            pts.push(+ln.toFixed(5), +la.toFixed(5))
+          }
+          r.pts = pts
+        }
+        return r
       }
       const msg = (payload && payload.msg && payload.msg.message) || ''
       // 线路不存在是确定性结果，不重试
@@ -116,6 +134,74 @@ async function pool(items, worker, concurrency) {
 
 const fmt = (n) => String(n).padStart(4, ' ')
 const t0 = Date.now()
+
+// —— --net：全市线网底图（读线路库→逐方向拉站点坐标→落 src/static/network.json）——
+if (NET) {
+  const LIB = path.resolve(argOf('lib', 'src/data/lines.json'))
+  if (!fs.existsSync(LIB)) { console.error('找不到线路库：' + LIB + '（先跑一次普通的 scan-lines）'); process.exit(1) }
+  const lib = JSON.parse(fs.readFileSync(LIB, 'utf8'))
+  // 只扫营运线：停运线没有在运车辆，画在地图上纯属干扰
+  const todo = []
+  for (const l of lib.lines || []) {
+    if (l.status === '停运' || !l.stops) continue
+    for (const d of (l.dirs && l.dirs.length ? l.dirs : [0])) todo.push({ no: l.no, code: l.code || l.no, dir: d })
+  }
+  const netSort = (a, b) => {
+    const na = Number(a.no)
+    const nb = Number(b.no)
+    if (!isNaN(na) && !isNaN(nb)) return na - nb
+    if (!isNaN(na)) return -1
+    if (!isNaN(nb)) return 1
+    return String(a.no).localeCompare(String(b.no), 'zh-Hans-CN')
+  }
+  console.log(`线网：${new Set(todo.map((t) => t.no)).size} 条线路 / ${todo.length} 个方向，并发 ${CONCURRENCY}，间隔 ${DELAY}ms`)
+  let nd = 0
+  const netRes = await pool(todo, async (t) => {
+    const r = await probe(t.code, t.dir, true)
+    nd++
+    if (nd % 25 === 0 || nd === todo.length) process.stdout.write(`\r  线网 ${fmt(nd)}/${fmt(todo.length)}`)
+    return { no: t.no, code: t.code, dir: t.dir, r }
+  }, CONCURRENCY)
+  process.stdout.write('\n')
+  const netByNo = new Map()
+  let skipped = 0
+  for (const it of netRes) {
+    if (!it.r || !it.r.ok || !it.r.pts || it.r.pts.length < 4) { skipped++; continue }
+    if (!netByNo.has(it.no)) netByNo.set(it.no, { no: it.no, code: it.code, dirs: [] })
+    netByNo.get(it.no).dirs.push({ d: it.dir, p: it.r.pts })
+  }
+  const netLines = [...netByNo.values()].sort(netSort)
+  let minLng = Infinity, minLat = Infinity, maxLng = -Infinity, maxLat = -Infinity
+  let stopCount = 0
+  for (const l of netLines) {
+    for (const d of l.dirs) {
+      stopCount += d.p.length / 2
+      for (let i = 0; i + 1 < d.p.length; i += 2) {
+        if (d.p[i] < minLng) minLng = d.p[i]
+        if (d.p[i] > maxLng) maxLng = d.p[i]
+        if (d.p[i + 1] < minLat) minLat = d.p[i + 1]
+        if (d.p[i + 1] > maxLat) maxLat = d.p[i + 1]
+      }
+    }
+  }
+  const netOut = {
+    city: CITY,
+    cityName: '武汉',
+    updated: new Date().toISOString(),
+    source: 'customized.wuhanbus.com /line 站点坐标串',
+    bbox: [minLng, minLat, maxLng, maxLat].map((n) => +n.toFixed(5)),
+    count: netLines.length,
+    dirCount: netLines.reduce((s, l) => s + l.dirs.length, 0),
+    stopCount,
+    lines: netLines,
+  }
+  fs.mkdirSync(path.dirname(OUT), { recursive: true })
+  fs.writeFileSync(OUT, JSON.stringify(netOut) + '\n', 'utf8')
+  const nkb = (fs.statSync(OUT).size / 1024).toFixed(1)
+  console.log(`\n写入 ${path.relative(process.cwd(), OUT)}：${netLines.length} 条线路 / ${netOut.dirCount} 个方向 / ${stopCount} 个站点坐标，${nkb} KB，用时 ${((Date.now() - t0) / 1000).toFixed(1)}s`)
+  console.log(`bbox = ${netOut.bbox.join(', ')}${skipped ? ` · 不足 2 个有效坐标而未绘的方向 ${skipped} 个（定制线缺位，属上游数据缺失）` : ''}`)
+  process.exit(0)
+}
 
 // 1) 生成候选：纯数字 + 各前缀
 const candidates = []

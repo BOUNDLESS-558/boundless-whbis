@@ -55,9 +55,8 @@
         },
         "sdkConfigs" : {
             "maps" : {
-                /* 高德地图（Web端 JS API）：出于安全不再内置 Key/安全密钥（留空），
-                   由用户在首页右上角「地图服务设置」自填（BYOK），运行时由 applyAmapConfig()
-                   覆写 __uniConfig.aMapKey/aMapSecurityJsCode；修改后需重启 dev 服务器生效 */
+                /* 高德地图（Web端 JS API）：H5 端留空时自动降级为自绘走向图（免 Key）。
+                   如需原生 <map>，在此填入 Web端(JS API) 类型的 Key 与安全密钥 */
                 "amap" : {
                     "key" : "",
                     "securityJsCode" : ""

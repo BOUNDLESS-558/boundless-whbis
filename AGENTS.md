@@ -37,7 +37,6 @@ npm run deploy:pages # 构建 + 强推 origin/pages（GitHub Pages）
 | `probe-label-overlap.mjs "<url>" 30 [--mobile]` | 站名/车号/圆点两两重叠，四类全空才算过 |
 | `probe-line-colors.mjs 337` | 详情页方向配色，读回 `.seg`/圆点/页签的计算样式 |
 | `probe-hover-focus.mjs` | 悬停浮标 + 「在地图上定位」落点；**改布局后必跑** |
-| `probe-map-mode.mjs 337` | 渲染方式三档（auto/schematic/native × 有/无 Key）逻辑 + 真实渲染；改双模式判据后必跑 |
 | `probe-ctrl-row.mjs 337` | 左上控制卡版式：整卡包裹 / 四块左缘对齐 / 不溢出 / 方向行单行 / tab 文字居中 / 徽标紧邻线路号，跑 1440·390·360·320 四个视口。**改 `.ctrl` 内任何版式后必跑** |
 | `probe-line-refresh.mjs 337` | 详情页刷新胶囊（↻ + 间隔下拉）：结构、四项、选中态、菜单不溢出、存储与真实请求节奏。`PROBE_MOBILE=1 PROBE_QUICK=1` 只验窄屏渲染 |
 | `probe-refresh.mjs 337` | 地图页同款刷新控件（面板内），含 24s 真实请求时间线 |
@@ -76,17 +75,13 @@ npm run deploy:pages # 构建 + 强推 origin/pages（GitHub Pages）
 
 ### 地图双模式（判据是 `useNativeMap()`，不是 `hasMapKey()`）
 
-有两套**视觉完全不同**的渲染：「自绘走向图」（青蓝/玫红分色双轨 + 白心站点 + 白底站名贴片）和「原生 `<map>`」（高德底图 + 原生 marker/polyline）。切换维度由 `config.js` 的 `map_render_mode` 三档决定：
+有两套**视觉完全不同**的渲染：「自绘走向图」（青蓝/玫红分色双轨 + 白心站点 + 白底站名贴片）和「原生 `<map>`」（高德底图 + 原生 marker/polyline）。判据简化后只剩一个真值（`config.js` 的 `useNativeMap()`）：
 
-| 存储值 | 行为 |
-|---|---|
-| 未设置 / `auto` | 有 Key → 原生；无 Key → 走向图（旧行为） |
-| `schematic` | **即使填了 Key 也走自绘走向图** |
-| `native` | 有 Key → 原生；无 Key → 自动回退走向图 |
+- **App 端**：Key 随安装包内置（`manifest.json` 的 `sdkConfigs.maps.amap.key`），`APP_CONFIG.mapKey` 非空 → 原生地图；
+- **H5 端**：`APP_CONFIG.mapKey` 留空（现状）→ `useNativeMap()` 恒为假 → 一律走自绘走向图（免 Key 的 OSRM 贴路 + 高德免 Key 瓦片）。
+- BYOK（用户自填 Key）入口已整体移除：`config.js` 不再读 `amap_byok_config` 存储，`main.js` 不再调 `applyAmapConfig()`，也没有设置抽屉/齿轮。若将来需要 H5 端用原生地图，只需在 `manifest.json` 的 H5 `sdkConfigs.maps.amap` 填入 Web端(JS API) Key 与 `securityJsCode`（构建期注入，改完需重启 dev 服务器）。
 
-- **只能从 `useNativeMap()` 取判据**，别在页面里直接调 `hasMapKey()`，否则会出现“设置页显示原生、地图页却画自绘”。两个入口（`settings.vue` 与 `index.vue` 内嵌面板）共用同一份三档常量。
-- **改完必须整页重载**：`useMap` 是启动时读一次的计算属性，`uni.setStorageSync` 不会触发重算（hash 路由下改 hash 也不重建页面）。两个入口的 `pickMode()` 都调 `reload()`。
-- 走向图模式下 Key 完全闲置（瓦片免 Key），但**不要自动清除用户 Key**——切回原生还要用。
+⚠ 不要重新引入「三档渲染开关」（旧的 `map_render_mode` auto/schematic/native 已删）：判据必须是单一 `useNativeMap()`，页面里别自己拼 `hasMapKey()` / `APP_CONFIG.mapKey` 的变体，否则会出现"设置页显示原生、地图页却画自绘"的分裂。
 
 走向图模式的两个底座：
 
@@ -95,7 +90,7 @@ npm run deploy:pages # 构建 + 强推 origin/pages（GitHub Pages）
   - 逐段质检用**最大垂距**，不要用「规划距离/直线距离」ratio——站前掉头 ratio 11 只偏 76m 却真实，吸到高架 ratio 17 已跑 3km 外。
   - 四级修复：贴走廊 → 加 1/3、2/3 途经点 → **换端点吸附候选**（`/nearest?number=3`）→ 站间直线。第三级是实测关键：坏段根因是站点被吸到高架层/对向车道；吸附点离站 >60m 不认，且要用 `distance >= straight*0.8` 剔除「跳过」而非「绕开」。
   - 缓存 7 天，键 `whbis:osrm-route:v5:`。**升版本号后旧键不会自动清理**，探针需先清 localStorage。公共 demo 服务会限速断连，全失败只回退站点连线。
-  - 已实测**无效、不要重试**：`exclude=motorway`、`alternatives=3`、foot/walking profile、FOSSGIS 服务；以及「免 Key 拿高德官方轨迹」三条路（iframe 嵌入 / 直拉 amap.com 接口 / OSM relation，详见代码注释与 `probe-embed-and-exclude.mjs`）。
+  - 已实测**无效、不要重试**：`exclude=motorway`、`alternatives=3`、foot/walking profile、FOSSGIS 服务；以及「免 Key 拿高德官方轨迹」三条路（iframe 嵌入 / 直拉 amap.com 接口 / OSM relation，详见代码注释）。对应的临时探针（`probe-embed-and-exclude.mjs`、`probe-amap-*.mjs` 等）已随路线否决删除。
 - 走向未贴路时画的是站间直连（细虚线 + `routeAlert` 提示）。**判断截图前先确认吸附完成**（缓存已落库、无 alert），别把初屏当结果。
 
 ### 方向配色（全站唯一真源）

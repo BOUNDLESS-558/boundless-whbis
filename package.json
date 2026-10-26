@@ -5,6 +5,7 @@
     "test:md5": "node scripts/test-md5.mjs",
     "test:busid": "node scripts/test-busid.mjs",
     "scan:lines": "node scripts/scan-lines.mjs --merge",
+    "scan:net": "node scripts/scan-lines.mjs --net --concurrency 8 --delay 40",
     "probe:suggest": "node scripts/probe-line-suggest.mjs",
     "dev:custom": "uni -p",
     "dev:h5": "uni",
