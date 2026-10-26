@@ -12,10 +12,8 @@ const EDGE = 'C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe'
 const PORT = 9339
 const LOCAL = process.argv[2] || 'http://localhost:5174/boundless-whbis/'
 const TARGET = 'https://www.amap.com/ssr/search/busline_detail?query_type=TQUERY&query=337%E8%B7%AF&city=420100&busId=900000128833&keywords=337%E8%B7%AF'
-const OUT = path.join(os.tmpdir(), 'amap-embed-probe')
 const PROFILE = path.join(os.tmpdir(), 'edge-iframe-prof')
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
-fs.mkdirSync(OUT, { recursive: true })
 fs.rmSync(PROFILE, { recursive: true, force: true })
 
 const child = spawn(EDGE, [
@@ -89,8 +87,7 @@ ws.onopen = async () => {
   const cookies = await send('Network.getAllCookies', { urls: ['https://www.amap.com/', 'https://www.amap.com/ssr/search/busline_detail'] })
   const amapCookies = ((cookies && cookies.cookies) || []).filter((c) => /amap\.com$/.test(c.domain.replace(/^\./, '')))
   const withReasons = await evaluate(`'n/a'`)
-  const shot = await send('Page.captureScreenshot', { format: 'png' })
-  if (shot && shot.data) fs.writeFileSync(path.join(OUT, 'iframe-login.png'), Buffer.from(shot.data, 'base64'))
+  // AGENTS.md：探针不产出任何文件——不调 captureScreenshot、不写盘
 
   console.log(JSON.stringify({
     iframe: injected,

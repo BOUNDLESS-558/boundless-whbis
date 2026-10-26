@@ -10,10 +10,8 @@ import path from 'node:path'
 const EDGE = 'C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe'
 const PORT = 9337
 const URL_PAGE = process.argv[2] || 'http://localhost:5174/boundless-whbis/#/pages/map/map?lineCode=420100-337-0&direction=0&lineName=337'
-const OUT = path.join(os.tmpdir(), 'amap-embed-probe')
 const PROFILE = path.join(os.tmpdir(), 'edge-interact-prof')
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
-fs.mkdirSync(OUT, { recursive: true })
 fs.rmSync(PROFILE, { recursive: true, force: true })
 
 const child = spawn(EDGE, [
@@ -52,9 +50,9 @@ const evaluate = async (expr) => {
   if (r && r.exceptionDetails) return { error: r.exceptionDetails.text }
   return r && r.result ? r.result.value : null
 }
+// AGENTS.md：探针不产出任何文件。shot() 保留为空实现，调用点不动。
 const shot = async (name) => {
-  const s = await send('Page.captureScreenshot', { format: 'png' })
-  if (s && s.data) fs.writeFileSync(path.join(OUT, name), Buffer.from(s.data, 'base64'))
+  return null
 }
 
 ws.onopen = async () => {

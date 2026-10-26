@@ -23,8 +23,27 @@
           placeholder="输入公交线路号，如 337 / 电1"
           placeholder-class="search-ph"
           confirm-type="search"
+          @input="onInput"
           @confirm="doSearch"
         />
+        <!-- 线路库联想：本地匹配输入，点一条直达对应线路（不发试探请求） -->
+        <view class="sug-panel" v-if="suggestOpen && suggestList.length">
+          <view class="sug-head">
+            <text class="sug-head-t">相关线路 {{ suggestTotal }} 条</text>
+            <text class="sug-head-s">线路库 {{ lineCount }} 条 · 本地匹配</text>
+          </view>
+          <view class="sug-item" v-for="s in suggestList" :key="s.no" @click="pickSuggest(s)">
+            <text class="sug-no">{{ s.no }}</text>
+            <view class="sug-body">
+              <text class="sug-route">{{ s.start || '起点未知' }} → {{ s.end || '终点未知' }}</text>
+              <text class="sug-meta">{{ s.stops ? s.stops + ' 站' : '站数未知' }} · {{ s.dirs.length > 1 ? '双向' : '单向' }}</text>
+            </view>
+            <text class="sug-go">›</text>
+          </view>
+        </view>
+        <view class="sug-panel sug-none" v-else-if="suggestEmpty">
+          <text class="sug-empty">线路库未收录「{{ lineNo }}」，点「查询」仍可直接向后端查一次</text>
+        </view>
       </view>
 
       <!-- 查询按钮（居中） -->
@@ -52,6 +71,22 @@
           <view class="mc-close" @click="showSettings = false">✕</view>
         </view>
         <view class="mc-desc">实时地图使用高德「Web端(JS API)」。填入你自己申请的 Key 后，地图用量计入你的高德账号；留空则使用内置 Key（开发模式）。</view>
+
+        <view class="field">
+          <view class="label">地图渲染方式</view>
+          <view class="mc-seg">
+            <view
+              v-for="m in modeOptions"
+              :key="m.value"
+              class="mc-seg-item"
+              :class="{ on: mapMode === m.value }"
+              @click="pickMode(m.value)"
+            >
+              <text class="ms-t">{{ m.label }}</text>
+              <text class="ms-d">{{ m.desc }}</text>
+            </view>
+          </view>
+        </view>
 
         <view class="field">
           <view class="label">高德 JS Key</view>
@@ -130,13 +165,24 @@
       <view class="loading-dot"></view>
       <view class="loading-text">正在查询...</view>
     </view>
+
+    <!-- 联想面板的“点外部关闭”遮罩，必须在页面最外层，否则被卡片背景裁切 -->
+    <view class="sug-mask" v-if="suggestOpen" @click="suggestOpen = false"></view>
   </view>
 </template>
 
 <script>
 import { fetchLine, fetchPlanTime, fetchRealTime, decryptBusId, onBusIdReady } from '../../utils/api.js'
-import { buildLineCode, getUserAmapConfig, saveUserAmapConfig, clearUserAmapConfig } from '../../config.js'
+import { buildLineCode, getUserAmapConfig, saveUserAmapConfig, clearUserAmapConfig, getMapMode, saveMapMode } from '../../config.js'
 import { assetUrl } from '../../utils/asset.js'
+import { suggestLines, countMatches, normNo, LINE_COUNT } from '../../utils/lineIndex.js'
+
+// 渲染方式三档：自动（跟随有无 Key）/ 强制走向图 / 强制原生地图
+const MODE_OPTIONS = [
+  { value: 'auto', label: '自动', desc: '有 Key 用原生' },
+  { value: 'schematic', label: '走向图', desc: '自绘双色分轨' },
+  { value: 'native', label: '原生地图', desc: '高德底图' },
+]
 
 export default {
   data() {
@@ -152,7 +198,13 @@ export default {
       showSettings: false,
       amapKey: '',
       amapJsCode: '',
+      // 搜索联想面板开关（点选 / 查询 / 点外部都关闭）
+      suggestOpen: false,
+      // 线路库条数（scripts/scan-lines.mjs 生成，运行时0 请求）
+      lineCount: LINE_COUNT,
       hasCustom: false,
+      mapMode: 'auto',
+      modeOptions: MODE_OPTIONS,
     }
   },
   computed: {
@@ -169,6 +221,17 @@ export default {
       if (!k || k.length < 10) return k
       return `${k.slice(0, 4)}****${k.slice(-4)}`
     },
+    // 线路库联想（本地 JSON，输入即出；不请求接口）
+    suggestList() {
+      return suggestLines(this.lineNo, 6)
+    },
+    suggestTotal() {
+      return countMatches(this.lineNo)
+    },
+    // 输入了东西但库里没收录：提示仍可直接查询，不拦截
+    suggestEmpty() {
+      return !!this.suggestOpen && !!normNo(this.lineNo) && !this.suggestList.length
+    },
   },
   onLoad() {
     // 回填已保存的自定义高德 Key
@@ -178,10 +241,23 @@ export default {
       this.amapJsCode = c.securityJsCode || ''
       this.hasCustom = true
     }
+    this.mapMode = getMapMode()
   },
   methods: {
+    // 用户输入即展开联想（不用 watch，避免“点选后设值”又把面板弹回来）
+    onInput() {
+      this.suggestOpen = true
+    },
+    pickSuggest(s) {
+      this.suggestOpen = false
+      this.lineNo = s.no
+      this.keyword = s.no
+      // 库里的 no 是真实线路号，code 才是后端 lineCode（电1 的 code 是 1001）
+      this.searchLine(s.code || s.no, s.no)
+    },
     // 触发查询
     doSearch() {
+      this.suggestOpen = false
       const no = (this.lineNo || '').trim()
       if (!no) {
         uni.showToast({ title: '请输入线路号', icon: 'none' })
@@ -195,7 +271,9 @@ export default {
       this.searchLine(no)
     },
     // 查询指定线路（上下行两个方向）
-    async searchLine(no) {
+    // no 是后端 lineCode 段；label 是展示用的线路号（两者偶尔不同）
+    async searchLine(no, label) {
+      const shown = label || no
       this.loading = true
       this.searched = true
       this.lines = []
@@ -223,16 +301,16 @@ export default {
         // 不阻塞列表：用时刻表明文车辆编号推断各方向的营运公司
         this.lines.forEach((l) => this.attachCompanies(l))
         if (!results.length) {
-          this.keyword = no
+          this.keyword = shown
         }
       } catch (e) {
         this.lines = []
-        this.keyword = no
+        this.keyword = shown
         const msg = (e && e.message) || ''
         if (msg.indexOf('openId') > -1 || msg.indexOf('缺少') > -1) {
           this.apiError = '接口鉴权未配置，请在 src/config.js 填写 openId'
         } else if (msg.indexOf('线路找不到') > -1) {
-          this.apiError = `线路「${no}」不存在，请确认线路号（部分线路号需带前缀）`
+          this.apiError = `线路「${shown}」不存在，请确认线路号（部分线路号需带前缀）`
         } else {
           this.apiError = `接口返回错误：${msg}`
         }
@@ -271,6 +349,17 @@ export default {
         })
       } catch (e) { /* 忽略 */ }
       fill()
+    },
+    // 渲染方式是页面创建时读一次的（useMap 不响应存储变化），必须整页重载才生效
+    pickMode(mode) {
+      if (mode === this.mapMode) return
+      if (mode === 'native' && !this.hasCustom && !(this.amapKey || '').trim()) {
+        uni.showToast({ title: '原生地图需先填写高德 Key', icon: 'none' })
+        return
+      }
+      this.mapMode = mode
+      saveMapMode(mode)
+      this.reloadAmapCfg()
     },
     // 保存自定义高德 Key：高德 SDK 一经加载无法换 Key，必须整页重载
     saveAmap() {
@@ -386,7 +475,7 @@ export default {
   color: rgba(255, 255, 255, 0.55);
   letter-spacing: 2rpx;
 }
-/* 搜索卡片 */
+/* 搜索卡片：兼做联想面板的定位容器（面板浮在“查询”按钮上方，不撑高布局） */
 .search-card {
   display: flex;
   align-items: center;
@@ -394,6 +483,8 @@ export default {
   max-width: 860rpx;
   box-sizing: border-box;
   padding: 16rpx 16rpx 16rpx 32rpx;
+  position: relative;
+  z-index: 42;
   transition: box-shadow 0.25s, border-color 0.25s;
 }
 .search-card:focus-within {
@@ -413,6 +504,103 @@ export default {
 }
 .search-ph {
   color: rgba(255, 255, 255, 0.4);
+}
+/* 线路库联想面板 */
+.sug-panel {
+  position: absolute;
+  top: calc(100% + 12rpx);
+  left: 0;
+  right: 0;
+  z-index: 43;
+  padding: 10rpx;
+  border-radius: 26rpx;
+  background: rgba(12, 18, 36, 0.96);
+  backdrop-filter: blur(26px) saturate(170%);
+  -webkit-backdrop-filter: blur(26px) saturate(170%);
+  border: 2rpx solid rgba(255, 255, 255, 0.16);
+  box-shadow: 0 24rpx 56rpx rgba(0, 0, 0, 0.55), inset 0 1rpx 0 rgba(255, 255, 255, 0.12);
+  max-height: 58vh;
+  overflow-y: auto;
+}
+.sug-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12rpx;
+  padding: 8rpx 14rpx 12rpx;
+}
+.sug-head-t {
+  font-size: 21rpx;
+  color: rgba(255, 255, 255, 0.58);
+}
+.sug-head-s {
+  font-size: 19rpx;
+  color: rgba(255, 255, 255, 0.32);
+}
+.sug-item {
+  display: flex;
+  align-items: center;
+  gap: 16rpx;
+  padding: 16rpx 14rpx;
+  border-radius: 18rpx;
+  cursor: pointer;
+  transition: background 0.16s;
+}
+.sug-item:hover {
+  background: rgba(255, 255, 255, 0.08);
+}
+.sug-no {
+  flex: 0 0 auto;
+  min-width: 92rpx;
+  text-align: center;
+  padding: 6rpx 14rpx;
+  border-radius: 12rpx;
+  font-size: 24rpx;
+  font-weight: 800;
+  color: #062a33;
+  background: linear-gradient(135deg, #67e8f9, #06b6d4);
+  font-variant-numeric: tabular-nums;
+}
+.sug-body {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6rpx;
+}
+.sug-route {
+  font-size: 22rpx;
+  color: rgba(255, 255, 255, 0.86);
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.sug-meta {
+  font-size: 19rpx;
+  color: rgba(255, 255, 255, 0.4);
+}
+.sug-go {
+  color: rgba(255, 255, 255, 0.3);
+  font-size: 26rpx;
+}
+.sug-none {
+  padding: 0;
+}
+.sug-empty {
+  display: block;
+  padding: 22rpx 18rpx;
+  font-size: 21rpx;
+  line-height: 1.5;
+  color: rgba(255, 255, 255, 0.5);
+}
+/* 联想面板的点击外部关闭遮罩（低于搜索卡片 42） */
+.sug-mask {
+  position: fixed;
+  left: 0;
+  top: 0;
+  width: 100vw;
+  height: 100vh;
+  z-index: 41;
 }
 /* 查询按钮：水平居中 */
 .search-btn-wrap {
@@ -716,6 +904,45 @@ export default {
 }
 .field {
   margin-bottom: 24rpx;
+}
+/* 渲染方式三档选择（<text> 在 H5 下是 inline，必须显式 block） */
+.mc-seg {
+  display: flex;
+  gap: 12rpx;
+}
+.mc-seg-item {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6rpx;
+  padding: 16rpx 6rpx;
+  box-sizing: border-box;
+  border-radius: 20rpx;
+  background: rgba(255, 255, 255, 0.06);
+  border: 2rpx solid rgba(255, 255, 255, 0.12);
+  cursor: pointer;
+  transition: background 0.2s, border-color 0.2s;
+}
+.mc-seg-item.on {
+  background: linear-gradient(135deg, rgba(99, 102, 241, 0.35), rgba(6, 182, 212, 0.28));
+  border-color: rgba(129, 140, 248, 0.7);
+}
+.ms-t {
+  display: block;
+  font-size: 26rpx;
+  font-weight: 700;
+  line-height: 1.2;
+  color: #fff;
+}
+.ms-d {
+  display: block;
+  font-size: 19rpx;
+  line-height: 1.3;
+  color: rgba(255, 255, 255, 0.5);
+  text-align: center;
 }
 .label {
   font-size: 24rpx;

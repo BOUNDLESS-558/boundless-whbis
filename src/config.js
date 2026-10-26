@@ -65,6 +65,35 @@ export function hasMapKey() {
   return !!((u && u.key) || (APP_CONFIG.mapKey && APP_CONFIG.mapKey.trim()))
 }
 
+// ---- 地图渲染方式（与 Key 解耦，两套视觉效果二选一）----
+// 'auto'（默认）：有 Key 用原生 <map>，无 Key 用自绘走向图（旧行为）
+// 'schematic'：始终用自绘走向图（青蓝/玫红分色、双向分轨、站名白底贴片），免 Key
+// 'native'：始终用原生 <map>（高德底图 + 原生 marker/polyline），无 Key 时自动回退自绘
+const MAP_MODE_KEY = 'map_render_mode'
+
+export function getMapMode() {
+  try {
+    const m = uni.getStorageSync(MAP_MODE_KEY)
+    return m === 'native' || m === 'schematic' ? m : 'auto'
+  } catch (e) {
+    return 'auto'
+  }
+}
+
+export function saveMapMode(mode) {
+  try {
+    if (mode === 'native' || mode === 'schematic') uni.setStorageSync(MAP_MODE_KEY, mode)
+    else uni.removeStorageSync(MAP_MODE_KEY)
+  } catch (e) { /* 忽略存储异常，下次按 auto 处理 */ }
+}
+
+// 当前是否应该渲染原生 <map>：两处入口（设置页 / 地图页）必须共用这一个判据，
+// 否则会出现“设置页显示原生、地图页却画自绘”的不一致。
+export function useNativeMap() {
+  if (getMapMode() === 'schematic') return false
+  return hasMapKey()
+}
+
 // H5：把用户 Key 注入 uni-app 运行时配置，供 <map> 组件加载高德 SDK 时使用。
 // 原理：@dcloudio/uni-h5 的 loadMaps() 从全局 __uniConfig.aMapKey / aMapSecurityJsCode
 // 读取 Key 拼接 script 标签，在页面创建前覆写这两个字段即可接管加载源。

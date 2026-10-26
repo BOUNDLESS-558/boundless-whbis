@@ -167,12 +167,22 @@ openId: wx_openid_dev_001
 
 ## 四、地图（双模式 + BYOK）
 
-地图页支持**双模式**，无 Key 也能跑通：
+地图页支持**双模式**，无 Key 也能跑通，而「用哪套」与有没有 Key **已经解耦**（设置项 `map_render_mode`）：
 
 | 模式 | 触发条件 | 说明 |
 | ---- | -------- | ---- |
-| 原生地图 | `hasMapKey()` 返回 true | 使用 uni-app `<map>` 组件（高德底图 + 折线走向） |
-| 自绘走向图 | 无可用 Key（默认） | 自绘 SVG：高德瓦片底图 + 贴路走向 + 站点 + 实时车辆 |
+| 原生地图 | `useNativeMap()` 为 true | 使用 uni-app `<map>` 组件（高德底图 + 原生 marker/折线） |
+| 自绘走向图 | `useNativeMap()` 为 false | 自绘 SVG：高德瓦片底图 + 贴路走向 + 站点 + 实时车辆 |
+
+`useNativeMap()` 的判定（`src/config.js`）：
+
+| 设置值 | 有 Key | 无 Key |
+| ------ | ------ | ------ |
+| `auto`（默认，未设置） | 原生地图 | 自绘走向图 |
+| `schematic`（走向图） | **自绘走向图** | 自绘走向图 |
+| `native`（原生地图） | 原生地图 | 自绘走向图（自动回退） |
+
+即：**填了 Key 但想要自绘视觉**时，在「地图服务设置」里把渲染方式选成「走向图」即可（保存后整页重载生效）。键名 `map_render_mode`，与 Key 存储 `amap_byok_config` 相互独立，切换模式不会清除 Key。
 
 **自绘模式的两个底座**（都不依赖高德 JS API）：
 
@@ -190,12 +200,12 @@ openId: wx_openid_dev_001
 项目出于安全**不再内置高德 Key**。用户需自行申请，且 H5 与 App 端 Key 类型不同：
 
 - **H5**：到[高德开放平台](https://console.amap.com/dev/key/app)申请「Web端(JS API)」类型的 Key + 安全密钥。
-  - 首页右上角 ⚙ 齿轮 →「地图服务设置」展开面板，或进入 `pages/settings/settings.vue` 填入。
+  - 首页右上角 ⚙ 齿轮 →「地图服务设置」展开面板，或进入 `pages/settings/settings.vue` 填入；面板顶部还有「地图渲染方式」三档选择。
   - 保存后存 `localStorage`（`amap_byok_config`），运行时由 `applyAmapConfig()` 覆写 `__uniConfig.aMapKey`。
   - ⚠️ 高德 SDK 一经加载无法换 Key，保存后需**整页重载**才生效。
 - **App 端**：申请「Android/iOS 平台」类型的 Key，填入 `src/manifest.json` 的 `app-plus.distribute.sdkConfigs.maps.amap.key`，随安装包内置，无需用户配置。
 
-`src/config.js` 的 `mapKey` 字段默认留空；`hasMapKey()` 综合判断内置 Key 与用户自定义 Key 是否可用。
+`src/config.js` 的 `mapKey` 字段默认留空；`hasMapKey()` 判断内置 Key 与用户自定义 Key 是否可用，`useNativeMap()` 在它的基础上叠加 `map_render_mode` 偏好。
 
 > ⚠️ 实测：武汉公交 API 返回的站点/车辆坐标**已是 GCJ-02**（与高德官方线路轨迹偏差仅约 18m），直接上高德地图即可，切勿二次转换（`geo.js` 的 `wgs84ToGcj02` 仅供持有 WGS84 原始坐标的参考场景）。
 

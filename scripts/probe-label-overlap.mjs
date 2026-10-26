@@ -12,10 +12,8 @@ const PORT = 9338
 const URL_PAGE = process.argv[2]
 const WAIT = Number(process.argv[3] || 22)
 const MOBILE = process.argv.includes('--mobile')
-const OUT = path.join(os.tmpdir(), 'amap-embed-probe')
 const PROFILE = path.join(os.tmpdir(), 'edge-overlap-prof')
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
-fs.mkdirSync(OUT, { recursive: true })
 fs.rmSync(PROFILE, { recursive: true, force: true })
 
 if (!URL_PAGE) { console.error('请提供页面地址'); process.exit(1) }
@@ -94,12 +92,7 @@ ws.onopen = async () => {
   })()`
   const res = await send('Runtime.evaluate', { expression, returnByValue: true })
   console.log(JSON.stringify(res.result && res.result.value, null, 1))
-  const shot = await send('Page.captureScreenshot', { format: 'png' })
-  if (shot && shot.data) {
-    const file = path.join(OUT, MOBILE ? 'overlap-mobile.png' : 'overlap.png')
-    fs.writeFileSync(file, Buffer.from(shot.data, 'base64'))
-    console.log('screenshot:', file)
-  }
+  // AGENTS.md：探针不产出任何文件——不调 captureScreenshot、不写盘，量测值已在上面打印
   ws.close()
   child.kill()
   process.exit(0)

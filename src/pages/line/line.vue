@@ -60,9 +60,32 @@
           <text class="lt-count">共 {{ activeCols.length }} 站 · {{ onlineCount }} 辆在线</text>
           <text class="upd" v-if="lastUpdate">更新于 {{ lastUpdate }}</text>
         </view>
-        <view class="refresh-btn" @click="onRefresh">
-          <text class="rf-icon" :class="{ spinning: loading }">↻</text>
-          <text class="rf-text">刷新</text>
+        <!-- 刷新控件：与地图页 .refresh-pill 同一套设计 ——
+             左半 ↻ 立即拉一次，右半显示当前间隔并可展开 手动 / 15 / 20 / 30 秒 -->
+        <view class="refresh-wrap">
+          <view class="refresh-pill" :class="{ busy: loading, auto: refreshSec > 0 }">
+            <view class="rp-refresh" @click="onRefresh" :title="loading ? '刷新中…' : '立即刷新'">
+              <text class="rp-ico" :class="{ spin: loading }">↻</text>
+            </view>
+            <view class="rp-split"></view>
+            <view class="rp-mode" @click="refreshMenu = !refreshMenu" :title="refreshTitle">
+              <text class="rp-txt">{{ refreshLabel }}</text>
+              <text class="rp-caret" :class="{ open: refreshMenu }">▾</text>
+            </view>
+          </view>
+          <view class="refresh-menu" v-if="refreshMenu">
+            <view
+              class="rm-item"
+              v-for="opt in refreshOptions"
+              :key="opt.sec"
+              :class="{ on: refreshSec === opt.sec }"
+              @click="setRefreshSec(opt.sec)"
+            >
+              <text class="rm-label">{{ opt.label }}</text>
+              <text class="rm-tip">{{ opt.tip }}</text>
+              <text class="rm-check" v-if="refreshSec === opt.sec">✓</text>
+            </view>
+          </view>
         </view>
       </view>
 
@@ -142,6 +165,9 @@
         <view class="empty-text">暂无{{ activeDir === 0 ? '上行' : '下行' }}计划发车数据</view>
       </view>
     </view>
+
+    <!-- 刷新间隔下拉的“点外部关闭”透明遮罩 -->
+    <view class="rm-mask" v-if="refreshMenu" @click="refreshMenu = false"></view>
   </view>
 </template>
 
@@ -149,6 +175,11 @@
 import { fetchLine, fetchPlanTime, fetchRealTime, decryptBusId, onBusIdReady } from '../../utils/api.js'
 import { matchBusesToStops } from '../../utils/geo.js'
 import { buildLineCode } from '../../config.js'
+
+// 自动刷新间隔（秒）：0 = 手动。与地图页各存一份（地图页是 whbis:map-refresh-sec），
+// 两页的使用节奏不同，共用反而互相干扰；详情页默认 15 秒（旧行为）。
+const LINE_REFRESH_KEY = 'whbis:line-refresh-sec'
+const REFRESH_OPTS = [0, 15, 20, 30]
 
 export default {
   data() {
@@ -170,6 +201,10 @@ export default {
       planLoading: false,
       lastUpdate: '',
       currentTab: 'stops',
+      // 刷新间隔（秒）：0 = 手动；15 / 20 / 30 = 自动
+      refreshSec: 15,
+      // 刷新间隔下拉是否展开
+      refreshMenu: false,
       _timer: null,
     }
   },
@@ -206,6 +241,21 @@ export default {
       const lines = Math.min(Math.max(this.maxNameLines, 1), 4)
       return { minHeight: lines * 36 + 'rpx' }
     },
+    // 刷新控件右半显示的文案（与地图页一致：0 → 手动，其余 → N秒）
+    refreshLabel() {
+      return this.refreshSec > 0 ? `${this.refreshSec}秒` : '手动'
+    },
+    refreshTitle() {
+      return this.refreshSec > 0 ? `每 ${this.refreshSec} 秒自动刷新` : '手动刷新（点 ↻ 拉取）'
+    },
+    refreshOptions() {
+      return [
+        { sec: 0, label: '手动刷新', tip: '点 ↻ 才拉取' },
+        { sec: 15, label: '15 秒', tip: '最灵敏' },
+        { sec: 20, label: '20 秒', tip: '较灵敏' },
+        { sec: 30, label: '30 秒', tip: '省流量' },
+      ]
+    },
     // 时刻表按计划发车时间升序排列（后端 startOrder 不可靠，班次序号由排序生成）
     planSorted() {
       return [...this.planTimes].sort((a, b) =>
@@ -239,14 +289,18 @@ export default {
     this.loadAll()
     // 编号字典就绪后重新还原自编号并刷新
     onBusIdReady(() => this.loadLive())
-    // 自动刷新实时车辆
-    this._timer = setInterval(() => this.loadLive(true), 15000)
+    // 自动刷新的启动/停止交给 onShow / onHide（首次进入也会立即走到），
+    // 这样翻开地图页时本页不再后台空拉接口
+    this.refreshSec = this.readRefreshSec()
+  },
+  onShow() {
+    this.restartAutoRefresh()
+  },
+  onHide() {
+    this.stopAutoRefresh()
   },
   onUnload() {
-    if (this._timer) {
-      clearInterval(this._timer)
-      this._timer = null
-    }
+    this.stopAutoRefresh()
     if (this._stripCleanup) {
       this._stripCleanup()
       this._stripCleanup = null
@@ -260,6 +314,8 @@ export default {
   methods: {
     switchTab(key) {
       this.currentTab = key
+      // 刷新控件只存在于实时线路页，切走时把可能展开的下拉一并收掉（否则遮罩会残留）
+      this.refreshMenu = false
       if (key === 'plan') this.loadPlan()
     },
     setDir(dir) {
@@ -268,11 +324,55 @@ export default {
       // 处于时刻表页时，切换方向需重新加载该方向班次
       if (this.currentTab === 'plan') this.loadPlan()
     },
-    // 手动刷新实时车辆
+    // 手动刷新实时车辆（点胶囊左半的 ↻）
     async onRefresh() {
       if (this.loading) return
       await this.loadLive()
       uni.showToast({ title: '实时数据已刷新', icon: 'none' })
+    },
+    // 读上次选择的间隔：未设过或值非法时回落到 15 秒（保持旧有行为）
+    // ⚠ uni.getStorageSync 在键不存在时返回空字符串，Number('') === 0，
+    // 直接 Number 后再 includes 会把“从没设过”误判成“手动”（0 是合法值），必须先排除空值
+    readRefreshSec() {
+      try {
+        const raw = uni.getStorageSync(LINE_REFRESH_KEY)
+        if (raw === '' || raw == null) return 15
+        const v = Number(raw)
+        return REFRESH_OPTS.includes(v) ? v : 15
+      } catch (e) {
+        return 15
+      }
+    },
+    // 选择间隔：0 = 手动，其余按秒数轮询（立即生效并持久化）
+    setRefreshSec(sec) {
+      this.refreshMenu = false
+      if (sec === this.refreshSec) {
+        // 重复点同一项：把计时器拨回起点（相当于“从现在开始重新计数”）
+        this.restartAutoRefresh()
+        return
+      }
+      this.refreshSec = sec
+      try {
+        uni.setStorageSync(LINE_REFRESH_KEY, sec)
+      } catch (e) {
+        /* 存储不可用时仅本次生效 */
+      }
+      this.restartAutoRefresh()
+      // 切到自动模式立刻拉一次，不必等满一个间隔才看到变化
+      if (sec > 0) this.loadLive(true)
+      uni.showToast({ title: sec > 0 ? `已开启：每 ${sec} 秒自动刷新` : '已改为手动刷新', icon: 'none' })
+    },
+    // 重建自动刷新定时器（间隔改变、页面重新显示时调用；先清旧再建，避免叠多个）
+    restartAutoRefresh() {
+      this.stopAutoRefresh()
+      if (!this.refreshSec) return
+      this._timer = setInterval(() => this.loadLive(true), this.refreshSec * 1000)
+    },
+    stopAutoRefresh() {
+      if (this._timer) {
+        clearInterval(this._timer)
+        this._timer = null
+      }
     },
     // 一键复制当前方向在线车辆信息（编号 / 所在站点 / 时间 / 速度 / 状态 / 经纬度），多辆车逐行换行
     copyOnlineBuses() {
@@ -664,43 +764,127 @@ export default {
   color: rgba(255, 255, 255, 0.35);
   margin-top: 4rpx;
 }
-/* 刷新按钮 */
-.refresh-btn {
+/* 刷新控件：与地图页同一套设计 —— 左半 ↻ 立即刷一次，右半显示当前间隔并可展开设置 */
+.refresh-wrap {
+  position: relative;
   flex-shrink: 0;
-  display: inline-flex;
-  align-items: center;
-  padding: 12rpx 26rpx;
+}
+.refresh-pill {
+  display: flex;
+  align-items: stretch;
   border-radius: 999rpx;
+  overflow: hidden;
   background: linear-gradient(135deg, #6366f1, #06b6d4);
   box-shadow: 0 10rpx 24rpx rgba(99, 102, 241, 0.42), inset 0 1rpx 0 rgba(255, 255, 255, 0.3);
-  transition: transform 0.15s, box-shadow 0.2s;
+  transition: box-shadow 0.2s;
 }
-.refresh-btn:hover {
-  box-shadow: 0 14rpx 30rpx rgba(99, 102, 241, 0.5), inset 0 1rpx 0 rgba(255, 255, 255, 0.3);
+/* 自动刷新进行中：外圈加一道青色光环，一眼看出“正在自动跑” */
+.refresh-pill.auto {
+  box-shadow: 0 0 0 3rpx rgba(103, 232, 249, 0.55), 0 10rpx 24rpx rgba(99, 102, 241, 0.42);
 }
-.refresh-btn:active {
-  transform: scale(0.94);
+.refresh-pill.busy .rp-refresh {
+  opacity: 0.55;
 }
-.rf-icon {
-  display: inline-block;
-  font-size: 30rpx;
+.rp-refresh {
+  display: flex;
+  align-items: center;
+  padding: 12rpx 16rpx 12rpx 24rpx;
+  cursor: pointer;
+}
+.rp-ico {
+  font-size: 28rpx;
   line-height: 1;
   color: #fff;
-  margin-right: 8rpx;
 }
-.rf-icon.spinning {
-  animation: rf-spin 0.8s linear infinite;
+.rp-ico.spin {
+  animation: rp-spin 0.9s linear infinite;
 }
-.rf-text {
-  font-size: 24rpx;
-  font-weight: 700;
-  color: #fff;
-  letter-spacing: 1rpx;
-}
-@keyframes rf-spin {
+@keyframes rp-spin {
   to {
     transform: rotate(360deg);
   }
+}
+.rp-split {
+  width: 2rpx;
+  margin: 14rpx 0;
+  background: rgba(255, 255, 255, 0.38);
+}
+.rp-mode {
+  display: flex;
+  align-items: center;
+  gap: 6rpx;
+  padding: 12rpx 22rpx 12rpx 16rpx;
+  cursor: pointer;
+}
+.rp-txt {
+  font-size: 24rpx;
+  font-weight: 700;
+  color: #fff;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+.rp-caret {
+  font-size: 18rpx;
+  color: rgba(255, 255, 255, 0.88);
+  transition: transform 0.2s;
+}
+.rp-caret.open {
+  transform: rotate(180deg);
+}
+/* 间隔下拉：按钮贴在行尾，右对齐向左展开，否则会顶出页面右边界 */
+.refresh-menu {
+  position: absolute;
+  top: calc(100% + 14rpx);
+  right: 0;
+  z-index: 30;
+  width: 310rpx;
+  padding: 10rpx;
+  background: rgba(17, 24, 44, 0.96);
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+  border: 2rpx solid rgba(255, 255, 255, 0.16);
+  border-radius: 22rpx;
+  box-shadow: 0 18rpx 44rpx rgba(0, 0, 0, 0.5);
+}
+.rm-item {
+  display: flex;
+  align-items: center;
+  gap: 12rpx;
+  padding: 16rpx;
+  border-radius: 16rpx;
+  cursor: pointer;
+}
+.rm-item:hover {
+  background: rgba(255, 255, 255, 0.08);
+}
+.rm-item.on {
+  background: rgba(6, 182, 212, 0.22);
+}
+.rm-label {
+  font-size: 24rpx;
+  font-weight: 600;
+  color: #fff;
+  white-space: nowrap;
+}
+.rm-tip {
+  flex: 1;
+  font-size: 19rpx;
+  color: rgba(255, 255, 255, 0.42);
+  text-align: right;
+  white-space: nowrap;
+}
+.rm-check {
+  font-size: 22rpx;
+  color: #67e8f9;
+}
+/* 下拉的“点外部关闭”透明遮罩：压在菜单之下、其余内容之上 */
+.rm-mask {
+  position: fixed;
+  left: 0;
+  top: 0;
+  width: 100vw;
+  height: 100vh;
+  z-index: 29;
 }
 /* 连通式线路带 */
 .route-strip {

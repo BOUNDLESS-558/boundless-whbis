@@ -139,10 +139,12 @@
       <text class="bh-no">{{ hoverTip.no || '…' }}</text>
     </view>
 
-    <!-- 左上角：线路号搜索 + 上下行快捷切换 -->
+    <!-- 左上角控制卡：搜索 / 主操作 / 视图工具 / 方向与线路，全部收进一张玻璃卡片，
+         区内用细分割线断开 —— 之前四个独立胶囊各自带阴影，浮在地图上分不出层级 -->
     <view class="ctrl">
+      <!-- ① 搜索行 -->
       <view class="ctrl-search">
-        <view class="ctrl-back" @click="goBack">‹</view>
+        <view class="ctrl-back" @click="goBack" title="返回">‹</view>
         <text class="ctrl-icon">🔍</text>
         <input
           class="ctrl-input"
@@ -156,25 +158,23 @@
         <view class="ctrl-go" @click="doSearchMap">查询</view>
         <view class="ctrl-cfg" @click="goSettings" title="地图服务设置">⚙</view>
       </view>
-      <!-- 功能按钮：一键查询双方向全部在运车辆 / 循环切换视角方向（全部→上行→下行） -->
+
+      <view class="ctrl-div"></view>
+
+      <!-- ② 主操作：一键查询双方向全部在运车辆（独占整行）；方向切换已收进下方方向行 -->
       <view class="ctrl-tools">
         <view class="tool-btn primary" :class="{ busy: loading }" @click="queryAllBuses">{{ loading ? '查询中…' : '🚌 一键查询全部在运车辆' }}</view>
-        <view class="tool-btn" @click="cycleDirView">⇄ 切换方向（{{ dirFilterLabel }}）</view>
       </view>
-      <!-- 自绘走向图专用：缩放 / 全览 / 站名开关（无需任何 Key） -->
-      <view class="ctrl-view" v-if="!useMap">
-        <view class="tool-btn sm" @click="zoomBy(0.6)">＋</view>
-        <view class="tool-btn sm" @click="zoomBy(-0.6)">－</view>
-        <view class="tool-btn sm" @click="resetView">⤢ 全览</view>
-        <view class="tool-btn sm" :class="{ on: showStopLabels }" @click="toggleLabels">站名</view>
-        <view class="tool-btn sm" :class="{ on: showBaseMap }" @click="toggleBaseMap">底图</view>
-        <text class="view-hint">青蓝上行 / 玫红下行（双方向左右分轨）· 拖拽平移 / 滚轮缩放 · 走向自动贴路（个别路口为站间直连）</text>
-        <text class="view-alert" v-if="routeAlert">{{ routeAlert }}</text>
-      </view>
+
+      <view class="ctrl-div"></view>
+
+      <!-- ③ 方向与线路：直接选方向 + 当前线路号 + 营运公司徽标（必须单行） -->
       <view class="ctrl-dir">
         <view class="dir-tab" :class="{ active: dirFilter === 2 }" @click="setDirView(2)">全部</view>
         <view class="dir-tab up" :class="{ active: dirFilter === 0 }" @click="setDirView(0)">上行</view>
         <view class="dir-tab down" :class="{ active: dirFilter === 1 }" @click="setDirView(1)">下行</view>
+        <!-- 循环切换视角（全部→上行→下行）的小方键：紧贴在三个 tab 右侧，颜色随当前视角变化 -->
+        <view class="dir-swap" :class="'d' + dirFilter" @click="cycleDirView" :title="'切换到下一个视角（当前：' + dirFilterLabel + '）'">⇄</view>
         <view class="dir-cur">{{ lineName ? lineName + ' 路' : '未选择线路' }}</view>
         <!-- 所属营运公司（由在线车辆自编号首位推断）：紧跟在“337 路”后面同一行，不换行 -->
         <view class="ctrl-org" v-if="operatorCompanies.length">
@@ -184,6 +184,18 @@
           </view>
         </view>
       </view>
+
+      <!-- ④ 视图工具（仅自绘走向图，无需任何 Key）：缩放 / 全览 / 站名 / 底图，
+           挂在方向行（含线路号与公司徽标）下方 -->
+      <view class="ctrl-div" v-if="!useMap"></view>
+      <view class="ctrl-view" v-if="!useMap">
+        <view class="tool-btn sq" @click="zoomBy(0.6)" title="放大">＋</view>
+        <view class="tool-btn sq" @click="zoomBy(-0.6)" title="缩小">－</view>
+        <view class="tool-btn sm" @click="resetView">⤢ 全览</view>
+        <view class="tool-btn sm" :class="{ on: showStopLabels }" @click="toggleLabels">站名</view>
+        <view class="tool-btn sm" :class="{ on: showBaseMap }" @click="toggleBaseMap">底图</view>
+      </view>
+      <view class="view-alert" v-if="routeAlert">{{ routeAlert }}</view>
     </view>
 
     <!-- 右侧车辆面板（可折叠，列表随视角方向过滤） -->
@@ -287,17 +299,18 @@
 <script>
 import { fetchRealTime, fetchLine, decryptBusId, onBusIdReady } from '../../utils/api.js'
 import { fetchRoadRoute } from '../../utils/osrm.js'
-import { APP_CONFIG, buildLineCode, hasMapKey } from '../../config.js'
+import { APP_CONFIG, buildLineCode, useNativeMap } from '../../config.js'
 import { assetUrl } from '../../utils/asset.js'
 
 // —— 方向配色（全站统一）：上行 = 青蓝，下行 = 玫红 ——
 // 色相相隔约 150°，在浅色高德底图与深色自绘画布上都清晰；不依赖红绿对比，色盲用户也能分辨。
 // casing/inner 用于原生地图的双层折线（白色外描边 + 方向色主线，路线高亮质感），
 // svgStroke 用于自绘走向图，bus 为车辆圆点与车号（同色系提亮，靠白色描边与主线拉开层次）。
+// labelText 是站名文字色：取同色系压暗两档，浅色底图上比主线更易读，又仍属于该方向色。
 // ⚠ 详情页 line.vue 的线路带、方向徽标必须沿用同一套色，否则两个页面对「上下行」的颜色理解会打架。
 const DIR_STYLE = {
-  0: { name: '上行', casing: '#FFFFFF', inner: '#06B6D4', svgStroke: '#22D3EE', bus: '#67E8F9' },
-  1: { name: '下行', casing: '#FFFFFF', inner: '#F43F5E', svgStroke: '#FB7185', bus: '#FDA4AF' },
+  0: { name: '上行', casing: '#FFFFFF', inner: '#06B6D4', svgStroke: '#22D3EE', bus: '#67E8F9', labelText: '#0E7490' },
+  1: { name: '下行', casing: '#FFFFFF', inner: '#F43F5E', svgStroke: '#FB7185', bus: '#FDA4AF', labelText: '#BE185D' },
 }
 // 刷新间隔选项（秒）：0 = 手动刷新，其余为自动刷新周期。选择结果持久化，下次进地图页沿用。
 const REFRESH_OPTS = [0, 15, 20, 30]
@@ -429,9 +442,10 @@ export default {
     }
   },
   computed: {
-    // 配置了地图 Key（用户自定义 BYOK 或内置）才使用原生地图，否则走示意图
+    // 渲染方式由「地图服务设置」决定：选“走向图”时即使填了 Key 也用自绘；
+    // 未设置时按有无 Key 自动选择（保持旧行为）
     useMap() {
-      return hasMapKey()
+      return useNativeMap()
     },
     // 当前视角方向下的车辆列表（元素含 dir 字段 0/1）
     shownBuses() {
@@ -470,26 +484,31 @@ export default {
       const STOP_ID = 5000
       const stopMarkers = []
       dirs.forEach((dir) => {
+        const st = DIR_STYLE[dir]
+        const total = (this.stopsByDir[dir] || []).length
         ;(this.stopsByDir[dir] || []).forEach((s, i) => {
           // API 坐标已是 GCJ-02，直接使用，切勿再转（否则整体偏移数百米）
           const lat = parseFloat(s.latitude)
           const lng = parseFloat(s.longitude)
           if (isNaN(lat) || isNaN(lng)) return
+          // 首末站用实心大圆突出终点，中间站用白心圆环：密集路段不再糊成一条深色带
+          const isEnd = i === 0 || i === total - 1
           stopMarkers.push({
             id: STOP_ID + dir * 1000 + i,
             latitude: lat,
             longitude: lng,
             // 不传 title：uni-h5 会把 title 当成 callout 内容，虽然默认隐藏，
             // 但 MapMarker 的 click 监听会 callout.visible = !visible —— 点一下就冒出一个白框盖住站名。站名已由 label 渲染。
-            iconPath: assetUrl('/static/stop-dot.png'),
-            width: 14,
-            height: 14,
+            iconPath: assetUrl(isEnd ? `/static/stop-end-${dir}.png` : `/static/stop-dot-${dir}.png`),
+            width: isEnd ? 16 : 11,
+            height: isEnd ? 16 : 11,
             label: {
               content: s.stopName,
-              color: '#312e81',
+              // 站点文字跟随方向色（青蓝/玫红），与参考图一致；底色近纯白保证浅色底图上可读
+              color: st.labelText,
               fontSize: 10,
-              borderRadius: 6,
-              bgColor: 'rgba(255, 255, 255, 0.88)',
+              borderRadius: 8,
+              bgColor: 'rgba(255, 255, 255, 0.95)',
               padding: 3,
               textAlign: 'center',
             },
@@ -537,7 +556,10 @@ export default {
         const pts = offsetPolyline(points, split)
         const st = DIR_STYLE[dir]
         casings.push({ points: pts, color: st.casing, width: 9, arrowLine: false })      // 白色外描边
-        lines.push({ points: pts, color: st.inner, width: 5, arrowLine: true, dottedLine: dir === 1 })
+        // 主线统一用提亮一档的 direction 色（与自绘 svgStroke 同源）。
+        // 不再给下行加 dottedLine：玫红虚线压在同一条走廊上会与青蓝主线互相打架，
+        // 方向靠 14m 分轨偏移 + 色相已经能分清。
+        lines.push({ points: pts, color: st.svgStroke, width: 5, arrowLine: true })
       })
       return [...casings, ...lines]
     },
@@ -1159,7 +1181,37 @@ export default {
       }
       this.projCenter = { x: (rect.x0 + rect.x1) / 2, y: (rect.y0 + rect.y1) / 2 }
       this.camInited = true
+      // 原生 <map> 不走 cam 相机，必须单独换算 scale/center：
+      // 不写的话 mapScale 会永远停在 data 里的初始值 13，跨区线路（如 337 横跨汉阳—武昌）
+      // 就被压成屏幕中间一小团，是「走向图不好看」最主要的原因。
+      this.fitNativeView(pts, rect)
       this.renderSchematic()
+    },
+    // 原生地图视野自适应：按线路包围盒选出「刚好装下整条线」的最大 scale
+    // 可绘制区沿用 fitRect()（已扣掉左上控制卡与右侧车辆面板的遮挡），
+    // 中心也要按可绘制区中心反算，否则线路会被控制卡压住一半。
+    fitNativeView(pts, rect) {
+      if (!this.useMap || !pts.length) return
+      const us = pts.map((p) => mercX(p.lng))
+      const vs = pts.map((p) => mercY(p.lat))
+      const minU = Math.min(...us), maxU = Math.max(...us)
+      const minV = Math.min(...vs), maxV = Math.max(...vs)
+      const availW = Math.max(160, rect.x1 - rect.x0)
+      const availH = Math.max(160, rect.y1 - rect.y0)
+      const sFit = Math.min(availW / Math.max(maxU - minU, 1e-7), availH / Math.max(maxV - minV, 1e-7))
+      const raw = Math.log2(sFit / 256)
+      // 上限 16：再大站名就会挤爆；下限 9：极短线路（单站/环线）也不至于贴到一栋楼
+      const scale = clampNum(Math.round(raw), 9, 16)
+      const s = zoomScale(scale)
+      const cw = this.canvas.w
+      const ch = this.canvas.h
+      const cu = (minU + maxU) / 2 - ((rect.x0 + rect.x1) / 2 - cw / 2) / s
+      const cv = (minV + maxV) / 2 - ((rect.y0 + rect.y1) / 2 - ch / 2) / s
+      this.mapScale = scale
+      this.mapCenter = { lat: invMercY(cv), lng: invMercX(cu) }
+      // 同步 _view：否则紧接着的 silent 刷新会按旧视野把画面拽回初始中心
+      this._view = { center: this.mapCenter, scale }
+      this.mapKey++
     },
     resetView() {
       // 全览：清掉“用户已调整视角”标记并重新自适应
@@ -2037,7 +2089,7 @@ export default {
     display: none;
   }
 }
-/* 左上角控制卡：线路号搜索 + 上下行切换 */
+/* 左上角控制卡：整块是一张玻璃卡片，内部分 搜索 / 主操作 / 视图 / 方向 四个区 */
 .ctrl {
   position: absolute;
   top: 24rpx;
@@ -2046,112 +2098,138 @@ export default {
   max-width: calc(100vw - 48rpx);
   display: flex;
   flex-direction: column;
-  gap: 16rpx;
+  gap: 12rpx;
+  padding: 12rpx;
+  box-sizing: border-box;
+  background: rgba(11, 16, 32, 0.82);
+  backdrop-filter: blur(28px) saturate(160%);
+  -webkit-backdrop-filter: blur(28px) saturate(160%);
+  border: 2rpx solid rgba(255, 255, 255, 0.14);
+  border-radius: 26rpx;
+  box-shadow: 0 18rpx 48rpx rgba(0, 0, 0, 0.45), inset 0 1rpx 0 rgba(255, 255, 255, 0.1);
   z-index: 10;
 }
+/* 组间分割线：比单纯拉开间距更能表达“这里是不同的组” */
+.ctrl-div {
+  height: 2rpx;
+  margin: 0 8rpx;
+  background: rgba(255, 255, 255, 0.09);
+}
+/* 搜索行：卡片内的一条凹槽，不再是自带阴影的独立胶囊 */
 .ctrl-search {
   display: flex;
   align-items: center;
-  background: rgba(11, 16, 32, 0.72);
-  backdrop-filter: blur(28px) saturate(160%);
-  -webkit-backdrop-filter: blur(28px) saturate(160%);
-  border: 2rpx solid rgba(255, 255, 255, 0.16);
-  border-radius: 999rpx;
-  padding: 8rpx 8rpx 8rpx 24rpx;
-  box-shadow: 0 12rpx 36rpx rgba(0, 0, 0, 0.35);
+  gap: 10rpx;
+  padding: 6rpx;
+  background: rgba(255, 255, 255, 0.06);
+  border: 2rpx solid rgba(255, 255, 255, 0.1);
+  border-radius: 18rpx;
 }
 .ctrl-icon {
-  font-size: 28rpx;
-  margin-right: 12rpx;
+  flex-shrink: 0;
+  font-size: 26rpx;
+  opacity: 0.75;
 }
 /* 自定义导航后的返回按钮 */
 .ctrl-back {
   flex-shrink: 0;
-  width: 56rpx;
-  height: 56rpx;
-  line-height: 50rpx;
+  width: 52rpx;
+  height: 52rpx;
+  line-height: 46rpx;
   text-align: center;
-  border-radius: 50%;
-  font-size: 40rpx;
-  color: rgba(255, 255, 255, 0.85);
-  background: rgba(255, 255, 255, 0.08);
-  border: 2rpx solid rgba(255, 255, 255, 0.16);
-  margin-right: 14rpx;
+  border-radius: 14rpx;
+  font-size: 36rpx;
+  color: rgba(255, 255, 255, 0.8);
+  background: rgba(255, 255, 255, 0.07);
   cursor: pointer;
+  transition: background 0.18s, color 0.18s;
+}
+.ctrl-back:hover {
+  color: #fff;
+  background: rgba(255, 255, 255, 0.16);
 }
 .ctrl-input {
   flex: 1;
   min-width: 0;
-  font-size: 28rpx;
+  height: 52rpx;
+  font-size: 26rpx;
   color: #fff;
   background: transparent;
   border: none;
 }
 .ctrl-ph {
-  color: rgba(255, 255, 255, 0.4);
+  color: rgba(255, 255, 255, 0.38);
 }
 .ctrl-go {
   flex-shrink: 0;
-  font-size: 26rpx;
+  height: 52rpx;
+  line-height: 52rpx;
+  padding: 0 26rpx;
+  font-size: 24rpx;
+  font-weight: 700;
   color: #fff;
   background: linear-gradient(135deg, #6366f1, #06b6d4);
-  border-radius: 999rpx;
-  padding: 12rpx 30rpx;
+  border-radius: 14rpx;
   cursor: pointer;
+  transition: filter 0.18s;
+}
+.ctrl-go:active {
+  filter: brightness(1.12);
 }
 /* 地图设置入口（齿轮） */
 .ctrl-cfg {
   flex-shrink: 0;
-  width: 56rpx;
-  height: 56rpx;
-  line-height: 56rpx;
+  width: 52rpx;
+  height: 52rpx;
+  line-height: 52rpx;
   text-align: center;
-  border-radius: 50%;
-  font-size: 30rpx;
-  color: rgba(255, 255, 255, 0.75);
-  background: rgba(255, 255, 255, 0.08);
-  border: 2rpx solid rgba(255, 255, 255, 0.16);
-  margin-left: 10rpx;
+  border-radius: 14rpx;
+  font-size: 28rpx;
+  color: rgba(255, 255, 255, 0.72);
+  background: rgba(255, 255, 255, 0.07);
   cursor: pointer;
-  transition: transform 0.25s, background 0.2s;
+  transition: transform 0.28s, background 0.18s, color 0.18s;
 }
 .ctrl-cfg:hover {
-  background: rgba(129, 140, 248, 0.3);
+  color: #fff;
+  background: rgba(129, 140, 248, 0.32);
   transform: rotate(60deg);
 }
+/* 方向分段条：卡片底部一块凹槽，三个 tab 与线路信息同排 */
 .ctrl-dir {
   display: flex;
   align-items: center;
   /* 单行：营运公司徽标必须紧跟在“337 路”后面，一旦允许换行就会跑到第二排、看着像错位 */
   flex-wrap: nowrap;
-  gap: 8rpx;
-  background: rgba(11, 16, 32, 0.72);
-  backdrop-filter: blur(28px) saturate(160%);
-  -webkit-backdrop-filter: blur(28px) saturate(160%);
-  border: 2rpx solid rgba(255, 255, 255, 0.16);
-  border-radius: 999rpx;
-  padding: 8rpx;
-  width: fit-content;
-  max-width: 100%;
+  gap: 6rpx;
+  padding: 6rpx;
   box-sizing: border-box;
-  box-shadow: 0 12rpx 36rpx rgba(0, 0, 0, 0.35);
+  width: 100%;
+  min-width: 0;
+  background: rgba(255, 255, 255, 0.06);
+  border: 2rpx solid rgba(255, 255, 255, 0.1);
+  border-radius: 18rpx;
 }
 .dir-tab {
   /* 固定行高 + 双轴 flex 居中：只用 padding 撑高时中文基线会偏，且选中加粗后文字会上下跳 */
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  height: 56rpx;
-  padding: 0 26rpx;
+  height: 52rpx;
+  padding: 0 24rpx;
   box-sizing: border-box;
-  font-size: 26rpx;
+  font-size: 24rpx;
   line-height: 1;
   white-space: nowrap;
   flex-shrink: 0;
-  color: rgba(255, 255, 255, 0.7);
-  border-radius: 999rpx;
+  color: rgba(255, 255, 255, 0.68);
+  border-radius: 14rpx;
   cursor: pointer;
   transition: background 0.2s, color 0.2s;
+}
+.dir-tab:hover {
+  color: #fff;
+  background: rgba(255, 255, 255, 0.1);
 }
 .dir-tab.active {
   color: #fff;
@@ -2162,29 +2240,72 @@ export default {
 .dir-tab.up.active {
   color: #062a33;
   background: linear-gradient(135deg, #67e8f9, #06b6d4);
-  box-shadow: 0 6rpx 18rpx rgba(6, 182, 212, 0.4);
+  box-shadow: 0 6rpx 18rpx rgba(6, 182, 212, 0.35);
+}
+.dir-tab.up.active:hover {
+  color: #062a33;
 }
 .dir-tab.down.active {
   color: #fff;
   background: linear-gradient(135deg, #fda4af, #e11d48);
-  box-shadow: 0 6rpx 18rpx rgba(225, 29, 72, 0.4);
+  box-shadow: 0 6rpx 18rpx rgba(225, 29, 72, 0.35);
 }
+/* 方向行内的“循环切换”小键：紧贴三个 tab 右侧，颜色随当前视角（上行青 / 下行玫红 / 中性）。
+   它本质上就是“切方向”，放在方向行里才有归属感；挂在一键查询旁边时像个多余的旁路按钮。 */
+.dir-swap {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 48rpx;
+  height: 48rpx;
+  box-sizing: border-box;
+  flex: 0 0 auto;
+  font-size: 26rpx;
+  line-height: 1;
+  color: rgba(255, 255, 255, 0.62);
+  background: rgba(255, 255, 255, 0.07);
+  border: 2rpx solid rgba(255, 255, 255, 0.12);
+  border-radius: 12rpx;
+  cursor: pointer;
+  transition: color 0.18s, background 0.18s, border-color 0.18s, transform 0.12s;
+}
+.dir-swap:hover {
+  color: #fff;
+  background: rgba(255, 255, 255, 0.15);
+}
+.dir-swap:active {
+  transform: scale(0.94);
+}
+.dir-swap.d0 {
+  color: #67e8f9;
+  background: rgba(34, 211, 238, 0.16);
+  border-color: rgba(34, 211, 238, 0.42);
+}
+.dir-swap.d1 {
+  color: #fda4af;
+  background: rgba(244, 63, 94, 0.16);
+  border-color: rgba(244, 63, 94, 0.42);
+}
+/* 线路号：靠右，与左侧三个方向 tab 用留白分开 */
 .dir-cur {
   display: inline-flex;
   align-items: center;
-  height: 56rpx;
-  font-size: 24rpx;
+  height: 52rpx;
+  margin-left: auto;
+  padding: 0 8rpx 0 16rpx;
+  font-size: 22rpx;
   line-height: 1;
   white-space: nowrap;
-  flex-shrink: 0;
+  flex: 0 0 auto;
   color: rgba(255, 255, 255, 0.55);
-  padding: 0 18rpx;
 }
 /* 营运公司徽标：紧跟线路号同一行（不换行）；地方不够时只把公司名省成省略号 */
 .ctrl-org {
   display: flex;
   align-items: center;
+  justify-content: flex-end;
   gap: 8rpx;
+  flex: 0 1 auto;
   min-width: 0;
 }
 .org-tag {
@@ -2500,71 +2621,91 @@ export default {
   font-size: 26rpx;
   padding: 40rpx 0;
 }
-/* 功能按钮行：一键查询全部在运车辆 / 切换方向 */
+/* 卡片内的按钮行：主操作（渐变）与次操作（浅底）统一高度与圆角，不再各自成胶囊 */
 .ctrl-tools {
   display: flex;
-  align-items: center;
-  gap: 16rpx;
+  align-items: stretch;
   flex-wrap: wrap;
+  gap: 10rpx;
 }
 .tool-btn {
-  font-size: 24rpx;
-  color: rgba(255, 255, 255, 0.85);
-  background: rgba(11, 16, 32, 0.72);
-  backdrop-filter: blur(28px) saturate(160%);
-  -webkit-backdrop-filter: blur(28px) saturate(160%);
-  border: 2rpx solid rgba(255, 255, 255, 0.16);
-  border-radius: 999rpx;
-  padding: 12rpx 30rpx;
-  cursor: pointer;
-  box-shadow: 0 12rpx 36rpx rgba(0, 0, 0, 0.35);
-  transition: transform 0.15s, background 0.2s;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 60rpx;
+  padding: 0 22rpx;
+  box-sizing: border-box;
+  font-size: 22rpx;
+  line-height: 1;
   white-space: nowrap;
+  color: rgba(255, 255, 255, 0.86);
+  background: rgba(255, 255, 255, 0.07);
+  border: 2rpx solid rgba(255, 255, 255, 0.1);
+  border-radius: 14rpx;
+  cursor: pointer;
+  transition: background 0.18s, border-color 0.18s, transform 0.12s;
+}
+.tool-btn:hover {
+  background: rgba(255, 255, 255, 0.14);
+  border-color: rgba(255, 255, 255, 0.2);
 }
 .tool-btn:active {
   transform: scale(0.97);
 }
+/* 主操作：独占整行（方向切换已收进方向行，此处不再并排第二枚按钮） */
 .tool-btn.primary {
-  color: #fff;
+  flex: 1 1 auto;
+  width: 100%;
+  font-size: 23rpx;
   font-weight: 700;
+  color: #fff;
   background: linear-gradient(135deg, #6366f1, #06b6d4);
   border-color: transparent;
-  box-shadow: 0 14rpx 34rpx rgba(99, 102, 241, 0.45);
+  box-shadow: 0 8rpx 22rpx rgba(99, 102, 241, 0.38);
 }
 .tool-btn.busy {
   opacity: 0.65;
   pointer-events: none;
 }
-/* 自绘走向图的视角控制行（缩放 / 全览 / 站名） */
+/* 视图工具行（挂在方向行下方）：方形缩放键 + 三个标签键，高度统一 56rpx */
 .ctrl-view {
   display: flex;
   align-items: center;
-  gap: 12rpx;
+  gap: 10rpx;
   flex-wrap: wrap;
 }
+.tool-btn.sq {
+  flex: 0 0 auto;
+  width: 56rpx;
+  height: 56rpx;
+  padding: 0;
+  font-size: 26rpx;
+}
 .tool-btn.sm {
-  font-size: 22rpx;
-  padding: 8rpx 20rpx;
+  flex: 0 0 auto;
+  height: 56rpx;
+  padding: 0 20rpx;
+  font-size: 21rpx;
 }
+/* 已开启（站名 / 底图）：用上行青表示“开着”，与靛蓝青的主行动作区分开 */
 .tool-btn.on {
-  color: #fff;
-  background: rgba(99, 102, 241, 0.5);
-  border-color: rgba(129, 140, 248, 0.6);
+  color: #a5f3fc;
+  background: rgba(34, 211, 238, 0.18);
+  border-color: rgba(34, 211, 238, 0.5);
 }
-.view-hint {
-  font-size: 20rpx;
-  color: rgba(255, 255, 255, 0.4);
+.tool-btn.on:hover {
+  background: rgba(34, 211, 238, 0.28);
 }
 /* 走向尚未贴路（计算中/失败）的提示，避免把站间直连当成真实走向 */
 .view-alert {
-  margin-top: 8rpx;
+  align-self: flex-start;
   font-size: 20rpx;
+  line-height: 1.4;
   color: #fbbf24;
   background: rgba(251, 191, 36, 0.12);
   border: 2rpx solid rgba(251, 191, 36, 0.32);
-  border-radius: 10rpx;
-  padding: 6rpx 14rpx;
-  align-self: flex-start;
+  border-radius: 12rpx;
+  padding: 8rpx 16rpx;
 }
 /* 车辆列表项的方向徽标（上行 / 下行，宽度随文字自适应） */
 .bus-dir {

@@ -14,12 +14,10 @@ const MOBILE = process.env.PROBE_MOBILE === '1'
 // QUICK=1 跳过两段 24s 的自动刷新观察，只看渲染（手机布局用）
 const QUICK = process.env.PROBE_QUICK === '1'
 const TAG = MOBILE ? 'm' : 'd'
-const OUT = path.join('.openchamber', 'screenshots')
 const EDGE = 'C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe'
 const PORT = 9341
 const PROFILE = path.join(process.env.TMP || '.', 'edge-refresh-prof')
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
-fs.mkdirSync(OUT, { recursive: true })
 fs.rmSync(PROFILE, { recursive: true, force: true })
 
 const URL_PAGE = `${BASE}#/pages/map/map?lineCode=420100-${LINE_NO}-0&direction=0&lineName=${encodeURIComponent(LINE_NO + '路')}`
@@ -88,12 +86,9 @@ const READ = `(() => {
   };
 })()`
 
+// AGENTS.md：探针不产出任何文件。shot() 保留为空实现，调用点不动。
 async function shot(name) {
-  const s = await send('Page.captureScreenshot', { format: 'jpeg', quality: 70 })
-  if (s && s.data) {
-    fs.writeFileSync(path.join(OUT, name), Buffer.from(s.data, 'base64'))
-    console.log('screenshot:', name)
-  }
+  return null
 }
 const clickSel = (sel) => send('Runtime.evaluate', {
   expression: `(() => { const b=document.querySelector('${sel}'); if(b){b.click(); return 'ok'} return 'not-found' })()`,

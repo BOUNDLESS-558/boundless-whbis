@@ -14,12 +14,10 @@ import path from 'node:path'
 
 const LINE_NO = process.argv[2] || '337'
 const BASE = process.env.PROBE_BASE || 'http://localhost:5173/boundless-whbis/'
-const OUT = path.join('.openchamber', 'screenshots')
 const EDGE = 'C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe'
 const PORT = 9345
 const PROFILE = path.join(process.env.TMP || '.', 'edge-hover-prof')
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
-fs.mkdirSync(OUT, { recursive: true })
 fs.rmSync(PROFILE, { recursive: true, force: true })
 
 const URL_PAGE = `${BASE}#/pages/map/map?lineCode=420100-${LINE_NO}-0&direction=0&lineName=${encodeURIComponent(LINE_NO + '路')}`
@@ -60,9 +58,9 @@ const evalV = async (expr) => {
   if (r && r.result && r.result.subtype === 'error') console.log('EVAL ERR:', r.result.description)
   return r && r.result ? r.result.value : null
 }
+// AGENTS.md：探针不产出任何文件。shot() 保留为空实现，调用点不动。
 async function shot(name) {
-  const s = await send('Page.captureScreenshot', { format: 'jpeg', quality: 78 })
-  if (s && s.data) { fs.writeFileSync(path.join(OUT, name), Buffer.from(s.data, 'base64')); console.log('screenshot:', name) }
+  return null
 }
 
 const PAGE_VM = `(() => {

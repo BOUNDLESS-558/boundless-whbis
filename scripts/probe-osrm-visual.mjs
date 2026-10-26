@@ -12,13 +12,11 @@ const WAIT = Number(process.argv[3] || 55)
 const MOBILE = process.argv.includes('--mobile')
 const TAG = MOBILE ? `mobile-${LINE_NO}` : LINE_NO
 const BASE = process.env.PROBE_BASE || 'http://localhost:5175/boundless-whbis/'
-const OUT = path.join('.openchamber', 'screenshots')
 const EDGE = 'C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe'
 const PORT = 9337
 const PROFILE = path.join(process.env.TEMP || os_tmp(), 'edge-osrm-prof')
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
 function os_tmp() { return process.env.TMP || '.' }
-fs.mkdirSync(OUT, { recursive: true })
 fs.rmSync(PROFILE, { recursive: true, force: true })
 
 const URL_PAGE = `${BASE}#/pages/map/map?lineCode=420100-${LINE_NO}-0&direction=0&lineName=${encodeURIComponent(LINE_NO + '路')}`
@@ -104,13 +102,10 @@ const STATS_EXPR = `(() => {
   return out;
 })()`
 
+// AGENTS.md：探针一律不生产截图，也不写文件。视觉核对靠控制台量测值。
+// 这里保留 shot() 为空实现，调用点不动，避免误删逻辑。
 async function shot(name) {
-  const s = await send('Page.captureScreenshot', { format: 'jpeg', quality: 62 })
-  if (s && s.data) {
-    const file = path.join(OUT, name)
-    fs.writeFileSync(file, Buffer.from(s.data, 'base64'))
-    console.log('screenshot:', file)
-  }
+  // 空实现：不调 captureScreenshot、不写盘
 }
 
 ws.onopen = async () => {

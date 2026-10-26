@@ -14,5 +14,10 @@ export default defineConfig({
         rewrite: (p) => p.replace(/^\/api/, '/gps-resapi/wechat/bus'),
       },
     },
+    // 探针脚本会把日志与截图写到 .openchamber，打包产物写到 dist；
+    // 不排除的话 vite 会去 watch 这些文件，探针正在写入时抛 EBUSY 并直接杀掉 dev server。
+    watch: {
+      ignored: ['**/.openchamber/**', '**/dist/**', '**/.idea/**'],
+    },
   },
 })
