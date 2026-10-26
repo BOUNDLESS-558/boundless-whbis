@@ -51,8 +51,8 @@
     <view v-if="currentTab === 'stops'" class="stops-wrap">
       <!-- 方向切换 -->
       <view class="dir-switch glass-soft">
-        <view class="dir-opt" :class="{ active: activeDir === 0 }" @click="setDir(0)">▲ 上行</view>
-        <view class="dir-opt" :class="{ active: activeDir === 1 }" @click="setDir(1)">▼ 下行</view>
+        <view class="dir-opt up" :class="{ active: activeDir === 0 }" @click="setDir(0)">▲ 上行</view>
+        <view class="dir-opt down" :class="{ active: activeDir === 1 }" @click="setDir(1)">▼ 下行</view>
       </view>
 
       <view class="live-tip">
@@ -66,8 +66,8 @@
         </view>
       </view>
 
-      <!-- 连通式线路带（横向滚动，PC 支持拖拽/滚轮） -->
-      <view class="route-strip glass" ref="strip">
+      <!-- 连通式线路带（横向滚动，PC 支持拖拽/滚轮）：整条带颜色随方向切换，上行青蓝 / 下行玫红 -->
+      <view class="route-strip glass" :class="activeDir === 1 ? 'dir-down' : 'dir-up'" ref="strip">
         <view class="strip-inner">
           <view class="node" v-for="(stop, i) in activeCols" :key="stop.stopId">
             <!-- 车辆浮层（高度自适应单站最多车辆数，保证线路对齐且信息完整） -->
@@ -119,8 +119,8 @@
     <view v-if="currentTab === 'plan'" class="tab-content">
       <!-- 方向切换 -->
       <view class="dir-switch glass-soft">
-        <view class="dir-opt" :class="{ active: activeDir === 0 }" @click="setDir(0)">▲ 上行</view>
-        <view class="dir-opt" :class="{ active: activeDir === 1 }" @click="setDir(1)">▼ 下行</view>
+        <view class="dir-opt up" :class="{ active: activeDir === 0 }" @click="setDir(0)">▲ 上行</view>
+        <view class="dir-opt down" :class="{ active: activeDir === 1 }" @click="setDir(1)">▼ 下行</view>
       </view>
 
       <!-- 方向标题栏 -->
@@ -633,10 +633,16 @@ export default {
   transition: all 0.2s;
 }
 .dir-opt.active {
-  color: #0b1020;
+  color: #062a33;
   font-weight: 700;
-  background: linear-gradient(135deg, #a5b4fc, #67e8f9);
-  box-shadow: 0 8rpx 20rpx rgba(103, 232, 249, 0.35), inset 0 1rpx 0 rgba(255, 255, 255, 0.4);
+  background: linear-gradient(135deg, #67e8f9, #06b6d4);
+  box-shadow: 0 8rpx 20rpx rgba(6, 182, 212, 0.35), inset 0 1rpx 0 rgba(255, 255, 255, 0.4);
+}
+/* 下行选中态用玫红，与地图页下行走向线同色 */
+.dir-opt.down.active {
+  color: #fff;
+  background: linear-gradient(135deg, #fda4af, #e11d48);
+  box-shadow: 0 8rpx 20rpx rgba(225, 29, 72, 0.38), inset 0 1rpx 0 rgba(255, 255, 255, 0.4);
 }
 .live-tip {
   display: flex;
@@ -705,6 +711,21 @@ export default {
   -webkit-overflow-scrolling: touch;
   scrollbar-width: none;
 }
+/* 方向色变量：与地图页 DIR_STYLE 同源 —— 上行青蓝 / 下行玫红 */
+.dir-up {
+  --line-a: #06b6d4;
+  --line-b: #22d3ee;
+  --ring: #67e8f9;
+  --num: #a5f3fc;
+  --glow: rgba(34, 211, 238, 0.22);
+}
+.dir-down {
+  --line-a: #e11d48;
+  --line-b: #fb7185;
+  --ring: #fda4af;
+  --num: #fecdd3;
+  --glow: rgba(251, 113, 133, 0.22);
+}
 .route-strip::-webkit-scrollbar {
   display: none;
 }
@@ -741,7 +762,8 @@ export default {
   right: 0;
   top: 17rpx;
   height: 6rpx;
-  background: linear-gradient(90deg, #6366f1, #06b6d4);
+  background: #06b6d4; /* 不支持 CSS 变量时的兜底 */
+  background: linear-gradient(90deg, var(--line-a), var(--line-b));
   border-radius: 3rpx;
 }
 .seg.first { left: 50%; }
@@ -755,7 +777,8 @@ export default {
   height: 40rpx;
   border-radius: 50%;
   background: #0b1020;
-  border: 4rpx solid #a5b4fc;
+  border: 4rpx solid #a5b4fc; /* 兜底 */
+  border-color: var(--ring);
   box-sizing: border-box;
   display: flex;
   align-items: center;
@@ -766,17 +789,22 @@ export default {
   font-size: 18rpx;
   font-weight: 700;
   color: #c7d2fe;
+  color: var(--num);
 }
+/* 首末站：实心方向色 + 白环，与地图页站点标记一致 */
 .dot.terminal {
-  background: #fb7185;
-  border-color: #fb7185;
+  background: #22d3ee;
+  background: var(--line-b);
+  border-color: #ffffff;
 }
 .dot.terminal .dot-no {
-  color: #fff;
+  color: #0b1020;
 }
+/* 有车的站：白环 + 方向色光晕 */
 .dot.busy {
-  border-color: #67e8f9;
+  border-color: #ffffff;
   box-shadow: 0 0 0 6rpx rgba(103, 232, 249, 0.22);
+  box-shadow: 0 0 0 6rpx var(--glow);
 }
 /* 站名 + 换乘 */
 .node-label {
@@ -803,9 +831,10 @@ export default {
 .ttag {
   display: block;
   font-size: 18rpx;
-  color: #67e8f9;
-  background: rgba(6, 182, 212, 0.16);
-  border: 2rpx solid rgba(6, 182, 212, 0.28);
+  /* 地铁换乘标签用紫色，避开与上行（青蓝）/ 下行（玫红）方向色撞色 */
+  color: #c4b5fd;
+  background: rgba(139, 92, 246, 0.16);
+  border: 2rpx solid rgba(139, 92, 246, 0.3);
   border-radius: 8rpx;
   padding: 2rpx 12rpx;
   margin-bottom: 6rpx;
@@ -933,9 +962,9 @@ export default {
   border: 2rpx solid rgba(6, 182, 212, 0.3);
 }
 .ph-dir.down {
-  color: #a5b4fc;
-  background: rgba(99, 102, 241, 0.18);
-  border: 2rpx solid rgba(99, 102, 241, 0.32);
+  color: #fda4af;
+  background: rgba(225, 29, 72, 0.18);
+  border: 2rpx solid rgba(251, 113, 133, 0.32);
 }
 .ph-route {
   flex: 1;

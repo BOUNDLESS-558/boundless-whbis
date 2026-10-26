@@ -49,6 +49,26 @@ export function wgs84ToGcj02(lat, lng) {
 }
 
 /**
+ * GCJ-02（国测局/高德火星坐标）反解为 WGS84（GPS 原始坐标）
+ * 用途：OSRM 等海外路网服务只认 WGS84，必须先解偏再查询；
+ *   而武汉公交 API 与高德瓦片都是 GCJ-02，查询结果还要再转回来才能对齐。
+ * 做法：用正向公式迭代逼近（3 次即可把残差压到厘米级），无需反解多项式。
+ * @param {number} lat GCJ-02 纬度
+ * @param {number} lng GCJ-02 经度
+ * @returns {{lat: number, lng: number}} WGS84 坐标
+ */
+export function gcj02ToWgs84(lat, lng) {
+  let wLat = lat
+  let wLng = lng
+  for (let i = 0; i < 3; i++) {
+    const g = wgs84ToGcj02(wLat, wLng)
+    wLat += lat - g.lat
+    wLng += lng - g.lng
+  }
+  return { lat: wLat, lng: wLng }
+}
+
+/**
  * 计算两点间球面距离（米）
  * @param {number} lat1 纬度1
  * @param {number} lng1 经度1

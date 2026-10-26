@@ -16,7 +16,8 @@
 		{
 			"path": "pages/map/map",
 			"style": {
-				"navigationBarTitleText": "实时车辆"
+				"navigationBarTitleText": "实时车辆",
+				"navigationStyle": "custom"
 			}
 		},
 		{
