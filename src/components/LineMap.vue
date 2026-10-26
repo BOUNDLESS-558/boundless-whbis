@@ -345,6 +345,7 @@
               </view>
             </view>
           </view>
+          <view class="copy-btn" @click="copyOnlineBuses" title="一键复制全部在线车辆信息（TSV，可直接粘贴进表格）">⧉ 复制</view>
           <text class="pt-hint">{{ refreshSec > 0 ? '自动刷新中' : '仅点 ↻ 时拉取' }}</text>
         </view>
         <view class="panel-body" v-show="!panelCollapsed">
@@ -432,6 +433,7 @@ import { fetchRealTime, fetchLine, decryptBusId, onBusIdReady } from '../utils/a
 import { fetchRoadRoute } from '../utils/osrm.js'
 import { APP_CONFIG, buildLineCode, useNativeMap } from '../config.js'
 import { assetUrl } from '../utils/asset.js'
+import { distance } from '../utils/geo.js'
 import {
   citySweepCost, sweepCity, loadSnapshot, loadLastSnapshot, snapshotAge,
   findBusByOrgId, refreshOrgIds, clusterPoints, SPEED_BANDS, CITY_FRESH_MS,
@@ -2924,6 +2926,62 @@ export default {
     busStateText(bus) {
       return busStateOf(bus)
     },
+    // 一键复制在线车辆信息（TSV：编号/营运公司/所在站点/时间/速度/状态/经纬度），
+    // 列格式与「实时线路」页的复制功能一致；「全部」视角按 上行/下行 分两段输出。
+    // 所在站点 = 车辆与该方向站点序列里 haversine 最近的一站（坐标均为 GCJ-02，直接算距离）
+    copyOnlineBuses() {
+      const CN = ['', '第一', '第二', '第三', '第四', '第五', '第六', '第七', '第八', '第九']
+      const companyOf = (b) => {
+        const d = String(b.orgId || '').charAt(0)
+        return d >= '1' && d <= '9' ? `武汉公交集团${CN[Number(d)]}营运公司` : '营运公司未知'
+      }
+      const nearStop = (b) => {
+        let best = '未知站点'
+        let bestD = Infinity
+        ;(this.stopsByDir[b.dir] || []).forEach((s) => {
+          const la = parseFloat(s.latitude)
+          const ln = parseFloat(s.longitude)
+          if (isNaN(la) || isNaN(ln)) return
+          const d = distance(b.lat, b.lng, la, ln)
+          if (d < bestD) { bestD = d; best = s.stopName || '未知站点' }
+        })
+        return best
+      }
+      const dirs = this.dirFilter === 2 ? [0, 1] : [this.dirFilter]
+      const blocks = []
+      let total = 0
+      for (const dir of dirs) {
+        const buses = this.busesByDir[dir] || []
+        if (!buses.length) continue
+        const rows = buses.map((b) =>
+          [
+            b.orgId || b.busNo || '?',
+            companyOf(b),
+            nearStop(b),
+            String(b.time || '--').slice(0, 5),
+            `${b.gpsSpeed}km/h`,
+            b.arrived === '1' ? '到站' : '行驶',
+            `${b.lat},${b.lng}`,
+          ].join('\t')
+        )
+        total += rows.length
+        const dirName = dir === 0 ? '上行' : '下行'
+        blocks.push(
+          `${this.lineName || this.lineNo}（${dirName}） 在线 ${rows.length} 辆\n` +
+            '编号\t营运公司\t所在站点\t时间\t速度\t状态\t经纬度\n' +
+            rows.join('\n')
+        )
+      }
+      if (!total) {
+        uni.showToast({ title: '当前无在线车辆', icon: 'none' })
+        return
+      }
+      uni.setClipboardData({
+        data: blocks.join('\n'),
+        success: () => uni.showToast({ title: `已复制 ${total} 辆车信息`, icon: 'none' }),
+        fail: () => uni.showToast({ title: '复制失败', icon: 'none' }),
+      })
+    },
     formatGpsTime(t) {
       if (!t || t.length !== 14) return '--'
       return `${t.slice(8, 10)}:${t.slice(10, 12)}:${t.slice(12, 14)}`
@@ -3449,7 +3507,7 @@ export default {
   position: absolute;
   top: 24rpx;
   right: 24rpx;
-  width: 560rpx;
+  width: 640rpx;
   max-height: calc(100vh - 48rpx);
   display: flex;
   flex-direction: column;
@@ -3493,6 +3551,26 @@ export default {
   align-items: center;
   justify-content: space-between;
   margin-bottom: 18rpx;
+}
+/* 复制按钮：与 fw-pin 同族的幽灵小圆角，hover 提到靛蓝 */
+.copy-btn {
+  font-size: 22rpx;
+  color: rgba(255, 255, 255, 0.66);
+  background: rgba(255, 255, 255, 0.08);
+  border: 2rpx solid rgba(255, 255, 255, 0.14);
+  border-radius: 999rpx;
+  padding: 6rpx 18rpx;
+  cursor: pointer;
+  white-space: nowrap;
+  flex-shrink: 0;
+  transition: transform 0.15s, background 0.2s, color 0.2s;
+}
+.copy-btn:hover {
+  color: #c7d2fe;
+  background: rgba(99, 102, 241, 0.3);
+}
+.copy-btn:active {
+  transform: scale(0.94);
 }
 /* 折叠态：只收车辆列表，高度自然收缩 */
 .panel.collapsed .panel-header {
@@ -3568,6 +3646,11 @@ export default {
   font-size: 30rpx;
   font-weight: 700;
   color: #fff;
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 /* 刷新控件：左半 ↻ 立即刷一次，右半显示当前间隔并可展开设置（手动 / 15 / 20 / 30 秒） */
 .refresh-wrap {
@@ -3742,6 +3825,7 @@ export default {
 .bus-left {
   display: flex;
   flex-direction: column;
+  min-width: 0;
 }
 .bus-org {
   font-size: 34rpx;
@@ -3753,19 +3837,26 @@ export default {
   font-size: 19rpx;
   color: rgba(255, 255, 255, 0.35);
   margin-top: 4rpx;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .bus-right {
   font-size: 24rpx;
   text-align: right;
+  flex-shrink: 0;
+  margin-left: 16rpx;
 }
 .bus-speed {
   color: #67e8f9;
   font-variant-numeric: tabular-nums;
+  white-space: nowrap;
 }
 .bus-time {
   margin-top: 6rpx;
   color: rgba(255, 255, 255, 0.55);
   font-variant-numeric: tabular-nums;
+  white-space: nowrap;
 }
 .empty {
   text-align: center;
