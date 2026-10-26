@@ -1,5 +1,5 @@
 /**
- * 方向配色体检：打开线路详情页，分别截「上行 / 下行」两张图，并读回线路带与方向徽标的实际渲染色。
+ * 方向配色体检：打开首页「实时线路」视图，分别读回「上行 / 下行」的线路带与方向徽标实际渲染色。
  * 用法：node scripts/probe-line-colors.mjs [线路号]
  * 依赖：先 npm run dev:h5，并用 PROBE_BASE 指定地址（默认 http://localhost:5176/boundless-whbis/）
  */
@@ -15,7 +15,8 @@ const PROFILE = path.join(process.env.TMP || '.', 'edge-line-prof')
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
 fs.rmSync(PROFILE, { recursive: true, force: true })
 
-const URL_PAGE = `${BASE}#/pages/line/line?lineCode=420100-${LINE_NO}-0&direction=0&lineName=${encodeURIComponent(LINE_NO + '路')}`
+// 首页深链：view=stops 直接落「实时线路」视图（线路带 + 方向分段都在 LineStops 组件里）
+const URL_PAGE = `${BASE}#/pages/map/map?view=stops&lineCode=420100-${LINE_NO}-0&direction=0&lineName=${encodeURIComponent(LINE_NO + '路')}`
 
 const child = spawn(EDGE, [
   '--headless=new', '--disable-gpu', '--no-sandbox',
@@ -56,7 +57,8 @@ const READ = `(() => {
   const seg = document.querySelector('.seg');
   const dot = [...document.querySelectorAll('.dot')].find((d) => !d.className.includes('terminal'));
   const term = document.querySelector('.dot.terminal');
-  const on = [...document.querySelectorAll('.dir-opt')].find((x) => x.className.includes('active'));
+  // 方向分段要限定在控制卡内，否则会同页顶栏 LineSearch 的视图分段（同为 .seg-tab）撞车
+  const on = [...document.querySelectorAll('.mod-ctrl .seg-tab')].find((x) => x.className.includes('on'));
   return {
     stripClass: strip ? strip.className : null,
     vars: strip ? { a: cs(strip, '--line-a'), ring: cs(strip, '--ring') } : null,
@@ -76,7 +78,7 @@ async function shot(name) {
 }
 async function clickDir(text) {
   await send('Runtime.evaluate', {
-    expression: `(() => { const b=[...document.querySelectorAll('.dir-opt')].find(x=>x.innerText.trim().includes('${text}')); if(b){b.click(); return 'ok'} return 'not-found' })()`,
+    expression: `(() => { const b=[...document.querySelectorAll('.mod-ctrl .seg-tab')].find(x=>x.innerText.trim().includes('${text}')); if(b){b.click(); return 'ok'} return 'not-found' })()`,
     returnByValue: true,
   })
   await sleep(4500)

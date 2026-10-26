@@ -145,6 +145,11 @@
       <!-- ⓪ 设置齿轮：常驻卡片右上角（绝对定位，不占行） -->
       <view class="ctrl-cfg" @click="goSettings" title="地图服务设置">⚙</view>
 
+      <!-- ◎ 宿主注入的首块（首页地图视图：视图分段 + 线路搜索联想）。
+         顶栏卡不再浮在地图外面，而是并入这张控制卡，与方向行 / 视图工具行共用一个卡壳 -->
+      <slot name="top"></slot>
+      <view class="ctrl-div" v-if="hasTopSlot"></view>
+
       <!-- ① 搜索行（仅独立页渲染；嵌入态线路由宿主页给定） -->
       <view class="ctrl-search" v-if="!embedded">
         <view class="ctrl-back" @click="goBack" title="返回">‹</view>
@@ -166,7 +171,7 @@
       <!-- ② 方向与线路：直接选方向 + 当前线路号 + 营运公司徽标（必须单行）
            嵌入态此行是卡片首行，右侧让位给齿轮（pad-cfg）；
            实时车辆挂载即自动加载，刷新统一走车辆面板的 ↻/间隔下拉，不再放「一键查询」按钮 -->
-      <view class="ctrl-dir" :class="{ 'pad-cfg': embedded }">
+      <view class="ctrl-dir" :class="{ 'pad-cfg': embedded && !hasTopSlot }">
         <view class="dir-tab" :class="{ active: dirFilter === 2 }" @click="setDirView(2)">全部</view>
         <view class="dir-tab up" :class="{ active: dirFilter === 0 }" @click="setDirView(0)">上行</view>
         <view class="dir-tab down" :class="{ active: dirFilter === 1 }" @click="setDirView(1)">下行</view>
@@ -200,59 +205,68 @@
       <view class="view-alert" v-if="routeAlert">{{ routeAlert }}</view>
     </view>
 
-    <!-- 右侧车辆面板（可折叠，列表随视角方向过滤） -->
-    <view class="panel" :class="{ collapsed: panelCollapsed }">
-      <view class="panel-header">
-        <view class="panel-title">实时车辆（{{ shownBuses.length }}辆 · {{ dirFilterLabel }}）</view>
-        <view class="collapse-btn" :class="{ folded: panelCollapsed }" @click="panelCollapsed = !panelCollapsed" :title="panelCollapsed ? '展开' : '折叠'">▾</view>
-      </view>
-      <!-- 刷新行：左半 ↻ 立即拉一次；右半显示当前间隔，单击展开 手动 / 15秒 / 20秒 / 30秒 -->
-      <view class="panel-tools">
-        <view class="refresh-wrap">
-          <view class="refresh-pill" :class="{ busy: loading, auto: refreshSec > 0 }">
-            <view class="rp-refresh" @click="refreshNow" :title="loading ? '刷新中…' : '立即刷新'">
-              <text class="rp-ico" :class="{ spin: loading }">↻</text>
-            </view>
-            <view class="rp-split"></view>
-            <view class="rp-mode" @click="refreshMenu = !refreshMenu" :title="refreshTitle">
-              <text class="rp-txt">{{ refreshLabel }}</text>
-              <text class="rp-caret" :class="{ open: refreshMenu }">▾</text>
-            </view>
-          </view>
-          <view class="refresh-menu" v-if="refreshMenu">
-            <view
-              class="rm-item"
-              v-for="opt in refreshOptions"
-              :key="opt.sec"
-              :class="{ on: refreshSec === opt.sec }"
-              @click="setRefreshSec(opt.sec)"
-            >
-              <text class="rm-label">{{ opt.label }}</text>
-              <text class="rm-tip">{{ opt.tip }}</text>
-              <text class="rm-check" v-if="refreshSec === opt.sec">✓</text>
-            </view>
-          </view>
+    <!-- 右侧栏：实时车辆面板在上，发车时刻表面板独立挂在它下方（两张卡各自成块，不共用一个面板壳） -->
+    <view class="side-col">
+      <!-- 实时车辆面板（可折叠，列表随视角方向过滤） -->
+      <view class="panel" :class="{ collapsed: panelCollapsed }">
+        <view class="panel-header">
+          <view class="panel-title">实时车辆（{{ shownBuses.length }}辆 · {{ dirFilterLabel }}）</view>
+          <view class="collapse-btn" :class="{ folded: panelCollapsed }" @click="panelCollapsed = !panelCollapsed" :title="panelCollapsed ? '展开' : '折叠'">▾</view>
         </view>
-        <text class="pt-hint">{{ refreshSec > 0 ? '自动刷新中' : '仅点 ↻ 时拉取' }}</text>
-      </view>
-      <view class="panel-body" v-show="!panelCollapsed">
-        <scroll-view class="bus-list" scroll-y v-if="shownBuses.length">
-          <view class="bus-item" v-for="(bus, i) in shownBuses" :key="bus.dir + '-' + i" @click="selectBus(bus)">
-            <view class="bus-left">
-              <!-- ★ 自编号（由 MD5 加密值还原，如 3240）+ 方向徽标 -->
-              <view class="bus-org">
-                {{ bus.orgId || '未知' }}
-                <text class="bus-dir" :class="'d' + bus.dir">{{ bus.dir === 0 ? '上行' : '下行' }}</text>
+        <!-- 刷新行：左半 ↻ 立即拉一次；右半显示当前间隔，单击展开 手动 / 15秒 / 20秒 / 30秒 -->
+        <view class="panel-tools">
+          <view class="refresh-wrap">
+            <view class="refresh-pill" :class="{ busy: loading, auto: refreshSec > 0 }">
+              <view class="rp-refresh" @click="refreshNow" :title="loading ? '刷新中…' : '立即刷新'">
+                <text class="rp-ico" :class="{ spin: loading }">↻</text>
               </view>
-              <view class="bus-hash">{{ bus.busNo }}</view>
+              <view class="rp-split"></view>
+              <view class="rp-mode" @click="refreshMenu = !refreshMenu" :title="refreshTitle">
+                <text class="rp-txt">{{ refreshLabel }}</text>
+                <text class="rp-caret" :class="{ open: refreshMenu }">▾</text>
+              </view>
             </view>
-            <view class="bus-right">
-              <view class="bus-speed">⚡ {{ bus.gpsSpeed }} km/h</view>
-              <view class="bus-time">🕐 {{ bus.time }}</view>
+            <view class="refresh-menu" v-if="refreshMenu">
+              <view
+                class="rm-item"
+                v-for="opt in refreshOptions"
+                :key="opt.sec"
+                :class="{ on: refreshSec === opt.sec }"
+                @click="setRefreshSec(opt.sec)"
+              >
+                <text class="rm-label">{{ opt.label }}</text>
+                <text class="rm-tip">{{ opt.tip }}</text>
+                <text class="rm-check" v-if="refreshSec === opt.sec">✓</text>
+              </view>
             </view>
           </view>
-        </scroll-view>
-        <view class="empty" v-else>当前{{ dirFilterLabel === '全部' ? '' : dirFilterLabel }}没有在线车辆</view>
+          <text class="pt-hint">{{ refreshSec > 0 ? '自动刷新中' : '仅点 ↻ 时拉取' }}</text>
+        </view>
+        <view class="panel-body" v-show="!panelCollapsed">
+          <scroll-view class="bus-list" scroll-y v-if="shownBuses.length">
+            <view class="bus-item" v-for="(bus, i) in shownBuses" :key="bus.dir + '-' + i" @click="selectBus(bus)">
+              <view class="bus-left">
+                <!-- ★ 自编号（由 MD5 加密值还原，如 3240）+ 方向徽标 -->
+                <view class="bus-org">
+                  {{ bus.orgId || '未知' }}
+                  <text class="bus-dir" :class="'d' + bus.dir">{{ bus.dir === 0 ? '上行' : '下行' }}</text>
+                </view>
+                <view class="bus-hash">{{ bus.busNo }}</view>
+              </view>
+              <view class="bus-right">
+                <view class="bus-speed">⚡ {{ bus.gpsSpeed }} km/h</view>
+                <view class="bus-time">🕐 {{ bus.time }}</view>
+              </view>
+            </view>
+          </scroll-view>
+          <view class="empty" v-else>当前{{ dirFilterLabel === '全部' ? '' : dirFilterLabel }}没有在线车辆</view>
+        </view>
+      </view>
+
+      <!-- 发车时刻表面板（原独立整屏视图移到这里）：上行与下行同屏各一组，不随控制卡视角二选一；
+           自带折叠键（与车辆面板同一枚圆键），两张卡各自成块、各折各的 -->
+      <view class="plan-side" v-if="lineNo">
+        <LinePlan :line-no="lineNo" />
       </view>
     </view>
 
@@ -297,7 +311,7 @@
     </view>
 
     <!-- 全屏切换（仅嵌入态）：把整块地图从 72vh 宿主里提出来铺满视口；再点一次或按 ESC 退出 -->
-    <view class="fs-btn" v-if="embedded" @click="toggleFullscreen" :title="isFullscreen ? '退出全屏（ESC）' : '全屏查看'">
+    <view class="fs-btn" v-if="embedded && fsEnabled" @click="toggleFullscreen" :title="isFullscreen ? '退出全屏（ESC）' : '全屏查看'">
       <text class="fs-ico">{{ isFullscreen ? '⤡' : '⛶' }}</text>
       <text class="fs-txt">{{ isFullscreen ? '退出全屏' : '全屏' }}</text>
     </view>
@@ -309,6 +323,7 @@ import { fetchRealTime, fetchLine, decryptBusId, onBusIdReady } from '../utils/a
 import { fetchRoadRoute } from '../utils/osrm.js'
 import { APP_CONFIG, buildLineCode, useNativeMap } from '../config.js'
 import { assetUrl } from '../utils/asset.js'
+import LinePlan from './LinePlan.vue'
 
 // —— 方向配色（全站统一）：上行 = 青蓝，下行 = 玫红 ——
 // 色相相隔约 150°，在浅色高德底图与深色自绘画布上都清晰；不依赖红绿对比，色盲用户也能分辨。
@@ -389,11 +404,14 @@ function smoothPath(pts) {
 }
 
 export default {
+  components: { LinePlan },
   props: {
     lineCodeProp: { type: String, default: '' },
     initDirection: { type: Number, default: 0 },
     lineNameProp: { type: String, default: '' },
     embedded: { type: Boolean, default: false },
+    // 宿主已把地图铺满整屏时不再需要「全屏查看」键（首页地图视图即如此）
+    fsEnabled: { type: Boolean, default: true },
   },
   data() {
     return {
@@ -435,7 +453,7 @@ export default {
       cam: { u: 0.5, v: 0.4, zoom: 13 },
       projCenter: { x: 187, y: 333 },
       // UI 占位（控制卡 / 右侧面板 / 图例），用于计算路线可绘制区域
-      uiRects: { ctrl: null, panel: null, legend: null },
+      uiRects: { ctrl: null, side: null, legend: null },
       // 相机是否已按线路自适应过一次（避免 15s 刷新时视图乱跳）
       camInited: false,
       showStopLabels: true,
@@ -458,6 +476,10 @@ export default {
     }
   },
   computed: {
+    // 宿主是否注入了 top 插槽：决定首块让位齿轮的是插槽内容还是方向行
+    hasTopSlot() {
+      return !!this.$slots.top
+    },
     // 渲染方式由「地图服务设置」决定：选“走向图”时即使填了 Key 也用自绘；
     // 未设置时按有无 Key 自动选择（保持旧行为）
     useMap() {
@@ -716,8 +738,8 @@ export default {
             orgId: decryptBusId(b.busId) || b.orgId || '',
           }))
         }
-        // 自编号就绪后标记图文会变化，重建地图保证渲染一致
-        this.mapKey++
+        // 自编号就绪后标记图文会变化，原生模式重建地图保证渲染一致；自绘模式标记走 SVG/HTML 图层，无需重建
+        if (this.useMap) this.mapKey++
         // 自编号就绪后营运公司徽章才出现，控制卡会变高 → 重新量取占位
         this.$nextTick(() => this.measureUi())
       })
@@ -732,11 +754,13 @@ export default {
       this.loadByLine(no, this.dirFilter === 2 ? this.direction : this.dirFilter)
     },
     // 切换视角方向：0 上行 / 1 下行 / 2 全部（站点与轨迹已双方向缓存，切换仅重绘）
+    // 自绘模式：走向/站点/车辆都是 SVG + HTML 图层，改 dirFilter 重算 svg* 即可，
+    // 底图瓦片随 cam 不变、完全不动。地图 <map> 组件（原生模式）则需重建以切换 marker 集合，
+    // 但自绘模式没有 <map>，mapKey++ 对性能无益只有徒劳开销——故自绘模式不重建。
     setDirView(d) {
       if (d !== 2) this.direction = d
       this.dirFilter = d
-      // 标记集随方向过滤变化，重建地图避免残留
-      this.mapKey++
+      if (this.useMap) this.mapKey++
       this.renderSchematic()
     },
     // 切换方向按钮：全部 → 上行 → 下行 → 全部 循环
@@ -761,7 +785,8 @@ export default {
       this.camInited = false
       this._userMoved = false
       this._view = null
-      this.mapKey++
+      // 原生模式才需要重建 <map>；自绘模式 mapKey 只是标记重建的副作用键，保持不动
+      if (this.useMap) this.mapKey++
       this.loadAllStops()
       this.loadLive()
     },
@@ -801,16 +826,15 @@ export default {
         check()
       })
     },
-    // 跳转地图服务设置页（BYOK：用户自填高德 Key）
+    // 打开地图服务设置：不在组件内跳转，改为向宿主页派发事件，由 line/map 页用内联抽屉呈现
     goSettings() {
-      uni.navigateTo({ url: '/pages/settings/settings' })
+      this.$emit('openSettings')
     },
-    // 返回上一页（嵌入式形态下无独立页面可返回，直接忽略）
+    // 返回上一页（嵌入式形态下由首页承载，不需要返回，直接忽略）
     goBack() {
       if (this.embedded) return
-      uni.navigateBack({
-        fail: () => uni.reLaunch({ url: '/pages/index/index' }),
-      })
+      // 地图页就是首页：没有「上一层」可回，回顶栏起始态即可
+      uni.reLaunch({ url: '/pages/map/map' })
     },
     // 按需加载高德插件（LineSearch / Driving），带超时保护
     loadPlugin(AMap, name) {
@@ -832,7 +856,8 @@ export default {
         for (const dir of [0, 1]) {
           if (official[dir] && official[dir].length > 1) this.routeByDir[dir] = official[dir]
         }
-        this.mapKey++
+        // 原生模式才需要重建 <map> 清 callout 残留；自绘模式没有 <map>，mapKey++ 只是徒劳
+        if (this.useMap) this.mapKey++
         this.renderSchematic()
         // 官方轨迹缺失且有站点缓存的方向 → 逐段驾车吸附兜底
         for (const dir of [0, 1]) {
@@ -984,7 +1009,7 @@ export default {
         }
       }
       this.routeByDir[dir] = result
-      this.mapKey++
+      if (this.useMap) this.mapKey++
       this.renderSchematic()
     },
     // 一批路径规划（含途经点）：Promise 化 + 10s 超时保护，失败返回空数组由调用方回退直线
@@ -1047,8 +1072,8 @@ export default {
           const first = this.shownBuses[0]
           if (first) this.mapCenter = { lat: first.lat, lng: first.lng }
         }
-        // 重建地图组件，彻底清除上批标记与气泡残留
-        this.mapKey++
+        // 重建地图组件，彻底清除上批标记与气泡残留（仅原生地图需要；自绘模式标记走 SVG/HTML 图层，无需重建）
+        if (this.useMap) this.mapKey++
         // 首次拿到车辆时重新自适应（包含车辆分布），此后仅重绘避免画面跳动
         if (!this.camInited) this.fitRoute()
         // 车辆到位后营运公司徽章出现会让控制卡变高，需重新量取占位（未手动调整视角时会自动重排）
@@ -1153,18 +1178,18 @@ export default {
       this.projCenter = { x: this.canvas.w / 2, y: this.canvas.h / 2 }
       this.renderSchematic()
     },
-    // 量取控制卡 / 右侧面板 / 图例实际占位（此项目样式用 rpx，不能用固定 px 推算）
+    // 量取控制卡 / 右侧栏（车辆面板 + 时刻表面板）/ 图例实际占位（此项目样式用 rpx，不能用固定 px 推算）
     measureUi() {
       const q = uni.createSelectorQuery().in(this)
       q.select('.ctrl').boundingClientRect()
-      q.select('.panel').boundingClientRect()
+      q.select('.side-col').boundingClientRect()
       q.select('.schematic-legend').boundingClientRect()
       q.select('.schematic').boundingClientRect()
       q.exec((res) => {
         const arr = res || []
         const prevCtrl = this.uiRects.ctrl
-        const prevPanel = this.uiRects.panel
-        this.uiRects = { ctrl: arr[0] || null, panel: arr[1] || null, legend: arr[2] || null }
+        const prevSide = this.uiRects.side
+        this.uiRects = { ctrl: arr[0] || null, side: arr[1] || null, legend: arr[2] || null }
         // H5 有原生标题栏（--window-top），窗口高度不等于画布高度，以实际画布矩形为准
         const box = arr[3]
         const prevCanvas = this.canvas
@@ -1174,17 +1199,17 @@ export default {
         // 控制卡/面板高度会随异步数据（营运公司徽章、车辆数）变化，画布也可能因窗口缩放变化；
         // 占位变了就得重排，但用户已手动平移/缩放时保持其视角不动
         const changed = (prev, now) => !!(prev && now && Math.abs(now.bottom - prev.bottom) > 8)
-        const grew = changed(prevCtrl, this.uiRects.ctrl) || changed(prevPanel, this.uiRects.panel)
+        const grew = changed(prevCtrl, this.uiRects.ctrl) || changed(prevSide, this.uiRects.side)
         const resized = prevCanvas.w !== this.canvas.w || prevCanvas.h !== this.canvas.h
         if (!this.camInited || ((grew || resized) && !this._userMoved)) this.fitRoute()
         else this.renderSchematic()
       })
     },
-    // 可绘制矩形：避开左上控制卡、桌面右侧面板 / 手机底部横栏、底部图例
+    // 可绘制矩形：避开左上控制卡、右侧栏（桌面）/ 底部横栏（手机）、底部图例
     fitRect() {
       const { w, h } = this.canvas
       const c = this.uiRects.ctrl
-      const p = this.uiRects.panel
+      const p = this.uiRects.side
       const lg = this.uiRects.legend
       let x0 = 28
       let y0 = c ? Math.min(c.bottom + 26, h * 0.58) : h * 0.3
@@ -1255,7 +1280,8 @@ export default {
       this.mapCenter = { lat: invMercY(cv), lng: invMercX(cu) }
       // 同步 _view：否则紧接着的 silent 刷新会按旧视野把画面拽回初始中心
       this._view = { center: this.mapCenter, scale }
-      this.mapKey++
+      // fitNativeView 仅在原生地图分支被调用（useMap 为真），此处重建是原生地图的正常行为
+      if (this.useMap) this.mapKey++
     },
     resetView() {
       // 全览：清掉“用户已调整视角”标记并重新自适应
@@ -1864,7 +1890,7 @@ export default {
       if (typeof document !== 'undefined') {
         const l0 = (hr && hr.left) || 0
         const t0 = (hr && hr.top) || 0
-        ;['.bus-sheet', '.ctrl', '.panel'].forEach((sel) => {
+        ;['.bus-sheet', '.ctrl', '.side-col', '.float-win'].forEach((sel) => {
           const el = document.querySelector(sel)
           if (!el) return
           const b = el.getBoundingClientRect()
@@ -2275,11 +2301,14 @@ export default {
   filter: brightness(1.12);
 }
 /* 地图设置入口（齿轮）：绝对定位在控制卡右上角，不占文档行；
-   卡片 padding 12rpx + 首行高约 64rpx，取 18rpx 偏移让齿轮与首行垂直居中 */
+   卡片 padding 12rpx + 首行高约 64rpx，取 18rpx 偏移让齿轮与首行垂直居中。
+   ⚠ z-index 必须高于插槽里的 .mod-main（50）：裸形态顶栏整行宽度铺满卡片（齿轮位只是它的 padding），
+   压在下面会让齿轮永远点不动（命中全部落在 .view-row 上） */
 .ctrl-cfg {
   position: absolute;
   top: 18rpx;
   right: 18rpx;
+  z-index: 60;
   width: 52rpx;
   height: 52rpx;
   line-height: 52rpx;
@@ -2468,13 +2497,25 @@ export default {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-/* 右侧面板（毛玻璃，悬浮在地图上方） */
-.panel {
+/* 右侧栏：一张列容器把「实时车辆」与「发车时刻表」两张独立卡片上下排好。
+   高度交给内容（不写 bottom），否则卡下方的空白条会盖住地图、吃掉拖拽手势 */
+.side-col {
   position: absolute;
   top: 24rpx;
   right: 24rpx;
   width: 560rpx;
-  max-height: 60vh;
+  max-height: calc(100vh - 48rpx);
+  display: flex;
+  flex-direction: column;
+  gap: 20rpx;
+  /* 高于刷新下拉遮罩（19），低于车辆详情窗（30） */
+  z-index: 20;
+}
+/* 实时车辆面板（毛玻璃，右侧栏的第一块） */
+.panel {
+  position: relative;
+  min-height: 0;
+  max-height: 54vh;
   display: flex;
   flex-direction: column;
   background: rgba(11, 16, 32, 0.72);
@@ -2485,18 +2526,16 @@ export default {
   padding: 28rpx;
   box-sizing: border-box;
   box-shadow: 0 16rpx 48rpx rgba(0, 0, 0, 0.4);
-  /* 高于刷新下拉遮罩（19），低于车辆详情弹层（28 / 30） */
-  z-index: 20;
 }
-/* 窄屏（手机）回落为底部横栏 */
+/* 窄屏（手机）整列回落为底部横栏：时刻表卡仍在车辆面板下方，两块一起贴底 */
 @media (max-width: 720px) {
-  .panel {
+  .side-col {
     top: auto;
     left: 20rpx;
     right: 20rpx;
     bottom: 20rpx;
     width: auto;
-    max-height: 46vh;
+    max-height: 62vh;
   }
 }
 .panel-header {
@@ -2506,10 +2545,7 @@ export default {
   justify-content: space-between;
   margin-bottom: 18rpx;
 }
-/* 折叠态：去掉底部锚定，高度收缩为仅标题栏 */
-.panel.collapsed {
-  bottom: auto;
-}
+/* 折叠态：只收车辆列表，高度自然收缩 */
 .panel.collapsed .panel-header {
   margin-bottom: 0;
 }
@@ -2555,6 +2591,25 @@ export default {
   min-height: 0;
   display: flex;
   flex-direction: column;
+}
+/* 发车时刻表：独立一张卡挂在车辆面板下方（与 .panel 同款玻璃卡壳与字号），
+   卡壳在这里、标题行与列表在 LinePlan 里，高度超额时由列表自己滚 */
+.plan-side {
+  flex: 0 1 auto;
+  min-height: 0;
+  /* 上下行两组同屏，给得比单方向宽裕一档，超额部分由列表自己滚 */
+  max-height: 38vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  box-sizing: border-box;
+  background: rgba(11, 16, 32, 0.72);
+  backdrop-filter: blur(28px) saturate(160%);
+  -webkit-backdrop-filter: blur(28px) saturate(160%);
+  border: 2rpx solid rgba(255, 255, 255, 0.16);
+  border-radius: 32rpx;
+  padding: 28rpx;
+  box-shadow: 0 16rpx 48rpx rgba(0, 0, 0, 0.4);
 }
 .panel-title {
   font-size: 30rpx;
@@ -2698,10 +2753,11 @@ export default {
 @media (max-width: 720px) {
   .panel.collapsed {
     max-height: none;
-    /* 手机上折叠后仍锚定屏幕底部 */
-    bottom: 20rpx;
   }
   .bus-list {
+    max-height: 26vh;
+  }
+  .plan-side {
     max-height: 32vh;
   }
 }

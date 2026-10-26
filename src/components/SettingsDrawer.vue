@@ -1,59 +1,67 @@
 <template>
-  <view class="page">
-    <view class="card glass">
-      <view class="title">地图服务设置</view>
-      <view class="desc">
-        实时地图使用高德「Web 端(JS API)」原生地图，必须填写你自己申请的 Key 才能启用地图在线查看实时运营车辆；
-        填好后地图用量计入你的高德账号。App 端 Key 随安装包内置，无需配置。
-      </view>
+  <view v-if="visible">
+    <view class="sd-mask" @click="$emit('close')"></view>
+    <view class="sd-panel">
+      <view class="card glass">
+        <view class="sd-close" @click="$emit('close')">✕</view>
+        <view class="title">地图服务设置</view>
+        <view class="desc">
+          实时地图使用高德「Web 端(JS API)」原生地图，必须填写你自己申请的 Key 才能启用地图在线查看实时运营车辆；
+          填好后地图用量计入你的高德账号。
+        </view>
 
-      <view class="field">
-        <view class="label">高德 JS Key</view>
-        <input
-          class="input"
-          v-model="amapKey"
-          type="text"
-          placeholder="32 位小写字母 + 数字"
-          placeholder-class="ph"
-        />
-      </view>
-      <view class="field">
-        <view class="label">安全密钥 securityJsCode</view>
-        <input
-          class="input"
-          v-model="amapJsCode"
-          type="text"
-          placeholder="与 Key 配对的安全密钥"
-          placeholder-class="ph"
-        />
-      </view>
+        <view class="field">
+          <view class="label">高德 JS Key</view>
+          <input
+            class="input"
+            v-model="amapKey"
+            type="text"
+            placeholder="32 位小写字母 + 数字"
+            placeholder-class="ph"
+          />
+        </view>
+        <view class="field">
+          <view class="label">安全密钥 securityJsCode</view>
+          <input
+            class="input"
+            v-model="amapJsCode"
+            type="text"
+            placeholder="与 Key 配对的安全密钥"
+            placeholder-class="ph"
+          />
+        </view>
 
-      <view class="state" v-if="hasCustom">
-        <text class="state-dot"></text>当前已启用自定义 Key：{{ maskedKey }}
-      </view>
+        <view class="state" v-if="hasCustom">
+          <text class="state-dot"></text>当前已启用自定义 Key：{{ maskedKey }}
+        </view>
 
-      <view class="btns">
-        <view class="btn primary" @click="save">保存并重载</view>
-        <view class="btn" v-if="hasCustom" @click="clear">清除自定义</view>
-      </view>
+        <view class="btns">
+          <view class="btn primary" @click="save">保存并重载</view>
+          <view class="btn" v-if="hasCustom" @click="clear">清除自定义</view>
+        </view>
 
-      <view class="btn-link" @click="applyKey">前往高德开放平台申请 Key ↗</view>
+        <view class="btn-link" @click="applyKey">前往高德开放平台申请 Key ↗</view>
 
-      <view class="help">
-        <view class="help-title">如何获取（约 2 分钟）</view>
-        <view class="help-step">1. 打开高德开放平台控制台 console.amap.com，登录后进入「应用管理 → 我的应用」；</view>
-        <view class="help-step">2. 创建新 Key，「启用平台」选择 <text class="em">Web端(JS API)</text>；</view>
-        <view class="help-step">3. 域名白名单可留空（留空表示不限制来源）；</view>
-        <view class="help-step">4. 把生成的 Key 和配套「安全密钥」复制粘贴到上方，保存后页面会自动重载生效。</view>
+        <view class="help">
+          <view class="help-title">如何获取（约 2 分钟）</view>
+          <view class="help-step">1. 打开高德开放平台控制台 console.amap.com，登录后进入「应用管理 → 我的应用」；</view>
+          <view class="help-step">2. 创建新 Key，「启用平台」选择 <text class="em">Web端(JS API)</text>；</view>
+          <view class="help-step">3. 域名白名单可留空（留空表示不限制来源）；</view>
+          <view class="help-step">4. 把生成的 Key 和配套「安全密钥」复制粘贴到上方，保存后页面会自动重载生效。</view>
+        </view>
       </view>
     </view>
   </view>
 </template>
 
 <script>
-import { getUserAmapConfig, saveUserAmapConfig, clearUserAmapConfig, openExternal, AMAP_CONSOLE_URL } from '../../config.js'
+import { getUserAmapConfig, saveUserAmapConfig, clearUserAmapConfig, openExternal, AMAP_CONSOLE_URL } from '../config.js'
 
 export default {
+  name: 'SettingsDrawer',
+  props: {
+    visible: { type: Boolean, default: false },
+  },
   data() {
     return {
       amapKey: '',
@@ -68,15 +76,21 @@ export default {
       return `${k.slice(0, 4)}****${k.slice(-4)}`
     },
   },
-  onLoad() {
-    const c = getUserAmapConfig()
-    if (c) {
-      this.amapKey = c.key || ''
-      this.amapJsCode = c.securityJsCode || ''
-      this.hasCustom = true
-    }
+  watch: {
+    // 抽屉每次打开时回填已保存的自定义 Key
+    visible(v) {
+      if (v) this.load()
+    },
   },
   methods: {
+    load() {
+      const c = getUserAmapConfig()
+      if (c) {
+        this.amapKey = c.key || ''
+        this.amapJsCode = c.securityJsCode || ''
+        this.hasCustom = true
+      }
+    },
     save() {
       const key = (this.amapKey || '').trim()
       const jscode = (this.amapJsCode || '').trim()
@@ -94,7 +108,6 @@ export default {
       this.hasCustom = false
       this.reload()
     },
-    // 打开高德开放平台控制台，引导申请 Web端(JS API) Key
     applyKey() {
       openExternal(AMAP_CONSOLE_URL)
     },
@@ -112,14 +125,28 @@ export default {
 }
 </script>
 
-<style>
-.page {
-  min-height: 100vh;
-  padding: 40rpx 32rpx 80rpx;
+<style scoped>
+.sd-mask {
+  position: fixed;
+  left: 0;
+  top: 0;
+  width: 100vw;
+  height: 100vh;
+  z-index: 80;
+  background: rgba(4, 8, 18, 0.6);
+  backdrop-filter: blur(2px);
+  -webkit-backdrop-filter: blur(2px);
+}
+.sd-panel {
+  position: fixed;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 81;
+  width: 100%;
+  max-width: 860rpx;
+  padding: 0 32rpx;
   box-sizing: border-box;
-  display: flex;
-  justify-content: center;
-  align-items: flex-start;
 }
 .glass {
   background: linear-gradient(180deg, rgba(255, 255, 255, 0.12), rgba(255, 255, 255, 0.05));
@@ -130,10 +157,19 @@ export default {
   box-shadow: 0 24rpx 64rpx rgba(0, 0, 0, 0.42), inset 0 1rpx 0 rgba(255, 255, 255, 0.20);
 }
 .card {
+  position: relative;
   width: 100%;
-  max-width: 860rpx;
   padding: 44rpx 40rpx;
   box-sizing: border-box;
+}
+.sd-close {
+  position: absolute;
+  top: 24rpx;
+  right: 24rpx;
+  padding: 6rpx 14rpx;
+  font-size: 30rpx;
+  color: rgba(255, 255, 255, 0.45);
+  cursor: pointer;
 }
 .title {
   font-size: 40rpx;
@@ -149,51 +185,6 @@ export default {
 }
 .field {
   margin-bottom: 28rpx;
-}
-/* 渲染方式三档选择（<text> 在 H5 下是 inline，必须显式 block 才能各行其道） */
-.seg {
-  display: flex;
-  gap: 14rpx;
-}
-.seg-item {
-  flex: 1;
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 8rpx;
-  padding: 18rpx 8rpx;
-  box-sizing: border-box;
-  border-radius: 20rpx;
-  background: rgba(255, 255, 255, 0.06);
-  border: 2rpx solid rgba(255, 255, 255, 0.12);
-  cursor: pointer;
-  transition: background 0.2s, border-color 0.2s;
-}
-.seg-item.on {
-  background: linear-gradient(135deg, rgba(99, 102, 241, 0.35), rgba(6, 182, 212, 0.28));
-  border-color: rgba(129, 140, 248, 0.7);
-}
-.si-t {
-  display: block;
-  font-size: 27rpx;
-  font-weight: 700;
-  line-height: 1.2;
-  color: #fff;
-}
-.si-d {
-  display: block;
-  font-size: 19rpx;
-  line-height: 1.3;
-  color: rgba(255, 255, 255, 0.5);
-  text-align: center;
-}
-.hint {
-  font-size: 21rpx;
-  line-height: 1.7;
-  color: rgba(255, 255, 255, 0.45);
-  margin-top: 14rpx;
 }
 .label {
   font-size: 24rpx;
@@ -255,7 +246,6 @@ export default {
   border: none;
   box-shadow: 0 14rpx 34rpx rgba(99, 102, 241, 0.45), inset 0 1rpx 0 rgba(255, 255, 255, 0.3);
 }
-/* 外部链接按钮：高德开放平台申请 Key */
 .btn-link {
   display: block;
   text-align: center;

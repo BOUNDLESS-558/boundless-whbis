@@ -1,189 +1,138 @@
 <template>
-  <view class="page">
-    <!-- 统一模块栈：整卡包裹 + 行分块，与首页 / 地图页控制卡同一套语言 -->
-    <view class="stack">
-      <!-- 卡1：线路头 —— 徽标 / 走向 / 公司 + 营运指标行 -->
-      <view class="mod">
-        <view class="mod-row head-row">
-          <view class="line-badge" :class="activeDir === 0 ? 'up' : 'down'">{{ lineName }}</view>
-          <view class="hd-body">
-            <view class="hd-route">
-              <text class="hd-start">{{ activeBase.startStop || startStopOpt || '起点' }}</text>
-              <text class="hd-arrow">⇌</text>
-              <text class="hd-end">{{ activeBase.endStop || endStopOpt || '终点' }}</text>
+  <view class="stops" :class="{ plain: plain }">
+    <!-- 卡1：线路头 —— 徽标 / 走向 / 公司 + 营运指标行 -->
+    <view class="mod">
+      <view class="mod-row head-row">
+        <view class="line-badge" :class="dir === 0 ? 'up' : 'down'">{{ lineName }}</view>
+        <view class="hd-body">
+          <view class="hd-route">
+            <text class="hd-start">{{ activeBase.startStop || startStop || '起点' }}</text>
+            <text class="hd-arrow">⇌</text>
+            <text class="hd-end">{{ activeBase.endStop || endStop || '终点' }}</text>
+          </view>
+          <!-- 营运公司（由车辆自编号首位推断） -->
+          <view class="hd-orgs" v-if="operatorCompanies.length">
+            <view class="org-tag" v-for="c in operatorCompanies" :key="c.no">
+              <text class="org-no">{{ c.no }}</text>
+              <text class="org-name">{{ c.label }}</text>
             </view>
-            <!-- 营运公司（由车辆自编号首位推断） -->
-            <view class="hd-orgs" v-if="operatorCompanies.length">
-              <view class="org-tag" v-for="c in operatorCompanies" :key="c.no">
-                <text class="org-no">{{ c.no }}</text>
-                <text class="org-name">{{ c.label }}</text>
-              </view>
-            </view>
-          </view>
-        </view>
-
-        <view class="mod-div"></view>
-
-        <!-- 指标行：首末班 / 票价 / 站数 / 在线（点“在线”一键复制车辆明细） -->
-        <view class="mod-row ops-row">
-          <view class="ops-item">
-            <text class="ops-value">{{ activeBase.earlyHour || '--' }}</text>
-            <text class="ops-label">首班</text>
-          </view>
-          <view class="ops-item">
-            <text class="ops-value">{{ activeBase.lastHour || '--' }}</text>
-            <text class="ops-label">末班</text>
-          </view>
-          <view class="ops-item">
-            <text class="ops-value">¥{{ activeBase.price || '--' }}</text>
-            <text class="ops-label">票价</text>
-          </view>
-          <view class="ops-item">
-            <text class="ops-value">{{ activeCols.length }}</text>
-            <text class="ops-label">站点</text>
-          </view>
-          <view class="ops-item ops-click" @click="copyOnlineBuses">
-            <text class="ops-value online">{{ onlineCount }}</text>
-            <text class="ops-label online-label">在线</text>
           </view>
         </view>
       </view>
 
-      <!-- 卡2：控制卡 —— 视图分段 / 方向分段 + 刷新 -->
-      <view class="mod mod-ctrl">
-        <view class="mod-row view-row">
-          <view class="seg-groove">
-            <view class="seg-tab" :class="{ on: currentTab === 'stops' }" @click="switchTab('stops')">实时线路</view>
-            <view class="seg-tab" :class="{ on: currentTab === 'map' }" @click="switchTab('map')">实时地图</view>
-            <view class="seg-tab" :class="{ on: currentTab === 'plan' }" @click="switchTab('plan')">时刻表</view>
+      <view class="mod-div"></view>
+
+      <!-- 指标行：首末班 / 票价 / 站数 / 在线（点“在线”一键复制车辆明细） -->
+      <view class="mod-row ops-row">
+        <view class="ops-item">
+          <text class="ops-value">{{ activeBase.earlyHour || '--' }}</text>
+          <text class="ops-label">首班</text>
+        </view>
+        <view class="ops-item">
+          <text class="ops-value">{{ activeBase.lastHour || '--' }}</text>
+          <text class="ops-label">末班</text>
+        </view>
+        <view class="ops-item">
+          <text class="ops-value">¥{{ activeBase.price || '--' }}</text>
+          <text class="ops-label">票价</text>
+        </view>
+        <view class="ops-item">
+          <text class="ops-value">{{ activeCols.length }}</text>
+          <text class="ops-label">站点</text>
+        </view>
+        <view class="ops-item ops-click" @click="copyOnlineBuses">
+          <text class="ops-value online">{{ onlineCount }}</text>
+          <text class="ops-label online-label">在线</text>
+        </view>
+      </view>
+    </view>
+
+    <!-- 卡2：控制卡 —— 方向分段 + 刷新胶囊 -->
+    <view class="mod mod-ctrl">
+      <view class="mod-row dir-row">
+        <view class="seg-groove grow">
+          <view class="seg-tab up" :class="{ on: dir === 0 }" @click="setDir(0)">▲ 上行</view>
+          <view class="seg-tab down" :class="{ on: dir === 1 }" @click="setDir(1)">▼ 下行</view>
+        </view>
+        <!-- 刷新控件：与地图页 .refresh-pill 同一套设计 ——
+             左半 ↻ 立即拉一次，右半显示当前间隔并可展开 手动 / 15 / 20 / 30 秒 -->
+        <view class="refresh-wrap">
+          <view class="refresh-pill" :class="{ busy: loading, auto: refreshSec > 0 }">
+            <view class="rp-refresh" @click="onRefresh" :title="loading ? '刷新中…' : '立即刷新'">
+              <text class="rp-ico" :class="{ spin: loading }">↻</text>
+            </view>
+            <view class="rp-split"></view>
+            <view class="rp-mode" @click="refreshMenu = !refreshMenu" :title="refreshTitle">
+              <text class="rp-txt">{{ refreshLabel }}</text>
+              <text class="rp-caret" :class="{ open: refreshMenu }">▾</text>
+            </view>
           </view>
-          <view class="lt-info">
-            <text class="lt-count" v-if="currentTab === 'stops'">共 {{ activeCols.length }} 站 · {{ onlineCount }} 辆在线</text>
-            <text class="lt-count" v-else>共 {{ planSorted.length }} 班</text>
-            <text class="upd" v-if="currentTab === 'stops' && lastUpdate">更新于 {{ lastUpdate }}</text>
-            <text class="upd" v-else-if="currentTab === 'plan'">按计划发车时间排序</text>
+          <view class="refresh-menu" v-if="refreshMenu">
+            <view
+              class="rm-item"
+              v-for="opt in refreshOptions"
+              :key="opt.sec"
+              :class="{ on: refreshSec === opt.sec }"
+              @click="setRefreshSec(opt.sec)"
+            >
+              <text class="rm-label">{{ opt.label }}</text>
+              <text class="rm-tip">{{ opt.tip }}</text>
+              <text class="rm-check" v-if="refreshSec === opt.sec">✓</text>
+            </view>
           </view>
         </view>
+        <text class="lt-count">共 {{ activeCols.length }} 站 · {{ onlineCount }} 辆在线</text>
+      </view>
+    </view>
 
-        <view class="mod-div"></view>
-
-        <view class="mod-row dir-row">
-          <view class="seg-groove grow">
-            <view class="seg-tab up" :class="{ on: activeDir === 0 }" @click="setDir(0)">▲ 上行</view>
-            <view class="seg-tab down" :class="{ on: activeDir === 1 }" @click="setDir(1)">▼ 下行</view>
-          </view>
-          <!-- 刷新控件：与地图页 .refresh-pill 同一套设计 ——
-               左半 ↻ 立即拉一次，右半显示当前间隔并可展开 手动 / 15 / 20 / 30 秒 -->
-          <view class="refresh-wrap" v-if="currentTab === 'stops'">
-            <view class="refresh-pill" :class="{ busy: loading, auto: refreshSec > 0 }">
-              <view class="rp-refresh" @click="onRefresh" :title="loading ? '刷新中…' : '立即刷新'">
-                <text class="rp-ico" :class="{ spin: loading }">↻</text>
-              </view>
-              <view class="rp-split"></view>
-              <view class="rp-mode" @click="refreshMenu = !refreshMenu" :title="refreshTitle">
-                <text class="rp-txt">{{ refreshLabel }}</text>
-                <text class="rp-caret" :class="{ open: refreshMenu }">▾</text>
-              </view>
-            </view>
-            <view class="refresh-menu" v-if="refreshMenu">
+    <!-- 卡3：线路带（横向滚动，PC 支持拖拽/滚轮）：整条带颜色随方向切换，上行青蓝 / 下行玫红 -->
+    <view
+      class="mod mod-strip"
+      v-if="activeCols.length"
+      :class="dir === 1 ? 'dir-down' : 'dir-up'"
+    >
+      <view class="route-strip" ref="strip">
+        <view class="strip-inner">
+          <view class="node" v-for="(stop, i) in activeCols" :key="stop.stopId">
+            <!-- 车辆浮层（高度自适应单站最多车辆数，保证线路对齐且信息完整） -->
+            <view class="node-bus" :style="busZoneStyle">
               <view
-                class="rm-item"
-                v-for="opt in refreshOptions"
-                :key="opt.sec"
-                :class="{ on: refreshSec === opt.sec }"
-                @click="setRefreshSec(opt.sec)"
+                class="bchip"
+                :class="b.arrived === '1' ? 'arrived' : 'running'"
+                v-for="b in stop.buses"
+                :key="b.busId"
               >
-                <text class="rm-label">{{ opt.label }}</text>
-                <text class="rm-tip">{{ opt.tip }}</text>
-                <text class="rm-check" v-if="refreshSec === opt.sec">✓</text>
+                <text class="b-org">{{ b.orgId || '?' }}</text>
+                <text class="b-meta">{{ b.time }} · {{ b.gpsSpeed }}km/h</text>
+                <text class="b-state">{{ b.arrived === '1' ? '到站' : '行驶' }}</text>
+              </view>
+            </view>
+            <!-- 连续线段 + 站点 -->
+            <view class="node-mid">
+              <view class="seg" :class="{ first: i === 0, last: i === activeCols.length - 1 }"></view>
+              <view
+                class="dot"
+                :class="{ terminal: isTerminal(i, activeCols.length), busy: stop.buses && stop.buses.length }"
+              >
+                <text class="dot-no">{{ stop.stopNo }}</text>
+              </view>
+            </view>
+            <!-- 站名 + 换乘 -->
+            <view class="node-label">
+              <text class="node-name" :style="nameZoneStyle">{{ stop.stopName }}</text>
+              <view class="node-tags" v-if="stop.transferInfos && stop.transferInfos.length">
+                <text class="ttag" v-for="t in stop.transferInfos" :key="t.subwayLineNo">{{ t.subwayLineNo }}号线</text>
               </view>
             </view>
           </view>
         </view>
       </view>
+    </view>
 
-      <!-- 卡3：实时车辆地图（聚合原 map 页：双模式走向图/原生地图、缩放、车辆面板、详情窗） -->
-      <view v-if="currentTab === 'map'" class="map-host">
-        <LineMap
-          ref="mapC"
-          :line-code-prop="lineCode"
-          :init-direction="activeDir"
-          :line-name-prop="lineName"
-          :embedded="true"
-        />
-      </view>
-
-      <!-- 卡3：线路带（横向滚动，PC 支持拖拽/滚轮）：整条带颜色随方向切换，上行青蓝 / 下行玫红 -->
-      <view
-        class="mod mod-strip"
-        v-if="currentTab === 'stops' && activeCols.length"
-        :class="activeDir === 1 ? 'dir-down' : 'dir-up'"
-      >
-        <view class="route-strip" ref="strip">
-          <view class="strip-inner">
-            <view class="node" v-for="(stop, i) in activeCols" :key="stop.stopId">
-              <!-- 车辆浮层（高度自适应单站最多车辆数，保证线路对齐且信息完整） -->
-              <view class="node-bus" :style="busZoneStyle">
-                <view
-                  class="bchip"
-                  :class="b.arrived === '1' ? 'arrived' : 'running'"
-                  v-for="b in stop.buses"
-                  :key="b.busId"
-                >
-                  <text class="b-org">{{ b.orgId || '?' }}</text>
-                  <text class="b-meta">{{ b.time }} · {{ b.gpsSpeed }}km/h</text>
-                  <text class="b-state">{{ b.arrived === '1' ? '到站' : '行驶' }}</text>
-                </view>
-              </view>
-              <!-- 连续线段 + 站点 -->
-              <view class="node-mid">
-                <view class="seg" :class="{ first: i === 0, last: i === activeCols.length - 1 }"></view>
-                <view
-                  class="dot"
-                  :class="{ terminal: isTerminal(i, activeCols.length), busy: stop.buses && stop.buses.length }"
-                >
-                  <text class="dot-no">{{ stop.stopNo }}</text>
-                </view>
-              </view>
-              <!-- 站名 + 换乘 -->
-              <view class="node-label">
-                <text class="node-name" :style="nameZoneStyle">{{ stop.stopName }}</text>
-                <view class="node-tags" v-if="stop.transferInfos && stop.transferInfos.length">
-                  <text class="ttag" v-for="t in stop.transferInfos" :key="t.subwayLineNo">{{ t.subwayLineNo }}号线</text>
-                </view>
-              </view>
-            </view>
-          </view>
-        </view>
-      </view>
-
-      <!-- 方向无站点时的空状态 -->
-      <view class="mod mod-empty" v-if="currentTab === 'stops' && !activeCols.length && !loading">
-        <view class="empty-icon">🚏</view>
-        <view class="empty-text">暂无{{ activeDir === 0 ? '上行' : '下行' }}站点数据</view>
-      </view>
-
-      <!-- 卡5：时刻表（一张卡包住表头与所有班次行） -->
-      <view class="mod mod-plan" v-if="currentTab === 'plan'">
-        <view class="mod-row plan-head" v-if="planSorted.length">
-          <text class="ph-dir" :class="activeDir === 1 ? 'down' : 'up'">{{ activeDir === 0 ? '▲ 上行' : '▼ 下行' }}</text>
-          <text class="ph-route">{{ activeBase.startStop || startStopOpt || '起点' }} → {{ activeBase.endStop || endStopOpt || '终点' }}</text>
-          <text class="ph-count">共 {{ planSorted.length }} 班</text>
-        </view>
-
-        <view class="mod-div" v-if="planSorted.length"></view>
-
-        <view class="plan-row" v-for="(p, i) in planSorted" :key="p.busId || i">
-          <text class="plan-order">第 {{ i + 1 }} 班</text>
-          <text class="plan-time">{{ p.planStartTime || '--' }}</text>
-          <text class="plan-org">车辆 {{ p.bus || '--' }}</text>
-        </view>
-
-        <view class="plan-empty" v-if="!planSorted.length && !planLoading">
-          <text class="empty-icon">🕐</text>
-          <text class="empty-text">暂无{{ activeDir === 0 ? '上行' : '下行' }}计划发车数据</text>
-        </view>
-      </view>
+    <!-- 方向无站点时的空状态 -->
+    <view class="mod mod-empty" v-if="!activeCols.length && !loading">
+      <view class="empty-icon">🚏</view>
+      <view class="empty-text">暂无{{ dir === 0 ? '上行' : '下行' }}站点数据</view>
     </view>
 
     <!-- 刷新间隔下拉的“点外部关闭”透明遮罩 -->
@@ -192,50 +141,47 @@
 </template>
 
 <script>
-import { fetchLine, fetchPlanTime, fetchRealTime, decryptBusId, onBusIdReady } from '../../utils/api.js'
-import { matchBusesToStops } from '../../utils/geo.js'
-import { buildLineCode } from '../../config.js'
-import LineMap from '../../components/LineMap.vue'
+import { fetchLine, fetchRealTime, decryptBusId, onBusIdReady } from '../utils/api.js'
+import { matchBusesToStops } from '../utils/geo.js'
+import { buildLineCode } from '../config.js'
 
 // 自动刷新间隔（秒）：0 = 手动。与地图页各存一份（地图页是 whbis:map-refresh-sec），
-// 两页的使用节奏不同，共用反而互相干扰；详情页默认 15 秒（旧行为）。
+// 两个视图的使用节奏不同，共用反而互相干扰；线路带默认 15 秒（旧详情页行为）。
 const LINE_REFRESH_KEY = 'whbis:line-refresh-sec'
 const REFRESH_OPTS = [0, 15, 20, 30]
 
 export default {
-  components: { LineMap },
+  name: 'LineStops',
+  props: {
+    lineNo: { type: String, default: '' },
+    lineName: { type: String, default: '' },
+    direction: { type: Number, default: 0 },
+    startStop: { type: String, default: '' },
+    endStop: { type: String, default: '' },
+    // 裸形态：挂在地图悬浮窗（FloatWin）里时，窗壳只有一张，三块内容不再各自套玻璃卡
+    plain: { type: Boolean, default: false },
+  },
+  emits: ['set-dir', 'updated'],
   data() {
     return {
-      lineCode: '',
-      lineNo: '',
-      direction: 0,
-      activeDir: 0,
-      lineName: '',
-      startStopOpt: '',
-      endStopOpt: '',
+      dir: Number(this.direction || 0),
       // 双方向数据：0=上行，1=下行
       diagram: {
         0: { cols: [], base: {} },
         1: { cols: [], base: {} },
       },
-      planTimes: [],
       loading: false,
-      planLoading: false,
-      lastUpdate: '',
-      currentTab: 'stops',
-      // 刷新间隔（秒）：0 = 手动；15 / 20 / 30 = 自动
       refreshSec: 15,
-      // 刷新间隔下拉是否展开
       refreshMenu: false,
       _timer: null,
     }
   },
   computed: {
     activeBase() {
-      return this.diagram[this.activeDir].base || {}
+      return this.diagram[this.dir].base || {}
     },
     activeCols() {
-      return this.diagram[this.activeDir].cols || []
+      return this.diagram[this.dir].cols || []
     },
     onlineCount() {
       return this.activeCols.reduce((n, s) => n + (s.buses ? s.buses.length : 0), 0)
@@ -278,81 +224,58 @@ export default {
         { sec: 30, label: '30 秒', tip: '省流量' },
       ]
     },
-    // 时刻表按计划发车时间升序排列（后端 startOrder 不可靠，班次序号由排序生成）
-    planSorted() {
-      return [...this.planTimes].sort((a, b) =>
-        (a.planStartTime || '').localeCompare(b.planStartTime || '')
-      )
-    },
     // 所属营运公司：由车辆自编号（orgId）首位数字推断，1 → 武汉公交集团第一营运公司，以此类推
     operatorCompanies() {
       const cn = ['', '第一', '第二', '第三', '第四', '第五', '第六', '第七', '第八', '第九']
       const set = new Set()
-      const pick = (id) => {
-        const d = String(id || '').charAt(0)
-        if (d >= '1' && d <= '9') set.add(Number(d))
-      }
-      // 优先用当前方向在线车辆推断；无在线车辆时退而用时刻表车辆编号
-      this.activeCols.forEach((s) => (s.buses || []).forEach((b) => pick(b.orgId)))
-      if (!set.size) this.planTimes.forEach((p) => pick(p.bus))
+      this.activeCols.forEach((s) =>
+        (s.buses || []).forEach((b) => {
+          const d = String(b.orgId || '').charAt(0)
+          if (d >= '1' && d <= '9') set.add(Number(d))
+        })
+      )
       return [...set]
         .sort((a, b) => a - b)
         .map((no) => ({ no, label: `武汉公交集团${cn[no]}营运公司` }))
     },
   },
-  onLoad(options) {
-    this.lineCode = options.lineCode || ''
-    this.direction = Number(options.direction || 0)
-    this.activeDir = this.direction
-    this.lineName = options.lineName || this.lineCode.split('-')[1] || ''
-    this.lineNo = this.lineCode.split('-')[1] || options.lineName || ''
-    this.startStopOpt = options.startStop || ''
-    this.endStopOpt = options.endStop || ''
+  watch: {
+    // 宿主页切换方向 → 本视图跟随（本组件内的分段键也会反向通知宿主）
+    direction(v) {
+      const d = Number(v || 0)
+      if (d !== this.dir) this.applyDir(d)
+    },
+    // 换线路：清空缓存重拉
+    lineNo(v) {
+      if (!v) return
+      this.diagram = { 0: { cols: [], base: {} }, 1: { cols: [], base: {} } }
+      this.loadAll()
+    },
+  },
+  mounted() {
+    this.refreshSec = this.readRefreshSec()
     this.loadAll()
     // 编号字典就绪后重新还原自编号并刷新
     onBusIdReady(() => this.loadLive())
-    // 自动刷新的启动/停止交给 onShow / onHide（首次进入也会立即走到），
-    // 这样翻开地图页时本页不再后台空拉接口
-    this.refreshSec = this.readRefreshSec()
-  },
-  onShow() {
     this.restartAutoRefresh()
-    // 嵌入式地图（实时地图 Tab）随页面显隐同步轮询节奏：回到前台重新拉起
-    const m = this.$refs.mapC
-    if (m && m.restartAutoRefresh) m.restartAutoRefresh()
   },
-  onHide() {
-    this.stopAutoRefresh()
-    // 离开页面（如进设置页）时暂停嵌入式地图的后台轮询
-    const m = this.$refs.mapC
-    if (m && m.stopAutoRefresh) m.stopAutoRefresh()
-  },
-  onUnload() {
+  beforeUnmount() {
     this.stopAutoRefresh()
     if (this._stripCleanup) {
       this._stripCleanup()
       this._stripCleanup = null
     }
   },
-  onReady() {
-    // #ifdef H5
-    this.bindStripScroll()
-    // #endif
-  },
   methods: {
-    switchTab(key) {
-      this.currentTab = key
-      // 刷新控件只存在于实时线路页，切走时把可能展开的下拉一并收掉（否则遮罩会残留）
-      this.refreshMenu = false
-      if (key === 'plan') this.loadPlan()
-      // 线路带在 v-if 内，切回「实时线路」时是全新节点，需重新绑定拖拽/滚轮
-      if (key === 'stops') this.$nextTick(() => this.bindStripScroll())
-    },
     setDir(dir) {
-      if (this.activeDir === dir) return
-      this.activeDir = dir
-      // 处于时刻表页时，切换方向需重新加载该方向班次
-      if (this.currentTab === 'plan') this.loadPlan()
+      if (this.dir === dir) return
+      this.applyDir(dir)
+      // 方向由宿主统一持有（地图视图 / 时刻表视图要同步）
+      this.$emit('set-dir', dir)
+    },
+    applyDir(dir) {
+      this.dir = dir
+      this.refreshMenu = false
     },
     // 手动刷新实时车辆（点胶囊左半的 ↻）
     async onRefresh() {
@@ -392,7 +315,7 @@ export default {
       if (sec > 0) this.loadLive(true)
       uni.showToast({ title: sec > 0 ? `已开启：每 ${sec} 秒自动刷新` : '已改为手动刷新', icon: 'none' })
     },
-    // 重建自动刷新定时器（间隔改变、页面重新显示时调用；先清旧再建，避免叠多个）
+    // 重建自动刷新定时器（间隔改变、宿主页面重新显示时调用；先清旧再建，避免叠多个）
     restartAutoRefresh() {
       this.stopAutoRefresh()
       if (!this.refreshSec) return
@@ -405,7 +328,6 @@ export default {
       }
     },
     // 由车辆自编号（orgId）首位数字推断所属营运公司，1 → 武汉公交集团第一营运公司，以此类推
-    // 与 operatorCompanies 同源；无法判定时返回「营运公司未知」
     companyOf(id) {
       const cn = ['', '第一', '第二', '第三', '第四', '第五', '第六', '第七', '第八', '第九']
       const d = String(id || '').charAt(0)
@@ -427,8 +349,8 @@ export default {
         uni.showToast({ title: '当前无在线车辆', icon: 'none' })
         return
       }
-      const dirName = this.activeDir === 0 ? '上行' : '下行'
-      const header = `${this.lineName || this.lineNo}（${dirName}） 在线 ${lines.length} 辆  ${this.lastUpdate}`
+      const dirName = this.dir === 0 ? '上行' : '下行'
+      const header = `${this.lineName || this.lineNo}（${dirName}） 在线 ${lines.length} 辆`
       const cols = '编号\t营运公司\t所在站点\t时间\t速度\t状态\t经纬度'
       const data = `${header}\n${cols}\n${lines.join('\n')}`
       uni.setClipboardData({
@@ -438,8 +360,8 @@ export default {
       })
     },
     // H5：为线路带绑定鼠标拖拽 + 滚轮横向滚动（PC 端可用）
-    // ⚠ .route-strip 在 v-if 内且依赖异步站点数据：onReady 时通常还不存在（$refs.strip 为空），
-    //   所以数据到达 / 切回「实时线路」Tab 后要各重试一次；每次先解绑旧监听，避免 window 事件叠加
+    // ⚠ .route-strip 在 v-if 内且依赖异步站点数据：mounted 时通常还不存在（$refs.strip 为空），
+    //   所以数据到达后要再重试一次；每次先解绑旧监听，避免 window 事件叠加
     bindStripScroll() {
       if (this._stripCleanup) {
         this._stripCleanup()
@@ -500,9 +422,6 @@ export default {
       try {
         const data = await fetchLine(code)
         this.diagram[dir].base = (data && data.lineDetailBaseDto) || {}
-        if (data && data.lineDetailBaseDto && dir === this.direction) {
-          this.lineName = this.lineName || data.lineDetailBaseDto.lineName
-        }
         const stops = (data && data.stopDetailList) || []
         this.diagram[dir].cols = stops.map((s) => ({ ...s, buses: [] }))
       } catch (e) {
@@ -512,15 +431,13 @@ export default {
     },
     // 加载两个方向实时车辆
     async loadLive(silent = false) {
+      if (!this.lineNo) return
       if (!silent) this.loading = true
       try {
-        const [up, down] = await Promise.all([
-          this.fetchDirBuses(0),
-          this.fetchDirBuses(1),
-        ])
+        const [up, down] = await Promise.all([this.fetchDirBuses(0), this.fetchDirBuses(1)])
         this.diagram[0].cols = up
         this.diagram[1].cols = down
-        this.lastUpdate = this.currentTime()
+        this.$emit('updated', this.currentTime())
       } catch (e) {
         if (!silent) uni.showToast({ title: `实时数据加载失败：${e.message}`, icon: 'none' })
       } finally {
@@ -557,26 +474,6 @@ export default {
       const { stopsWithBuses } = matchBusesToStops(buses, stops)
       return stopsWithBuses
     },
-
-    // 加载计划发车（当前方向）
-    async loadPlan() {
-      this.planLoading = true
-      try {
-        const dir = this.activeDir
-        const data = await fetchPlanTime(buildLineCode(this.lineNo, dir))
-        const arr = Array.isArray(data) ? data : []
-        this.planTimes = arr.map((p) => ({
-          ...p,
-          dir,
-          bus: p.orgBusId || p.orgBusNo || decryptBusId(p.busId) || '',
-        }))
-      } catch (e) {
-        this.planTimes = []
-        uni.showToast({ title: `时刻表加载失败：${e.message}`, icon: 'none' })
-      } finally {
-        this.planLoading = false
-      }
-    },
     // 格式化 GPS 时间（yyyyMMddHHmmss -> HH:mm）
     formatGpsTime(t) {
       if (!t || t.length !== 14) return '--'
@@ -592,32 +489,6 @@ export default {
 </script>
 
 <style scoped>
-.page {
-  min-height: 100vh;
-  padding: 28rpx 32rpx 60rpx;
-  box-sizing: border-box;
-}
-/* 模块栈：与首页同一套宽度。rpx 在 ≥960px 桌面上按 375 基准缩（1rpx=0.5px），
-   所以宽度也用 rpx 定，卡片与内部字号一起缩 */
-.stack {
-  width: 100%;
-  max-width: 1320rpx;
-  margin: 0 auto;
-  display: flex;
-  flex-direction: column;
-  gap: 24rpx;
-}
-/* 聚合地图宿主：固定高度容器，内部 LineMap 的 position:absolute 子元素以此为定位上下文
-   56vh：让底部（含全屏按钮）在常规笔记本首屏内免滚动可见，看细节走全屏 */
-.map-host {
-  position: relative;
-  height: 56vh;
-  border-radius: 28rpx;
-  overflow: hidden;
-  background: #070b18;
-  border: 2rpx solid rgba(255, 255, 255, 0.09);
-  box-shadow: 0 26rpx 64rpx rgba(0, 0, 0, 0.5), inset 0 1rpx 0 rgba(255, 255, 255, 0.08);
-}
 /* 模块卡：整卡包裹（背景/圆角/描边/阴影），内部只靠 .mod-row + .mod-div 分块 */
 .mod {
   position: relative;
@@ -637,19 +508,6 @@ export default {
 .mod-strip {
   overflow: hidden;
 }
-/* 地图入口：卡片自带留白，内部那一行渐变才像“卡里的主按钮” */
-.mod-cta {
-  padding: 12rpx;
-  cursor: pointer;
-  transition: transform 0.18s, border-color 0.2s;
-}
-.mod-cta:hover {
-  transform: translateY(-2rpx);
-  border-color: rgba(34, 211, 238, 0.35);
-}
-.mod-cta:active {
-  transform: scale(0.996);
-}
 .mod-row {
   display: flex;
   align-items: center;
@@ -661,6 +519,26 @@ export default {
   height: 2rpx;
   margin: 0 26rpx;
   background: rgba(255, 255, 255, 0.07);
+}
+.stops {
+  display: flex;
+  flex-direction: column;
+  gap: 24rpx;
+}
+/* 裸形态：卡壳（背景/描边/阴影/毛玻璃）交给宿主窗，只靠一条细线分区 */
+.stops.plain {
+  gap: 0;
+}
+.stops.plain .mod {
+  background: none;
+  border: none;
+  border-radius: 0;
+  box-shadow: none;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+.stops.plain .mod + .mod {
+  border-top: 2rpx solid rgba(255, 255, 255, 0.09);
 }
 /* ---- 卡1：线路头 ---- */
 .head-row {
@@ -800,6 +678,9 @@ export default {
   border: 2rpx solid rgba(255, 255, 255, 0.10);
   border-radius: 16rpx;
 }
+.seg-groove.grow {
+  flex: 0 0 auto;
+}
 .seg-tab {
   flex: 1;
   min-width: 0;
@@ -821,11 +702,6 @@ export default {
   color: #fff;
   background: rgba(255, 255, 255, 0.10);
 }
-.seg-tab.on {
-  color: #fff;
-  font-weight: 700;
-  background: linear-gradient(135deg, #6366f1, #06b6d4);
-}
 /* 上/下行选中态直接用方向色，与线路带同色 */
 .seg-tab.up.on {
   color: #062a33;
@@ -837,32 +713,15 @@ export default {
   background: linear-gradient(135deg, #fb7185, #e11d48);
   box-shadow: 0 6rpx 18rpx rgba(225, 29, 72, 0.32);
 }
-/* 视图行：分段 + 右侧统计（两行小字） */
-.view-row {
-  padding: 18rpx 22rpx;
-  gap: 16rpx;
-}
-.lt-info {
-  flex: 0 0 auto;
-  display: flex;
-  flex-direction: column;
-  align-items: flex-end;
-  min-width: 0;
-}
 .lt-count {
+  flex: 0 0 auto;
   font-size: 21rpx;
   white-space: nowrap;
   color: rgba(255, 255, 255, 0.62);
 }
-.upd {
-  font-size: 19rpx;
-  margin-top: 4rpx;
-  white-space: nowrap;
-  color: rgba(255, 255, 255, 0.34);
-}
-/* 方向行：分段 + 刷新胶囊 */
+/* 方向行：分段 + 刷新胶囊 + 统计 */
 .dir-row {
-  padding: 16rpx 22rpx 18rpx;
+  padding: 16rpx 22rpx;
   gap: 14rpx;
 }
 /* 刷新控件：与地图页同一套设计 —— 左半 ↻ 立即刷一次，右半显示当前间隔并可展开设置 */
@@ -1014,10 +873,12 @@ export default {
 .route-strip::-webkit-scrollbar {
   display: none;
 }
+/* ⚠ 横向滚动容器内的内容行必须 shrink-to-fit，否则被 flex 压到容器宽（内容被裁切而非滚动） */
 .strip-inner {
   display: inline-flex;
   flex-direction: row;
   align-items: flex-start;
+  min-width: 100%;
   padding: 28rpx 32rpx 32rpx;
 }
 .node {
@@ -1167,132 +1028,8 @@ export default {
   color: rgba(255, 255, 255, 0.58);
   margin-top: 3rpx;
 }
-/* 地图 CTA */
-.cta {
-  display: flex;
-  align-items: center;
-  margin-top: 32rpx;
-  padding: 30rpx 34rpx;
-  border-radius: 28rpx;
-  background: linear-gradient(135deg, rgba(99, 102, 241, 0.92), rgba(6, 182, 212, 0.92));
-  box-shadow: 0 18rpx 46rpx rgba(6, 182, 212, 0.4), inset 0 1rpx 0 rgba(255, 255, 255, 0.3);
-  transition: transform 0.2s, box-shadow 0.2s;
-}
-.cta:hover {
-  transform: translateY(-4rpx);
-  box-shadow: 0 26rpx 60rpx rgba(6, 182, 212, 0.5), inset 0 1rpx 0 rgba(255, 255, 255, 0.3);
-}
-.cta:active {
-  transform: translateY(-1rpx) scale(0.995);
-}
-.cta-icon {
-  font-size: 44rpx;
-  margin-right: 22rpx;
-}
-.cta-text {
-  flex: 1;
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-}
-.cta-title {
-  font-size: 30rpx;
-  font-weight: 700;
-  color: #fff;
-}
-.cta-sub {
-  font-size: 22rpx;
-  color: rgba(255, 255, 255, 0.8);
-  margin-top: 6rpx;
-}
-.cta-arrow {
-  font-size: 40rpx;
-  color: #fff;
-  width: 60rpx;
-  height: 60rpx;
-  line-height: 56rpx;
-  text-align: center;
-  border-radius: 50%;
-  background: rgba(255, 255, 255, 0.18);
-  transition: transform 0.2s;
-}
-.cta:hover .cta-arrow {
-  transform: translateX(4rpx);
-}
-/* 时刻表：与整页同一「模块栈」语言 —— 外层 .mod 出卡片壳，
-   plan-head 是普通 .mod-row（不再自带胶囊底），班次行用 .plan-row + 底部分隔线分块 */
-.plan-head {
-  display: flex;
-  align-items: center;
-  gap: 20rpx;
-  padding: 22rpx 26rpx;
-}
-.ph-dir {
-  font-size: 24rpx;
-  font-weight: 700;
-  padding: 4rpx 16rpx;
-  border-radius: 10rpx;
-  flex-shrink: 0;
-}
-.ph-dir.up {
-  color: #67e8f9;
-  background: rgba(6, 182, 212, 0.16);
-  border: 2rpx solid rgba(6, 182, 212, 0.3);
-}
-.ph-dir.down {
-  color: #fda4af;
-  background: rgba(225, 29, 72, 0.18);
-  border: 2rpx solid rgba(251, 113, 133, 0.32);
-}
-.ph-route {
-  flex: 1;
-  min-width: 0;
-  font-size: 24rpx;
-  color: rgba(255, 255, 255, 0.85);
-  white-space: normal;
-  word-break: break-all;
-  line-height: 1.4;
-}
-.ph-count {
-  font-size: 22rpx;
-  color: rgba(255, 255, 255, 0.5);
-  flex-shrink: 0;
-}
-.plan-row {
-  display: flex;
-  align-items: center;
-  gap: 20rpx;
-  padding: 24rpx 26rpx;
-  border-top: 2rpx solid rgba(255, 255, 255, 0.05);
-}
-.plan-row:last-child {
-  border-top: none;
-}
-.plan-order {
-  font-size: 24rpx;
-  color: rgba(255, 255, 255, 0.55);
-  width: 130rpx;
-  flex-shrink: 0;
-}
-.plan-time {
-  font-size: 36rpx;
-  font-weight: 800;
-  color: #a5b4fc;
-  flex: 1;
-  font-variant-numeric: tabular-nums;
-}
-.plan-org {
-  font-size: 24rpx;
-  color: rgba(255, 255, 255, 0.6);
-  flex-shrink: 0;
-}
-.plan-empty {
-  padding: 60rpx 40rpx;
-  text-align: center;
-}
 /* 空状态 */
-.empty {
-  margin-top: 40rpx;
+.mod-empty {
   padding: 70rpx 40rpx;
   text-align: center;
 }

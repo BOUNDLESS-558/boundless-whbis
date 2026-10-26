@@ -10,7 +10,7 @@
  *   4. body 必须含 cityCode；/line 用 lineCode，/detailPlanTime 与 /detailData 用 lineId
  */
 import { APP_CONFIG } from '../config.js'
-import { decryptBusId, decryptBusIds, warmUp, onBusIdReady } from './busId.js'
+import { decryptBusId, decryptBusIds, warmUp, onBusIdReady, isBusIdReady } from './busId.js'
 
 // 接口基础地址
 // H5 开发环境下通过 vite 代理（/api -> gps-resapi/wechat/bus）规避跨域
@@ -105,7 +105,7 @@ export function fetchRealTime(lineId) {
 // ---- 车辆编号还原（busId/busNo = MD5(orgBusId)）----
 // 具体实现见 ./busId.js，采用分片异步构建字典，避免阻塞 UI
 
-export { decryptBusId, decryptBusIds, warmUp, onBusIdReady }
+export { decryptBusId, decryptBusIds, warmUp, onBusIdReady, isBusIdReady }
 
 export default {
   fetchLine,

@@ -1,129 +1,130 @@
 <template>
-  <view class="db-page">
-    <view class="db-stack">
-      <!-- 头部卡：标题 + 三态统计 + 搜索 + 前缀/状态筛选 -->
-      <view class="db-mod">
-        <view class="db-row db-head">
-          <view class="db-head-text">
-            <view class="db-title">线路数据库</view>
-            <view class="db-sub">集团全量线路 · 本地摘要 · 含已停运历史线</view>
-          </view>
-          <text class="db-count">共 {{ total }} 条</text>
-        </view>
-
-        <view class="db-div"></view>
-
-        <view class="db-row db-stat">
-          <view class="db-st"><text class="db-st-n live">{{ stats.live }}</text><text class="db-st-l">营运中</text></view>
-          <view class="db-st"><text class="db-st-n ended">{{ stats.ended }}</text><text class="db-st-l">已收班</text></view>
-          <view class="db-st"><text class="db-st-n off">{{ stats.off }}</text><text class="db-st-l">已停运</text></view>
-        </view>
-
-        <view class="db-div"></view>
-
-        <view class="db-row db-search">
-          <text class="db-search-icon">🔍</text>
-          <input
-            class="db-search-input"
-            v-model="kw"
-            type="text"
-            placeholder="搜索线路号 / 起讫站，如 337 / 武昌火车站"
-            placeholder-class="db-search-ph"
-          />
-          <text class="db-search-clear" v-if="kw" @click="kw = ''">✕</text>
-        </view>
-
-        <view class="db-filter">
-          <text class="db-fl">线路</text>
-          <view class="db-chips">
-            <view
-              v-for="p in prefixes"
-              :key="p"
-              class="db-chip"
-              :class="{ on: prefix === p }"
-              @click="prefix = p"
-            >{{ p }}</view>
-          </view>
-        </view>
-
-        <view class="db-filter">
-          <text class="db-fl">状态</text>
-          <view class="db-chips">
-            <view
-              v-for="s in statusOpts"
-              :key="s.key"
-              class="db-chip"
-              :class="{ on: status === s.key }"
-              @click="status = s.key"
-            >{{ s.label }}</view>
-          </view>
-        </view>
+  <view class="db-mod" :class="{ plain: plain }">
+    <!-- 头部卡：标题 + 三态统计 + 搜索 + 前缀/状态筛选 -->
+    <view class="db-row db-head">
+      <view class="db-head-text">
+        <view class="db-title">线路数据库</view>
+        <view class="db-sub">集团全量线路 · 本地摘要 · 含已停运历史线</view>
       </view>
+      <text class="db-count">共 {{ total }} 条</text>
+    </view>
 
-      <!-- 结果列表 -->
-      <view class="db-mod db-list">
-        <view class="db-row db-lhead">
-          <text class="db-lh-t">匹配 {{ filtered.length }} 条</text>
-          <text class="db-lh-s" v-if="filtered.length">按线路号排序</text>
-        </view>
-        <view class="db-div"></view>
+    <view class="db-div"></view>
 
-        <view class="db-item" v-for="l in visibleLines" :key="l.no" @click="openDetail(l)">
-          <text class="db-no">{{ l.no }}</text>
-          <view class="db-item-body">
-            <text class="db-route">{{ l.start || '起点未知' }} → {{ l.end || '终点未知' }}</text>
-            <text class="db-meta">{{ l.stops ? l.stops + ' 站' : '站数未知' }} · {{ l.dirs.length > 1 ? '双向' : '单向' }} · {{ l.price ? '¥' + l.price : '票价未知' }}</text>
-          </view>
-          <text class="db-badge" :class="'db-badge-' + statusOf(l).key">{{ statusOf(l).label }}</text>
-          <text class="db-go">›</text>
-        </view>
+    <view class="db-row db-stat">
+      <view class="db-st"><text class="db-st-n live">{{ stats.live }}</text><text class="db-st-l">营运中</text></view>
+      <view class="db-st"><text class="db-st-n ended">{{ stats.ended }}</text><text class="db-st-l">已收班</text></view>
+      <view class="db-st"><text class="db-st-n off">{{ stats.off }}</text><text class="db-st-l">已停运</text></view>
+    </view>
 
-        <view class="db-none" v-if="!filtered.length">
-          <text class="db-none-t">没有符合条件的线路</text>
-        </view>
-        <view class="db-more" v-if="filtered.length > shown" @click="loadMore">
-          加载更多（剩余 {{ filtered.length - shown }} 条）
-        </view>
+    <view class="db-div"></view>
+
+    <view class="db-row db-search">
+      <text class="db-search-icon">🔍</text>
+      <input
+        class="db-search-input"
+        v-model="kw"
+        type="text"
+        placeholder="搜索线路号 / 起讫站，如 337 / 武昌火车站"
+        placeholder-class="db-search-ph"
+      />
+      <text class="db-search-clear" v-if="kw" @click="kw = ''">✕</text>
+    </view>
+
+    <view class="db-filter">
+      <text class="db-fl">线路</text>
+      <view class="db-chips">
+        <view
+          v-for="p in prefixes"
+          :key="p"
+          class="db-chip"
+          :class="{ on: prefix === p }"
+          @click="prefix = p"
+        >{{ p }}</view>
       </view>
     </view>
 
-    <!-- 详情弹层（只展示本地已有摘要） -->
-    <view class="db-mask" v-if="detail" @click="closeDetail"></view>
-    <view class="db-pop" v-if="detail">
-      <view class="db-pop-head">
-        <text class="db-pop-no">{{ detail.no }}</text>
-        <text class="db-badge" :class="'db-badge-' + statusOf(detail).key">{{ statusOf(detail).label }}</text>
-        <text class="db-pop-close" @click="closeDetail">✕</text>
+    <view class="db-filter">
+      <text class="db-fl">状态</text>
+      <view class="db-chips">
+        <view
+          v-for="s in statusOpts"
+          :key="s.key"
+          class="db-chip"
+          :class="{ on: status === s.key }"
+          @click="status = s.key"
+        >{{ s.label }}</view>
       </view>
-      <view class="db-pop-route">{{ detail.start || '起点未知' }} ⇄ {{ detail.end || '终点未知' }}</view>
-      <view class="db-pop-grid">
-        <view class="db-cell"><text class="db-k">首班</text><text class="db-v">{{ detail.early || '未知' }}</text></view>
-        <view class="db-cell"><text class="db-k">末班</text><text class="db-v">{{ detail.last || '未知' }}</text></view>
-        <view class="db-cell"><text class="db-k">票价</text><text class="db-v">{{ detail.price ? '¥' + detail.price : '未知' }}</text></view>
-        <view class="db-cell"><text class="db-k">站数</text><text class="db-v">{{ detail.stops ? detail.stops + ' 站' : '未知' }}</text></view>
-        <view class="db-cell"><text class="db-k">方向</text><text class="db-v">{{ detail.dirs.length > 1 ? '双向' : '单向' }}</text></view>
-        <view class="db-cell"><text class="db-k">名称</text><text class="db-v">{{ detail.name || detail.no }}</text></view>
+    </view>
+  </view>
+
+  <!-- 结果列表 -->
+  <view class="db-mod db-list" :class="{ plain: plain }">
+    <view class="db-row db-lhead">
+      <text class="db-lh-t">匹配 {{ filtered.length }} 条</text>
+      <text class="db-lh-s" v-if="filtered.length">按线路号排序</text>
+    </view>
+    <view class="db-div"></view>
+
+    <view class="db-item" v-for="l in visibleLines" :key="l.no" @click="openDetail(l)">
+      <text class="db-no">{{ l.no }}</text>
+      <view class="db-item-body">
+        <text class="db-route">{{ l.start || '起点未知' }} → {{ l.end || '终点未知' }}</text>
+        <text class="db-meta">{{ l.stops ? l.stops + ' 站' : '站数未知' }} · {{ l.dirs.length > 1 ? '双向' : '单向' }} · {{ l.price ? '¥' + l.price : '票价未知' }}</text>
       </view>
-      <view class="db-pop-code">查询编码 lineCode：{{ detail.code }}</view>
-      <view class="db-pop-note" v-if="statusOf(detail).key === 'off'">
-        该线路已无站点数据（已停运 / 历史线），后端不提供逐站明细，仅保留以上摘要信息。
-      </view>
-      <view class="db-pop-btns">
-        <view class="db-pbtn" @click="closeDetail">关闭</view>
-        <view class="db-pbtn primary" v-if="detail.status !== '停运'" @click="openLive">在实时查询中打开 ›</view>
-      </view>
+      <text class="db-badge" :class="'db-badge-' + statusOf(l).key">{{ statusOf(l).label }}</text>
+      <text class="db-go">›</text>
+    </view>
+
+    <view class="db-none" v-if="!filtered.length">
+      <text class="db-none-t">没有符合条件的线路</text>
+    </view>
+    <view class="db-more" v-if="filtered.length > shown" @click="loadMore">
+      加载更多（剩余 {{ filtered.length - shown }} 条）
+    </view>
+  </view>
+
+  <!-- 详情弹层（只展示本地已有摘要） -->
+  <view class="db-mask" v-if="detail" @click="closeDetail"></view>
+  <view class="db-pop" v-if="detail">
+    <view class="db-pop-head">
+      <text class="db-pop-no">{{ detail.no }}</text>
+      <text class="db-badge" :class="'db-badge-' + statusOf(detail).key">{{ statusOf(detail).label }}</text>
+      <text class="db-pop-close" @click="closeDetail">✕</text>
+    </view>
+    <view class="db-pop-route">{{ detail.start || '起点未知' }} ⇄ {{ detail.end || '终点未知' }}</view>
+    <view class="db-pop-grid">
+      <view class="db-cell"><text class="db-k">首班</text><text class="db-v">{{ detail.early || '未知' }}</text></view>
+      <view class="db-cell"><text class="db-k">末班</text><text class="db-v">{{ detail.last || '未知' }}</text></view>
+      <view class="db-cell"><text class="db-k">票价</text><text class="db-v">{{ detail.price ? '¥' + detail.price : '未知' }}</text></view>
+      <view class="db-cell"><text class="db-k">站数</text><text class="db-v">{{ detail.stops ? detail.stops + ' 站' : '未知' }}</text></view>
+      <view class="db-cell"><text class="db-k">方向</text><text class="db-v">{{ detail.dirs.length > 1 ? '双向' : '单向' }}</text></view>
+      <view class="db-cell"><text class="db-k">名称</text><text class="db-v">{{ detail.name || detail.no }}</text></view>
+    </view>
+    <view class="db-pop-code">查询编码 lineCode：{{ detail.code }}</view>
+    <view class="db-pop-note" v-if="statusOf(detail).key === 'off'">
+      该线路已无站点数据（已停运 / 历史线），后端不提供逐站明细，仅保留以上摘要信息。
+    </view>
+    <view class="db-pop-btns">
+      <view class="db-pbtn" @click="closeDetail">关闭</view>
+      <view class="db-pbtn primary" v-if="detail.status !== '停运'" @click="openLive">在实时查询中打开 ›</view>
     </view>
   </view>
 </template>
 
 <script>
-import { allLines, linePrefix, lineStatus, LINE_COUNT } from '../../utils/lineIndex.js'
-import { buildLineCode } from '../../config.js'
+import { allLines, linePrefix, lineStatus, LINE_COUNT } from '../utils/lineIndex.js'
+import { buildLineCode } from '../config.js'
 
 // 窗口化渲染：一次只挂 80 条，避免 1137 行全量 DOM 拖慢 H5 滚动
 const PAGE = 80
 
 export default {
+  name: 'LineDb',
+  props: {
+    // 裸形态：挂在地图悬浮窗（FloatWin）里时，窗壳只有一张，头卡与列表卡不再各自套玻璃卡
+    plain: { type: Boolean, default: false },
+  },
   data() {
     return {
       all: [],
@@ -172,7 +173,8 @@ export default {
     prefix() { this.shown = PAGE },
     status() { this.shown = PAGE },
   },
-  onLoad() {
+  // ⚠ 组件不触发页面生命周期：原来写成 onLoad 会永远不执行，列表恒空
+  created() {
     this.all = allLines()
   },
   methods: {
@@ -188,32 +190,24 @@ export default {
     closeDetail() {
       this.detail = null
     },
-    // 营运线：跳到现有实时详情页（停运线无在线数据，不提供此入口）
+    // 营运线：上抛选线事件给宿主页（由 line 页拉取实时详情；停运线无在线数据，不提供此入口）
     openLive() {
       const l = this.detail
-      const code = buildLineCode(l.code || l.no, 0)
-      uni.navigateTo({
-        url: `/pages/line/line?lineCode=${code}&direction=0&lineName=${l.no}&startStop=${l.start || ''}&endStop=${l.end || ''}`,
+      const code = l.code && String(l.code).includes('-') ? l.code : buildLineCode(l.code || l.no, 0)
+      this.$emit('pick', {
+        lineCode: code,
+        lineName: l.no,
+        direction: 0,
+        startStop: l.start || '',
+        endStop: l.end || '',
       })
+      this.closeDetail()
     },
   },
 }
 </script>
 
 <style scoped>
-.db-page {
-  min-height: 100vh;
-  box-sizing: border-box;
-  padding: 40rpx 32rpx 56rpx;
-}
-.db-stack {
-  width: 100%;
-  max-width: 1320rpx;
-  margin: 0 auto;
-  display: flex;
-  flex-direction: column;
-  gap: 24rpx;
-}
 /* 玻璃卡：与首页同一套语言 */
 .db-mod {
   position: relative;
@@ -227,6 +221,18 @@ export default {
 }
 .db-list {
   overflow: hidden;
+}
+/* 裸形态：只去掉卡壳，内边距与细线分区照旧（窗体自己留边） */
+.db-mod.plain {
+  background: none;
+  border: none;
+  border-radius: 0;
+  box-shadow: none;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+.db-mod.plain + .db-mod.plain {
+  margin-top: 22rpx;
 }
 .db-row {
   display: flex;

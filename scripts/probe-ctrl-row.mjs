@@ -4,7 +4,8 @@
  *   ② 徽标在线路号**同一行**且紧跟在它后面（不是第二排、不被 margin-left:auto 甩到最右）
  *   ③ 全部/上行/下行 三个 tab 文字**水平 + 垂直都居中**；循环切换键 ⇄ 紧贴在 tab 右侧
  *   ④ 竖屏窄屏（390 / 360 / 320）下公司名宁可省略号，也不许换行 / 溢出
- * 额外：主操作行只剩「一键查询」并独占整行（切换方向已移进方向行），点 ⇄ 着色与 tab 同步
+ * 额外：首页地图视图的顶栏（LineSearch plain）必须**长在 .ctrl 里**（视图分段 + 搜索行是卡内首块），
+ * 独立顶栏 .home-top 与 ⛶ 全屏键都不该再出现；非地图视图才用独立顶栏卡
  * 只打控制台，不写截图 / 日志（本项目约定：探针不留产物）
  * 用法：node scripts/probe-ctrl-row.mjs [线路号]
  * 依赖：先 npm run dev:h5
@@ -21,7 +22,7 @@ const PROFILE = path.join(process.env.TMP || '.', 'edge-ctrl-prof')
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
 fs.rmSync(PROFILE, { recursive: true, force: true })
 
-const URL_PAGE = `${BASE}#/pages/map/map?lineCode=420100-${LINE_NO}-0&direction=0&lineName=${encodeURIComponent(LINE_NO + '路')}`
+const URL_PAGE = `${BASE}#/pages/map/map?view=map&lineCode=420100-${LINE_NO}-0&direction=0&lineName=${encodeURIComponent(LINE_NO)}`
 
 const child = spawn(EDGE, [
   '--headless=new', '--disable-gpu', '--no-sandbox',
@@ -78,14 +79,40 @@ const MEASURE = `(() => {
   const dir = document.querySelector('.ctrl-dir');
   if (!dir) return { err: 'no .ctrl-dir' };
   const card = document.querySelector('.ctrl');
+  // 顶栏：地图视图下是 .ctrl 里的裸形态（is-plain），其余视图才是独立卡 .home-top .mod-main
+  const plainTop = document.querySelector('.ctrl .mod-main.is-plain');
+  const homeTop = document.querySelector('.home-top .mod-main');
+  const topBarEl = plainTop || homeTop;
+  const stage = document.querySelector('.home-stage');
   const cs = card ? getComputedStyle(card) : null;
-  // 卡片内四块：搜索行 / 主操作行 / 视图行（原生模式下不存在）/ 方向行
-  const blocks = card
-    ? ['ctrl-search', 'ctrl-tools', 'ctrl-view', 'ctrl-dir']
-        .map((c) => ({ name: c, box: document.querySelector('.' + c) }))
-        .filter((x) => x.box)
-        .map((x) => ({ name: x.name, box: r(x.box) }))
-    : [];
+  // 卡内内容块（按期望的视觉顺序声明，缺项自动跳过）
+  const SPECS = [
+    { name: 'plain-view', sel: '.ctrl .mod-main.is-plain .view-row' },
+    { name: 'plain-search', sel: '.ctrl .mod-main.is-plain .search-row' },
+    { name: 'ctrl-search', sel: '.ctrl .ctrl-search' },
+    { name: 'ctrl-tools', sel: '.ctrl .ctrl-tools' },
+    { name: 'ctrl-dir', sel: '.ctrl .ctrl-dir' },
+    { name: 'ctrl-view', sel: '.ctrl .ctrl-view' },
+  ];
+  const blocks = SPECS
+    .map((s) => ({ name: s.name, box: document.querySelector(s.sel) }))
+    .filter((x) => x.box)
+    .map((x) => ({ name: x.name, box: r(x.box) }));
+  // 并入卡内的视图分段：四枚 tab 不得换行 / 溢出，且文字要在 tab 内居中
+  const vtabs = [...document.querySelectorAll('.ctrl .mod-main.is-plain .view-row .seg-tab')].map((n) => ({ text: n.innerText.trim(), box: r(n), txt: textBox(n), on: n.classList.contains('on') }));
+  const vrow = document.querySelector('.ctrl .mod-main.is-plain .view-row');
+  const cfg = document.querySelector('.ctrl .ctrl-cfg');
+  const topBar = topBarEl ? {
+    box: r(topBarEl),
+    bg: getComputedStyle(topBarEl).backgroundColor,
+    plain: !!plainTop,
+    hasViewRow: !!topBarEl.querySelector('.view-row'),
+    hasSearch: !!topBarEl.querySelector('.search-row'),
+    hasGear: !!topBarEl.querySelector('.ab-gear'),
+    hasMeta: !!topBarEl.querySelector('.vr-meta'),
+    compact: !topBarEl.querySelector('.brand-row'),
+    overflow: topBarEl.scrollWidth > topBarEl.clientWidth + 1,
+  } : null;
   const tabs = [...dir.querySelectorAll('.dir-tab')].map((n) => ({ text: n.innerText.trim(), box: r(n), txt: textBox(n), active: n.classList.contains('active') }));
   const cur = dir.querySelector('.dir-cur');
   const swap = dir.querySelector('.dir-swap');
@@ -95,8 +122,16 @@ const MEASURE = `(() => {
   return {
     vw: window.innerWidth, vh: window.innerHeight,
     rpx: +(document.documentElement.clientWidth / 750).toFixed(3),
-    card: card ? { box: r(card), bg: cs.backgroundColor, radius: cs.borderRadius, border: cs.borderTopWidth, overflow: card.scrollWidth > card.clientWidth + 1 } : null,
+    card: card ? { box: r(card), bg: cs.backgroundColor, radius: cs.borderRadius, border: cs.borderTopWidth, overflow: card.scrollHeight > card.clientHeight + 1 } : null,
     blocks,
+    topBar,
+    homeTopBox: homeTop ? r(homeTop) : null,
+    vtabs,
+    vrow: vrow ? { box: r(vrow), overflow: vrow.scrollWidth > vrow.clientWidth + 1 } : null,
+    cfg: cfg ? r(cfg) : null,
+    dirPadCfg: dir.className.includes('pad-cfg'),
+    fsBtn: !!document.querySelector('.fs-btn'),
+    stage: stage ? r(stage) : null,
     // 主操作行（现在只剩一键查询）：应当独占整行
     tools: [...document.querySelectorAll('.ctrl-tools .tool-btn')].map((n) => ({ text: n.innerText.replace(/\\s+/g, ' ').trim().slice(0, 10), box: r(n) })),
     // 方向切换键（从主操作行挪进方向行）
@@ -121,21 +156,52 @@ const judge = (m) => {
     const inside = m.blocks.every((b) => b.box.l >= m.card.box.l - 1 && b.box.r <= m.card.box.r + 1)
     const lefts = m.blocks.map((b) => b.box.l)
     const aligned = lefts.length > 1 && Math.max(...lefts) - Math.min(...lefts) <= 1.5
-    out.push(`四块内容（${m.blocks.map((b) => b.name).join(' / ')}）卡内=${inside ? '✓' : '✗'} 左缘对齐=${aligned ? '✓' : '✗ spread=' + (Math.max(...lefts) - Math.min(...lefts)).toFixed(1)}`)
+    out.push(`卡内内容块（${m.blocks.map((b) => b.name).join(' / ')}）卡内=${inside ? '✓' : '✗'} 左缘对齐=${aligned ? '✓' : '✗ spread=' + (Math.max(...lefts) - Math.min(...lefts)).toFixed(1)}`)
     out.push(`卡片横向溢出=${m.card.overflow ? '✗ 有' : '✓ 无'}`)
-    // 区块顺序：搜索 → 主操作 → 方向（含线路号/徽标）→ 视图工具（挂在其下方）
-    const topOf = (n) => { const b = m.blocks.find((x) => x.name === n); return b ? b.box.t : null }
-    const order = ['ctrl-search', 'ctrl-tools', 'ctrl-dir', 'ctrl-view'].map(topOf).filter((v) => v != null)
+    // 区块顺序（按声明的期望顺序取存在的项）：视图分段 → 搜索 → 方向 → 视图工具
+    const order = m.blocks.map((b) => b.box.t)
     const ordered = order.every((v, i) => i === 0 || v > order[i - 1])
-    out.push(`区块顺序 搜索→主操作→方向→视图 ${ordered ? '✓' : '✗ ' + order.join(' / ')}`)
+    out.push(`区块顺序 ${m.blocks.map((b) => b.name).join('→')} ${ordered ? '✓' : '✗ ' + order.join(' / ')}`)
     out.push(`已移除说明文字（.view-hint）=${m.hasHint ? '✗ 仍在' : '✓'}`)
   } else out.push('✗ 没找到 .ctrl 卡片')
-  // 主操作行：应该只剩一键查询，且撑满卡片内容宽（方向切换已移入方向行）
+  // 顶栏：地图视图下应为 .ctrl 内的裸形态（无卡壳、无重复齿轮/状态文案），不得再有独立顶栏
+  if (m.topBar) {
+    const inCard = m.card
+      ? m.topBar.box.l >= m.card.box.l - 1 && m.topBar.box.r <= m.card.box.r + 1 &&
+        m.topBar.box.t >= m.card.box.t - 1 && m.topBar.box.b <= m.card.box.b + 1
+      : false
+    out.push(`顶栏 ${m.topBar.box.w}×${m.topBar.box.h}px 形态=${m.topBar.plain ? '裸（并入地图控制卡）' : '独立卡'} 分段=${m.topBar.hasViewRow ? '✓' : '✗'} 搜索行=${m.topBar.hasSearch ? '✓' : '✗'}`)
+    if (m.topBar.plain) {
+      const noBg = /rgba\(0, 0, 0, 0\)|transparent/.test(m.topBar.bg)
+      out.push(`  在 .ctrl 内=${inCard ? '✓' : '✗'} 自带卡壳=${noBg ? '✓ 已去掉' : '✗ 仍有背景 ' + m.topBar.bg} 重复齿轮=${m.topBar.hasGear ? '✗ 仍在' : '✓'} 重复状态文案=${m.topBar.hasMeta ? '✗ 仍在' : '✓'}`)
+      out.push(`  自身横向溢出=${m.topBar.overflow ? '✗ 有' : '✓ 无'}（卡宽 ${m.card ? m.card.box.w : '?'}px）`)
+      if (m.vtabs.length) {
+        const spread = Math.max(...m.vtabs.map((t) => t.box.cy || 0)) - Math.min(...m.vtabs.map((t) => t.box.cy || 0))
+        out.push(`  视图分段 ${m.vtabs.length} 枚「${m.vtabs.map((t) => t.text + (t.on ? '★' : '')).join(' / ')}」单行 spread=${spread.toFixed(1)}px ${spread < 1.5 && !m.vrow.overflow ? '✓' : '✗ 换行/溢出'}`)
+        for (const t of m.vtabs) {
+          const dx = t.txt ? +(t.txt.cx - t.box.cx).toFixed(1) : null
+          const dy = t.txt ? +(t.txt.cy - t.box.cy).toFixed(1) : null
+          out.push(`    「${t.text}」盒 ${t.box.w}×${t.box.h} 文字偏移 dx=${dx} dy=${dy} ${Math.abs(dx) <= 1.5 && Math.abs(dy) <= 1.5 ? '✓' : '✗'}`)
+        }
+      } else out.push('✗ 卡内没找到视图分段 tab')
+      // 齿轮只保留 .ctrl-cfg 一个：它盖在第一行右端，第一行必须让位
+      if (m.cfg && m.vrow) {
+        const clear = m.vrow.box.r - m.cfg.l
+        out.push(`  首行与齿轮：让位 ${clear.toFixed(1)}px ${clear >= 0 ? '✓' : '✗ tab 钻到齿轮底下'}`)
+      }
+      out.push(`  方向行不再让位齿轮（pad-cfg）=${m.dirPadCfg ? '✗ 仍在让位，浪费行宽' : '✓'}`)
+      out.push(`  ⛶ 全屏键=${m.fsBtn ? '✗ 仍在（地图已整屏铺满，该收起）' : '✓ 已收起'}`)
+    }
+    if (m.homeTopBox) out.push(`✗ 地图视图下仍有独立顶栏卡 .home-top（${m.homeTopBox.w}×${m.homeTopBox.h}）`)
+  } else out.push('✗ 没找到顶栏 .mod-main')
+  if (m.stage) out.push(`主视图容器 ${m.stage.w}×${m.stage.h}px（视口高 ${m.vh}）`)
+  // 主操作行：独立页形态应只剩一键查询并撑满内容宽；嵌入态该块不存在 → 跳过
   if (m.tools && m.tools.length === 1) {
     const a = m.tools[0]
     const diff = +(a.box.w - m.dir.w).toFixed(1)
     out.push(`主操作「${a.text}」${a.box.w}px / 方向行宽 ${m.dir.w}px 独占整行=${Math.abs(diff) <= 2 ? '✓' : '✗ 差 ' + diff + 'px'}`)
-  } else if (m.tools) out.push(`✗ 主操作行还有 ${m.tools.length} 枚按钮（应只剩一键查询）`)
+  } else if (m.tools && m.tools.length > 1) out.push(`✗ 主操作行还有 ${m.tools.length} 枚按钮（应只剩一键查询）`)
+  else out.push('.ctrl-tools 不存在（搜索 / 查询已上移到首页顶栏）— 跳过主操作行断言')
   // 方向切换键：应在方向行内、与 tab 同行、紧贴右侧，图标居中
   if (m.swap) {
     const lastTab = m.tabs[m.tabs.length - 1]

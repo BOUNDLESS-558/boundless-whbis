@@ -1,36 +1,10 @@
 {
 	"pages": [
 		{
-			"path": "pages/index/index",
+			"path": "pages/map/map",
 			"style": {
 				"navigationBarTitleText": "武汉公交信息实时查询",
 				"navigationStyle": "custom"
-			}
-		},
-		{
-			"path": "pages/db/db",
-			"style": {
-				"navigationBarTitleText": "线路数据库",
-				"navigationStyle": "custom"
-			}
-		},
-		{
-			"path": "pages/line/line",
-			"style": {
-				"navigationBarTitleText": "线路详情"
-			}
-		},
-		{
-			"path": "pages/map/map",
-			"style": {
-				"navigationBarTitleText": "实时车辆",
-				"navigationStyle": "custom"
-			}
-		},
-		{
-			"path": "pages/settings/settings",
-			"style": {
-				"navigationBarTitleText": "地图服务设置"
 			}
 		}
 	],
@@ -41,19 +15,10 @@
 		"backgroundColor": "#0b1020"
 	},
 	"tabBar": {
-		"color": "#8a93a8",
-		"selectedColor": "#818cf8",
-		"backgroundColor": "#0f1526",
-		"borderStyle": "black",
-		"list": [
-			{
-				"pagePath": "pages/index/index",
-				"text": "实时查询"
-			},
-			{
-				"pagePath": "pages/db/db",
-				"text": "线路库"
-			}
-		]
+		"color": "#ffffff",
+		"selectedColor": "#ffffff",
+		"backgroundColor": "#0b1020",
+		"borderStyle": "white",
+		"list": []
 	}
 }

@@ -187,8 +187,9 @@ ws.onopen = async () => {
     console.log(`${r.name}: useMap=${r.useMap} uni-map=${r.mapEl} schematic=${r.schematicEl} 站名=${r.stopLabels} 车=${r.svgBuses} 瓦片=${r.tiles} → ${tail}`)
   })
 
-  // 两个入口的 UI
-  await freshLoad(`${BASE}#/pages/settings/settings`, `!!document.querySelector('.seg-item')`)
+  // 设置已内联为 line 页的 SettingsDrawer（齿轮入口），三档渲染选择器在 config.js 中已移除，
+  // 此处不再有独立 settings 页与 .seg-item；入口改指 line 页
+  await freshLoad(`${BASE}#/pages/line/line`, `!!document.querySelector('.ab-gear')`)
   const seg = await evalV(`(() => {
     const items = [...document.querySelectorAll('.seg-item')];
     return { count: items.length, on: items.filter((e) => e.classList.contains('on')).map((e) => e.innerText.trim()),

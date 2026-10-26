@@ -4,7 +4,7 @@
  *   ② 排序口径：完全相等 > 前缀 > 包含（输入 3 → 3 路排第一；输入 k1 → K1、K2 之后才是 K202）
  *   ③ 面板头两行：命中总数 + 线路库总条数（来自 src/data/lines.json）
  *   ④ 白名单：J / P / T / V / G / H / Z 等非本集团前缀必须「未收录」（库里只有 数字 / 电 / BRT / K / D）
- *   ⑤ 点选一条 → 面板与遮罩一起关闭、输入框回填、随后走正常查询出结果卡
+ *   ⑤ 点选一条 → 面板与遮罩一起关闭、输入框回填，随后切到地图态（控制卡线路号 = 命中线路）
  * 只打控制台，不写截图 / 日志 / 构建产物（本项目约定：探针不留产物）
  * 用法：node scripts/probe-line-suggest.mjs
  * 依赖：先 npm run dev:h5
@@ -20,7 +20,10 @@ const PROFILE = path.join(process.env.TMP || '.', 'edge-sug-prof')
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
 fs.rmSync(PROFILE, { recursive: true, force: true })
 
-const URL_HOME = `${BASE}#/pages/index/index`
+// 首页就是 map 页：冷启动（未选线）时是「独立顶栏搜索卡 + 线路库整屏」，
+// 联想面板挂在这一份 LineSearch（plain=false，带遮罩与齿轮）里
+const URL_HOME = `${BASE}#/pages/map/map`
+const READY = `!!window.uni && !!document.querySelector('.home-top .mod-main input')`
 
 const child = spawn(EDGE, [
   '--headless=new', '--disable-gpu', '--no-sandbox',
@@ -57,6 +60,14 @@ const evalV = async (expr) => {
   const r = await send('Runtime.evaluate', { expression: expr, returnByValue: true })
   if (r && r.result && r.result.subtype === 'error') console.log('EVAL ERR:', r.result.description)
   return r && r.result ? r.result.value : null
+}
+// vite 按需编译，首屏明显变慢：轮询等元素出来，别用固定 sleep 赌时间
+const waitFor = async (expr, ms = 24000) => {
+  for (let t = 0; t < ms; t += 400) {
+    if (await evalV(`(() => { try { return (${expr}) } catch (e) { return false } })()`)) return true
+    await sleep(400)
+  }
+  return false
 }
 
 /** 往搜索框里塞值：uni-app 的 <input> 在 H5 下是 uni-input 套原生 input，直接派发原生 input 事件 */
@@ -99,7 +110,10 @@ const MEASURE = `(() => {
     none: (document.querySelector('.sug-empty') || {}).innerText || '',
     mask: mask ? { box: r(mask), z: getComputedStyle(mask).zIndex } : null,
     val: card ? (card.querySelector('input') || {}).value : null,
-    lineRows: document.querySelectorAll('.line-row').length,
+    // 点选后应切到地图态：LineMap 挂载 + 控制卡方向行的线路号徽章 = 命中的线路号
+    mapOn: !!document.querySelector('.lmap-page'),
+    ctrlOn: !!document.querySelector('.ctrl .dir-cur'),
+    curNo: ((document.querySelector('.ctrl .dir-cur .dc-no') || {}).innerText || '').trim(),
   };
 })()`
 
@@ -156,8 +170,8 @@ ws.onopen = async () => {
     await send('Emulation.setDeviceMetricsOverride', { width: vp.w, height: vp.h, deviceScaleFactor: 1, mobile: vp.mobile })
     if (vp.mobile) await send('Emulation.setTouchEmulationEnabled', { enabled: true, maxTouchPoints: 5 })
     await send('Page.navigate', { url: URL_HOME })
-    await sleep(8000)
-    console.log(`\n======== ${vp.tag} ${vp.w}x${vp.h}（实测视口 ${await evalV('window.innerWidth')}px）========`)
+    const up = await waitFor(READY)
+    console.log(`\n======== ${vp.tag} ${vp.w}x${vp.h}（实测视口 ${await evalV('window.innerWidth')}px，顶栏就绪=${up ? '✓' : '✗'}）========`)
 
     for (const c of cases) {
       if (c.kw === '3') { c.first = '3' }
@@ -173,11 +187,17 @@ ws.onopen = async () => {
       await sleep(600)
       const before = await evalV(`(() => { const n = document.querySelector('.sug-item'); return n ? n.querySelector('.sug-no').innerText : null })()`)
       await evalV(`document.querySelector('.sug-item').click()`)
-      await sleep(4500)
+      // 选线后整块视图换成地图（顶栏卸载、搜索行并入控制卡），要给数据加载留时间
+      await waitFor(`!!document.querySelector('.ctrl .dir-cur .dc-no')`, 20000)
+      await sleep(1500)
       const after = await evalV(MEASURE)
-      const ok = !!(after && !after.panel && !after.mask && after.val === before && after.lineRows > 0)
+      // 点选后：联想面板与遮罩关闭；搜索行随顶栏搬进控制卡，输入框按选中的线路号回填；
+      // 地图挂载 + 方向行线路号徽章显示同一条线路，才算真的「直达对应线路」
+      const ok = !!(after && !after.panel && !after.mask && after.val === before
+        && after.mapOn && after.ctrlOn && after.curNo === before)
       console.log(`\n---- 点选「${before}」----`)
-      console.log(`面板关闭=${after && !after.panel ? '✓' : '✗'} 遮罩关闭=${after && !after.mask ? '✓' : '✗'} 输入框回填=${after && after.val} ${after && after.val === before ? '✓' : '✗'} 结果行=${after && after.lineRows} 行 ${after && after.lineRows > 0 ? '✓' : '✗'} 综合=${ok ? '✓' : '✗'}`)
+      console.log(`面板关闭=${after && !after.panel ? '✓' : '✗'} 遮罩关闭=${after && !after.mask ? '✓' : '✗'} 输入框回填=${after && after.val} ${after && after.val === before ? '✓' : '✗'}`)
+      console.log(`地图挂载=${after && after.mapOn ? '✓' : '✗'} 控制卡在=${after && after.ctrlOn ? '✓' : '✗'} 控制卡线路号=${after && after.curNo} 期望=${before} ${after && after.curNo === before ? '✓' : '✗'} 综合=${ok ? '✓' : '✗'}`)
     }
   }
 

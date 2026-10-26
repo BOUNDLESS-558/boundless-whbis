@@ -1,5 +1,5 @@
 /**
- * 详情页刷新控件体检：line.vue 顶部那枚「↻ | 15秒 ▾」胶囊，应与地图页 .refresh-pill 视觉一致。
+ * 首页「实时线路」视图的刷新控件体检：那枚「↻ | 15秒 ▾」胶囊，应与地图页 .refresh-pill 视觉一致。
  * 验证 ① 结构渲染（渐变胶囊 / 分隔线 / 间隔文案 / 自动光环）② 下拉四项与选中态
  *      ③ 选中后存储与定时器真的按新间隔发请求 ④ 菜单不溢出视口
  * 只把结论打到控制台，不写截图 / 日志文件（本项目约定：探针不留产物）
@@ -23,7 +23,7 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
 fs.rmSync(PROFILE, { recursive: true, force: true })
 
 const URL_PAGE =
-  `${BASE}#/pages/line/line?lineCode=420100-${LINE_NO}-0&direction=0` +
+  `${BASE}#/pages/map/map?view=stops&lineCode=420100-${LINE_NO}-0&direction=0` +
   `&lineName=${encodeURIComponent(LINE_NO + '路')}`
 
 const child = spawn(EDGE, [
@@ -133,7 +133,7 @@ ws.onopen = async () => {
   let ready = false
   for (let i = 0; i < 60; i++) {
     const r = await send('Runtime.evaluate', {
-      expression: `!!document.querySelector('.refresh-pill') && document.querySelectorAll('.node').length > 0`,
+      expression: `!!document.querySelector('.mod-ctrl .refresh-pill') && document.querySelectorAll('.node').length > 0`,
       returnByValue: true,
     })
     if (r.result && r.result.value) { ready = true; break }
