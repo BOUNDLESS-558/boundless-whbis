@@ -225,10 +225,17 @@ export default {
     },
     // 顶栏搜索与线路库窗共用的选线出口
     onPickLine(p) {
+      const code = p.lineCode || buildLineCode(p.lineName || p.lineNo || '', p.direction || 0)
+      // 同线路重复查询：lineCode 不变时 LineMap 的 watch 不会触发，需手动强刷重发请求
+      const sameLine = this.mapMount && code === this.lineCode
       this.applyPick(p)
       // 换线路一律落回地图：窗里的内容会随 lineNo 变化重拉，但用户要看的是新线走向
       this.view = 'map'
       this.writeHomeLine()
+      if (sameLine) {
+        const c = this.$refs.mapC
+        if (c) c.loadByLine(this.lineNo, this.direction)
+      }
     },
     // 分段切换：有线路时是「开窗 / 收窗」，没线路时单条线路类档位不可达（全市公交始终可达）
     switchView(key) {

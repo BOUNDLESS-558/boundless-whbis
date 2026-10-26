@@ -62,6 +62,7 @@
   <view class="db-mod db-list" :class="{ plain: plain }">
     <view class="db-row db-lhead">
       <text class="db-lh-t">匹配 {{ filtered.length }} 条</text>
+      <view class="db-copy" v-if="filtered.length" @click.stop="copyFiltered" title="一键复制当前筛选命中的全部线路信息（TSV，可直接粘贴进表格）">⧉ 复制</view>
       <text class="db-lh-s" v-if="filtered.length">按线路号排序</text>
     </view>
     <view class="db-div"></view>
@@ -180,6 +181,38 @@ export default {
   methods: {
     statusOf(l) {
       return lineStatus(l)
+    },
+    // 一键复制当前筛选命中的全部线路（TSV：编号/起点/终点/站数/方向/票价/首班/末班/状态/lineCode），
+    // 复制的是 filtered 全量（不是窗口化渲染的 visibleLines），粘进表格即成清单
+    copyFiltered() {
+      const list = this.filtered
+      if (!list.length) {
+        uni.showToast({ title: '没有符合条件的线路', icon: 'none' })
+        return
+      }
+      const rows = list.map((l) =>
+        [
+          l.no,
+          l.start || '未知',
+          l.end || '未知',
+          l.stops ? l.stops + ' 站' : '未知',
+          l.dirs && l.dirs.length > 1 ? '双向' : '单向',
+          l.price ? '¥' + l.price : '未知',
+          l.early || '未知',
+          l.last || '未知',
+          this.statusOf(l).label,
+          l.code || l.no,
+        ].join('\t')
+      )
+      const data =
+        `线路库匹配 ${list.length} 条\n` +
+        '编号\t起点\t终点\t站数\t方向\t票价\t首班\t末班\t状态\tlineCode\n' +
+        rows.join('\n')
+      uni.setClipboardData({
+        data,
+        success: () => uni.showToast({ title: `已复制 ${list.length} 条线路`, icon: 'none' }),
+        fail: () => uni.showToast({ title: '复制失败', icon: 'none' }),
+      })
     },
     loadMore() {
       this.shown += PAGE
@@ -371,6 +404,27 @@ export default {
   font-size: 24rpx;
   font-weight: 700;
   color: rgba(255, 255, 255, 0.82);
+}
+/* 复制按钮：与 LineMap 的 copy-btn 同族幽灵小圆角，hover 提到靛蓝 */
+.db-copy {
+  margin-left: 16rpx;
+  font-size: 20rpx;
+  color: rgba(255, 255, 255, 0.66);
+  background: rgba(255, 255, 255, 0.08);
+  border: 2rpx solid rgba(255, 255, 255, 0.14);
+  border-radius: 999rpx;
+  padding: 4rpx 16rpx;
+  cursor: pointer;
+  white-space: nowrap;
+  flex-shrink: 0;
+  transition: transform 0.15s, background 0.2s, color 0.2s;
+}
+.db-copy:hover {
+  color: #c7d2fe;
+  background: rgba(99, 102, 241, 0.3);
+}
+.db-copy:active {
+  transform: scale(0.94);
 }
 .db-lh-s {
   margin-left: auto;
