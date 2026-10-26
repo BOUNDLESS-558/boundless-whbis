@@ -192,15 +192,15 @@
         </view>
       </view>
 
-      <!-- ④ 视图工具（仅自绘走向图，无需任何 Key）：缩放 / 全览 / 站名 / 底图，
-           挂在方向行（含线路号与公司徽标）下方 -->
-      <view class="ctrl-div" v-if="!useMap"></view>
-      <view class="ctrl-view" v-if="!useMap">
+      <!-- ④ 视图工具：缩放 / 全览 / 站名 两种模式通用（原生地图下分别调 scale、自适应、切 marker 站名）；
+           「底图」只切自绘模式的高德瓦片层，原生 <map> 底图无法隐藏，故仅自绘模式显示 -->
+      <view class="ctrl-div"></view>
+      <view class="ctrl-view">
         <view class="tool-btn sq" @click="zoomBy(0.6)" title="放大">＋</view>
         <view class="tool-btn sq" @click="zoomBy(-0.6)" title="缩小">－</view>
-        <view class="tool-btn sm" @click="resetView">⤢ 全览</view>
+        <view class="tool-btn sm" @click="resetView" title="全览整条线路">⤢ 全览</view>
         <view class="tool-btn sm" :class="{ on: showStopLabels }" @click="toggleLabels">站名</view>
-        <view class="tool-btn sm" :class="{ on: showBaseMap }" @click="toggleBaseMap">底图</view>
+        <view class="tool-btn sm" v-if="!useMap" :class="{ on: showBaseMap }" @click="toggleBaseMap">底图</view>
       </view>
       <view class="view-alert" v-if="routeAlert">{{ routeAlert }}</view>
     </view>
@@ -531,7 +531,7 @@ export default {
           if (isNaN(lat) || isNaN(lng)) return
           // 首末站用实心大圆突出终点，中间站用白心圆环：密集路段不再糊成一条深色带
           const isEnd = i === 0 || i === total - 1
-          stopMarkers.push({
+          const stopMarker = {
             id: STOP_ID + dir * 1000 + i,
             latitude: lat,
             longitude: lng,
@@ -541,7 +541,10 @@ export default {
             // 11px 在整线视野（scale ~13）下几乎看不见，提到 13px；首末站 19px 保持明显加重
             width: isEnd ? 19 : 13,
             height: isEnd ? 19 : 13,
-            label: {
+          }
+          // 站名开关：关闭时不挂 label，让工具行「站名」在原生模式下也能显隐站名贴片
+          if (this.showStopLabels) {
+            stopMarker.label = {
               content: s.stopName,
               // 站点文字跟随方向色（青蓝/玫红），与参考图一致；底色近纯白保证浅色底图上可读
               color: st.labelText,
@@ -553,8 +556,9 @@ export default {
               // uni-h5 的 label 会按方向色描一圈边，与参考图冲突；显式置透明
               borderColor: 'rgba(0, 0, 0, 0)',
               borderWidth: 0,
-            },
-          })
+            }
+          }
+          stopMarkers.push(stopMarker)
         })
       })
       const busMarkers = []
@@ -1292,9 +1296,26 @@ export default {
     },
     toggleLabels() {
       this.showStopLabels = !this.showStopLabels
-      this.renderSchematic()
+      // 原生模式站名挂在 marker.label 上，markers 重算后需重建 <map> 才可靠刷新；自绘模式重算图层即可
+      if (this.useMap) this.mapKey++
+      else this.renderSchematic()
     },
     zoomBy(dz) {
+      // 原生地图：不走自绘相机，直接加减 <map> 的 scale 层级并重建。
+      // 以「当前视野」为基准（用户可能已平移过），只改缩放、保持中心不动，避免跳回旧中心。
+      if (this.useMap) {
+        this._userMoved = true
+        const cur = this._view || { center: this.mapCenter, scale: this.mapScale }
+        const center = cur.center || this.mapCenter
+        const step = dz > 0 ? 1 : -1
+        const scale = clampNum((cur.scale || this.mapScale || 13) + step, 4, 19)
+        if (scale === this.mapScale) return
+        this.mapCenter = { lat: center.lat, lng: center.lng }
+        this.mapScale = scale
+        this._view = { center: this.mapCenter, scale }
+        this.mapKey++
+        return
+      }
       this.zoomAt(this.canvas.w / 2, this.canvas.h / 2, dz)
     },
     // 以 (px,py) 为锚点缩放：锚点下的地理位置保持不动
