@@ -14,6 +14,7 @@
 | 1 | 获取线路及站点信息（基础信息 + 全部站点 + 换乘） | POST | `/bus/line` | `fetchLine(lineCode)` |
 | 2 | 获取在线运营车辆实时信息（GPS，车辆编号 MD5 加密） | POST | `/bus/detailData` | `fetchRealTime(lineId)` |
 | 3 | 获取计划营运车辆信息（发车计划/时刻表） | POST | `/bus/detailPlanTime` | `fetchPlanTime(lineId)` |
+| 4 | 获取站点实时信息（途经线路 + 即将到站车辆） | POST | `/bus/station` | —（待接入 `fetchStation(stopId)`） |
 
 **基础地址（BASE URL）**：`https://customized.wuhanbus.com/gps-resapi/wechat/bus`
 
@@ -69,6 +70,7 @@ openId: wx_openid_dev_001          ← ★ 必须在 header，不能放 query/bo
 | `cityCode` | body | ✅ | String | 城市编码，武汉为 `420100` | `420100` |
 | `lineCode` | body | ✅（仅 `/line`） | String | 线路编码，格式 `{cityCode}-{线路号}-{方向0\|1}`，如 `420100-337-0` | 由 `buildLineCode(lineNo, dir)` 生成 |
 | `lineId` | body | ✅（仅 `/detailPlanTime`、`/detailData`） | String | 与 `lineCode` 同格式，**参数名不同，不可混用** | 同上 |
+| `destinationId` | body | ✅（仅 `/station`） | String | 站点加密 ID，**等于 `/line` 响应 `stopDetailList[].stopId`**（本身已是 32 位十六进制加密值，**不是** `MD5(stopId)`，实测 `MD5(stopId)` 会报 `code:-1 站点信息未找到`） | 由 `/line` 响应取得 |
 | `xiaomaAppId` | body | ❌ | String | 小码平台 AppID（微信小程序 AppID） | `wxaa1d01cdc96a2c0c` |
 | `appKey` | body | ❌ | String | 客户端标识 | `A0CADFE6F3B914A2` |
 | `appType` | body | ❌ | Integer | 应用类型（抓包值） | `4` |
@@ -98,6 +100,7 @@ openId: wx_openid_dev_001          ← ★ 必须在 header，不能放 query/bo
 | `3008` | 访问的资源不存在 | 用 GET 请求；或使用不存在的渠道路径/接口前缀 |
 | `3014` | 参数校验失败 | 缺 `cityCode`（`cityCode:城市编码不能为空`）；`/line` 传错参数名（`lineCode:线路ID不能为空`）；`/detailPlanTime`、`/detailData` 传错参数名（`lineId:线路id不能为空`）；线路号不存在（`线路找不到`） |
 | `90001` | 缺少 openId | header 未带 `openId`，或将 openId 放在 query / body，或 header 值为空 |
+| `-1` | 站点信息未找到 | `/station` 的 `destinationId` 不是有效站点 id（如误用 `MD5(stopId)` 而非原始 `stopId`） |
 
 ### 鉴权相关实测结论
 

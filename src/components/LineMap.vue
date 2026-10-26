@@ -131,6 +131,7 @@
           class="stop-label"
           :class="{ left: s.anchor === 'end', terminal: s.terminal }"
           :style="{ left: s.lx + 'px', top: s.ly + 'px' }"
+          @click="onStopLabelTap(s)"
         >
           <text>{{ s.name }}</text>
         </view>
@@ -420,6 +421,59 @@
       </view>
     </view>
 
+    <!-- 站点详情窗：点站名 / 站点圆点弹出（与车辆详情窗同一套玻璃浮窗与拖拽交互，
+         class 保留 bus-sheet 以复用 bindSheetDrag/clampSheetPos 的 DOM 查找；两窗互斥同显） -->
+    <view class="bus-sheet stop-sheet" v-if="selectedStop" :class="{ pinned: sheetPinned, dragging: sheetDragging }" :style="sheetStyle">
+      <view
+        class="sheet-head"
+        :title="sheetPinned ? '已固定，点 📌 解锁后可拖动' : '按住标题栏拖动窗口'"
+        @touchstart.stop="sheetDown"
+        @touchmove.stop.prevent="sheetMove"
+        @touchend.stop="sheetUp"
+        @touchcancel.stop="sheetUp"
+      >
+        <view class="sheet-title">
+          <text class="sheet-grip">⣿</text>
+          <text class="sheet-line">{{ selectedStop.name }}</text>
+          <text class="sheet-dir" :class="'d' + selectedStop.dir">{{ selectedStop.dir === 0 ? '上行' : '下行' }}</text>
+        </view>
+        <view class="sheet-actions">
+          <view
+            class="sheet-pin"
+            :class="{ on: sheetPinned }"
+            @click.stop="toggleSheetPin"
+            :title="sheetPinned ? '取消固定（恢复拖动）' : '固定位置（锁定拖动）'"
+          >📌</view>
+          <view class="sheet-close" @click.stop="closeSheet" title="关闭">✕</view>
+        </view>
+      </view>
+      <view class="sheet-row"><text class="sk">所属方向</text><text class="sv">{{ selectedStop.dir === 0 ? '上行' : '下行' }} · {{ lineName || lineNo }} 路</text></view>
+      <view class="sheet-transfer">
+        <view class="st-head">
+          <text class="sk">可换乘线路</text>
+          <text class="st-n">{{ stopLinesBusy ? '全市线网匹配中…' : stopLines.length + ' 条 · 点击直达' }}</text>
+        </view>
+        <view class="st-list">
+          <view
+            class="st-chip"
+            v-for="t in stopLines"
+            :key="t.no"
+            :class="{ cur: t.cur }"
+            @click="openStopLine(t)"
+            :title="(t.cur ? '当前线路 · ' : '查看 ') + t.no + ' 路（' + (t.start || '?') + ' → ' + (t.end || '?') + '）'"
+          >
+            <text class="st-no">{{ t.no }}</text>
+            <text class="st-route">{{ t.start || '?' }} → {{ t.end || '?' }}</text>
+            <text class="st-cur" v-if="t.cur">当前</text>
+            <text class="st-go">›</text>
+          </view>
+          <view class="st-none" v-if="!stopLinesBusy && !stopLines.length">
+            <text>全市线网中未找到其它途经该站的线路</text>
+          </view>
+        </view>
+      </view>
+    </view>
+
     <!-- 全屏切换（仅嵌入态）：把整块地图从 72vh 宿主里提出来铺满视口；再点一次或按 ESC 退出 -->
     <view class="fs-btn" v-if="embedded && fsEnabled" @click="toggleFullscreen" :title="isFullscreen ? '退出全屏（ESC）' : '全屏查看'">
       <text class="fs-ico">{{ isFullscreen ? '⤡' : '⛶' }}</text>
@@ -434,6 +488,7 @@ import { fetchRoadRoute } from '../utils/osrm.js'
 import { APP_CONFIG, buildLineCode, useNativeMap } from '../config.js'
 import { assetUrl } from '../utils/asset.js'
 import { distance } from '../utils/geo.js'
+import { allLines } from '../utils/lineIndex.js'
 import {
   citySweepCost, sweepCity, loadSnapshot, loadLastSnapshot, snapshotAge,
   findBusByOrgId, refreshOrgIds, clusterPoints, SPEED_BANDS, CITY_FRESH_MS,
@@ -581,6 +636,10 @@ export default {
       sheetPos: null,
       sheetPinned: false,
       sheetDragging: false,
+      // 站点详情窗：点站名 / 站点圆点弹出；换乘线路列表由全市线网坐标匹配异步补齐
+      selectedStop: null,
+      stopLines: [],
+      stopLinesBusy: false,
       loading: false,
       // 地图重建键：uni-app H5 的 callout 浮层在标记更新/清空时会泄漏残留，每次刷新后 +1 强制重建地图
       mapKey: 0,
@@ -918,6 +977,11 @@ export default {
   watch: {
     // 详情窗出现后给标题栏挂上原生鼠标拖动（uni-app 对 view 的 mouse 事件绑定不可靠）
     selectedBus(v) {
+      if (v) this.$nextTick(() => this.bindSheetDrag())
+      else this.unbindSheetDrag()
+    },
+    // 站点窗与车辆窗共用同一套拖拽绑定（两窗互斥同显，querySelector 只会命中在屏的那扇）
+    selectedStop(v) {
       if (v) this.$nextTick(() => this.bindSheetDrag())
       else this.unbindSheetDrag()
     },
@@ -2315,7 +2379,16 @@ export default {
     },
     onStopTap(s) {
       if (this._suppressClick) return
-      uni.showToast({ title: `${s.name}（${DIR_STYLE[s.dir].name}）`, icon: 'none' })
+      const st = (this.stopsByDir[s.dir] || [])[s.idx]
+      if (!st) return
+      this.selectStop({ name: st.stopName, dir: s.dir, lat: parseFloat(st.latitude), lng: parseFloat(st.longitude) })
+    },
+    // 站名标签（HTML 叠加层）点击：与站点圆点同走站点详情窗
+    onStopLabelTap(s) {
+      if (this._suppressClick) return
+      const st = (this.stopsByDir[s.dir] || [])[s.idx]
+      if (!st) return
+      this.selectStop({ name: st.stopName, dir: s.dir, lat: parseFloat(st.latitude), lng: parseFloat(st.longitude) })
     },
     // 绘制自绘走向图：用相机做 Web Mercator 投影（走向线 + 站点 + 车辆 + 经纬网格）
     renderSchematic() {
@@ -2612,7 +2685,7 @@ export default {
       if (id >= 5000 && id < 10000) {
         const dir = Math.floor((id - 5000) / 1000)
         const s = (this.stopsByDir[dir] || [])[ (id - 5000) % 1000 ]
-        if (s) uni.showToast({ title: `站点：${s.stopName}（${DIR_STYLE[dir].name}）`, icon: 'none' })
+        if (s) this.selectStop({ name: s.stopName, dir, lat: parseFloat(s.latitude), lng: parseFloat(s.longitude) })
         return
       }
       // 车辆标记：id = (dir+2)*10000 + 序号 → 弹出车辆详情窗
@@ -2624,13 +2697,85 @@ export default {
     },
     // 选中车辆：弹出详情窗（示意图车辆点与列表项也走这里）
     selectBus(bus) {
+      this.selectedStop = null
       this.selectedBus = bus
       this.renderSchematic()
+    },
+    // 选中站点：弹出站点详情窗，并异步匹配可换乘线路（两窗互斥，同时只显示一扇）
+    selectStop(stop) {
+      if (isNaN(stop.lat) || isNaN(stop.lng)) return
+      this.selectedBus = null
+      this.selectedStop = stop
+      this.stopLines = []
+      this.stopLinesBusy = true
+      this.renderSchematic()
+      this.computeStopLines()
+    },
+    // 换乘线路匹配：全市线网里每条营运方向都存了站点坐标串（GCJ-02，与本站同系），
+    // 逐方向做 bbox 快速排除 + haversine 精判（80m 内算途经），再用线路库补起讫站与排序
+    async computeStopLines() {
+      const stop = this.selectedStop
+      if (!stop) return
+      const net = await loadCityNet()
+      // 等待期间用户已关窗 / 换了站点：结果作废
+      if (!net || !this.selectedStop || this.selectedStop !== stop) {
+        this.stopLinesBusy = false
+        return
+      }
+      const M = 0.0016 // ≈ 纬度 180m 的快速排除带，先把绝大多数方向挡掉再精算
+      const seen = new Map()
+      for (const d of net.dirs) {
+        if (seen.has(d.no)) continue
+        const bb = d.bb
+        if (stop.lng < bb[0] - M || stop.lng > bb[2] + M || stop.lat < bb[1] - M || stop.lat > bb[3] + M) continue
+        const p = d.p
+        for (let i = 0; i + 1 < p.length; i += 2) {
+          if (Math.abs(p[i] - stop.lng) > M || Math.abs(p[i + 1] - stop.lat) > M) continue
+          if (distance(stop.lat, stop.lng, p[i + 1], p[i]) <= 80) {
+            seen.set(d.no, { no: d.no, code: d.code })
+            break
+          }
+        }
+      }
+      const lib = new Map(allLines().map((l) => [String(l.no), l]))
+      const curNo = String(this.lineName || this.lineNo || '')
+      const list = []
+      seen.forEach((d) => {
+        const l = lib.get(String(d.no)) || {}
+        list.push({
+          no: d.no,
+          code: d.code,
+          start: l.start || '',
+          end: l.end || '',
+          order: l.order != null ? l.order : 999999,
+          cur: String(d.no) === curNo,
+        })
+      })
+      list.sort((a, b) => a.order - b.order || (a.cur ? -1 : 1))
+      this.stopLines = list
+      this.stopLinesBusy = false
+    },
+    // 从站点窗跳到换乘线路：嵌入态交给宿主换线（同步 lineCode / 记忆），独立态自己换
+    openStopLine(t) {
+      this.closeSheet()
+      if (t.cur) return
+      if (this.embedded) {
+        this.$emit('pick-line', {
+          lineCode: t.code || buildLineCode(t.no, 0),
+          lineName: t.no,
+          direction: 0,
+          startStop: '',
+          endStop: '',
+        })
+      } else {
+        this.loadByLine(t.no, 0)
+      }
     },
     // —— 详情窗：拖动 / 固定 / 关闭 ——
     closeSheet() {
       if (this._suppressSheetClick) return
       this.selectedBus = null
+      this.selectedStop = null
       this.renderSchematic()
     },
     // 固定：锁定当前位置（标题栏不再响应拖动），再点一次解锁
@@ -3111,6 +3256,9 @@ export default {
   color: rgba(226, 232, 255, 0.7);
   transform: translate(0, -50%);
   text-shadow: 0 0 3px #070b18, 0 0 6px #070b18, 0 0 10px #070b18;
+  /* 叠加层整体 pointer-events:none（不挡地图拖拽），仅站名放开可点 → 弹站点详情窗 */
+  pointer-events: auto;
+  cursor: pointer;
 }
 /* uni-text 自带 white-space，需显式覆盖否则站名会折行 */
 .stop-label uni-text,
@@ -4041,6 +4189,114 @@ export default {
   color: #c7d2fe;
   background: rgba(99, 102, 241, 0.3);
   border-color: rgba(129, 140, 248, 0.65);
+}
+/* 站点详情窗：换乘线路区（芯片流式排布，与全站靛蓝描边语言一致） */
+.st-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 20rpx;
+}
+.st-n {
+  font-size: 20rpx;
+  color: rgba(255, 255, 255, 0.42);
+}
+.st-list {
+  margin-top: 14rpx;
+  display: flex;
+  flex-direction: column;
+  gap: 10rpx;
+  max-height: 400rpx;
+  overflow-y: auto;
+  padding-right: 8rpx;
+}
+/* 细滚动条：换掉原生白条，用与卡片同族的暗色细轨 */
+.st-list::-webkit-scrollbar {
+  width: 8rpx;
+}
+.st-list::-webkit-scrollbar-track {
+  background: transparent;
+}
+.st-list::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.16);
+  border-radius: 999rpx;
+}
+.st-list::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.3);
+}
+.st-chip {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 16rpx;
+  padding: 12rpx 16rpx;
+  border-radius: 14rpx;
+  background: rgba(255, 255, 255, 0.05);
+  border: 2rpx solid rgba(255, 255, 255, 0.08);
+  cursor: pointer;
+  transition: background 0.2s, border-color 0.2s, transform 0.15s;
+}
+.st-chip:hover {
+  background: rgba(99, 102, 241, 0.16);
+  border-color: rgba(129, 140, 248, 0.45);
+}
+.st-chip:active {
+  transform: scale(0.985);
+}
+/* 线路号徽章：实体靛蓝牌，公交站牌视觉；当前线路换成琥珀 */
+.st-no {
+  flex-shrink: 0;
+  box-sizing: border-box;
+  min-width: 96rpx;
+  max-width: 176rpx;
+  padding: 4rpx 14rpx;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  text-align: center;
+  white-space: nowrap;
+  border-radius: 8rpx;
+  background: rgba(99, 102, 241, 0.88);
+  color: #ffffff;
+  font-size: 22rpx;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+.st-chip.cur .st-no {
+  background: rgba(252, 211, 77, 0.92);
+  color: #0b1020;
+}
+.st-route {
+  flex: 1;
+  min-width: 0;
+  font-size: 22rpx;
+  color: rgba(255, 255, 255, 0.62);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.st-cur {
+  flex-shrink: 0;
+  font-size: 18rpx;
+  line-height: 1;
+  color: #fcd34d;
+  border: 2rpx solid rgba(252, 211, 77, 0.45);
+  border-radius: 999rpx;
+  padding: 4rpx 12rpx;
+}
+.st-go {
+  flex-shrink: 0;
+  font-size: 28rpx;
+  line-height: 1;
+  color: rgba(255, 255, 255, 0.26);
+  transition: color 0.2s;
+}
+.st-chip:hover .st-go {
+  color: #c7d2fe;
+}
+.st-none {
+  font-size: 22rpx;
+  color: rgba(255, 255, 255, 0.42);
+  padding: 8rpx 0;
 }
 .sheet-line {
   font-size: 36rpx;
