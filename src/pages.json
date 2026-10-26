@@ -8,6 +8,13 @@
 			}
 		},
 		{
+			"path": "pages/db/db",
+			"style": {
+				"navigationBarTitleText": "线路数据库",
+				"navigationStyle": "custom"
+			}
+		},
+		{
 			"path": "pages/line/line",
 			"style": {
 				"navigationBarTitleText": "线路详情"
@@ -32,5 +39,21 @@
 		"navigationBarTitleText": "武汉公交信息实时查询",
 		"navigationBarBackgroundColor": "#0b1020",
 		"backgroundColor": "#0b1020"
+	},
+	"tabBar": {
+		"color": "#8a93a8",
+		"selectedColor": "#818cf8",
+		"backgroundColor": "#0f1526",
+		"borderStyle": "black",
+		"list": [
+			{
+				"pagePath": "pages/index/index",
+				"text": "实时查询"
+			},
+			{
+				"pagePath": "pages/db/db",
+				"text": "线路库"
+			}
+		]
 	}
 }

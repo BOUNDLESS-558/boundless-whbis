@@ -26,6 +26,7 @@ export function normNo(s) {
 
 // 预计算索引，避免每次输入都遍历原始字段
 // key = 线路号（唯一，必有）；alt = 描述名（D 线很多是“起点-终点”，顺带支持按站名搜）
+// status = 静态基座（scan-lines.mjs 落盘：停运/营运）；early/last 供 lineStatus() 实时判「营运中 / 已收班」
 const INDEX = DB.lines.map((l) => ({
   no: l.no,
   code: l.code || l.no,
@@ -36,8 +37,40 @@ const INDEX = DB.lines.map((l) => ({
   end: l.end || '',
   stops: l.stops || 0,
   dirs: l.dirs || [0],
+  price: l.price || '',
+  status: l.status || (l.stops ? '营运' : '停运'),
+  early: l.early || '',
+  last: l.last || '',
   order: /^\d+$/.test(l.no) ? Number(l.no) : Number((l.no.match(/\d+$/) || [0])[0]) + 100000,
 }))
+
+const toMin = (t) => {
+  const m = /^(\d{1,2}):(\d{2})/.exec(String(t == null ? '' : t).trim())
+  return m ? Number(m[1]) * 60 + Number(m[2]) : NaN
+}
+
+/**
+ * 线路运行状态三态判定（徽标用）：静态基座 status + 首末班时间，结合当前时刻实时算出。
+ *   已停运：线路库探测不到站点数据（status==='停运'）——已从营运线网撤下；
+ *   已收班：仍属营运线网，但当前时刻不在 [首班, 末班] 区间（支持跨零点夜班）；
+ *   营运中：营运线且此刻处于运营时段；缺首末班时间时保守判为营运中。
+ * 兼容线路库记录（status/early/last）与后端返回（stopCount/earlyHour/lastHour）两种字段名。
+ * @param {Object} line 线路记录
+ * @param {Date} now 判定时刻，默认当前时间
+ * @returns {{key:'off'|'ended'|'live', label:string}}
+ */
+export function lineStatus(line, now = new Date()) {
+  if (!line) return { key: 'live', label: '营运中' }
+  const stops = line.stops != null ? line.stops : line.stopCount
+  const isOff = line.status === '停运' || (!line.status && !stops)
+  if (isOff) return { key: 'off', label: '已停运' }
+  const em = toMin(line.early != null ? line.early : line.earlyHour)
+  const lm = toMin(line.last != null ? line.last : line.lastHour)
+  if (isNaN(em) || isNaN(lm)) return { key: 'live', label: '营运中' }
+  const mins = now.getHours() * 60 + now.getMinutes()
+  const inWindow = em <= lm ? (mins >= em && mins <= lm) : (mins >= em || mins <= lm)
+  return inWindow ? { key: 'live', label: '营运中' } : { key: 'ended', label: '已收班' }
+}
 
 /**
  * 按关键词联想线路
@@ -78,4 +111,18 @@ export function findLine(no) {
   if (!q) return null
   const hit = INDEX.find((l) => l.key === q)
   return hit || null
+}
+
+/**
+ * 全量线路（供「线路数据库」页浏览）：直接返回预计算索引数组（只读，勿修改）。
+ * 每项含 no/code/name/start/end/stops/dirs/status/early/last，足够展示本地摘要。
+ */
+export function allLines() {
+  return INDEX
+}
+
+/** 线路号前缀归类：电 / BRT / K / D / 数字（白名单四前缀之外均为纯数字线） */
+export function linePrefix(no) {
+  const m = /^(电|BRT|K|D)/.exec(String(no == null ? '' : no))
+  return m ? m[1] : '数字'
 }

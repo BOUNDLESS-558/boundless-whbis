@@ -59,38 +59,46 @@ export function clearUserAmapConfig() {
   uni.removeStorageSync(AMAP_BYOK_KEY)
 }
 
-// 是否有可用的地图 Key（用户自定义 或 内置）；无 Key 时地图页降级为线路示意图
+// 是否有可用的地图 Key（用户自定义 或 内置）
 export function hasMapKey() {
   const u = getUserAmapConfig()
   return !!((u && u.key) || (APP_CONFIG.mapKey && APP_CONFIG.mapKey.trim()))
 }
 
-// ---- 地图渲染方式（与 Key 解耦，两套视觉效果二选一）----
-// 'auto'（默认）：有 Key 用原生 <map>，无 Key 用自绘走向图（旧行为）
-// 'schematic'：始终用自绘走向图（青蓝/玫红分色、双向分轨、站名白底贴片），免 Key
-// 'native'：始终用原生 <map>（高德底图 + 原生 marker/polyline），无 Key 时自动回退自绘
-const MAP_MODE_KEY = 'map_render_mode'
+// 高德开放平台「我的应用 / 创建 Key」控制台，用于引导用户申请 Web端(JS API) Key
+export const AMAP_CONSOLE_URL = 'https://console.amap.com/dev/key/app'
 
-export function getMapMode() {
+// 打开外部网页：H5 新标签页；App 走系统浏览器；其它端复制地址兜底
+export function openExternal(url) {
+  const target = url || AMAP_CONSOLE_URL
+  // #ifdef H5
+  try { window.open(target, '_blank') } catch (e) { /* 忽略弹窗被拦截 */ }
+  // #endif
+  // #ifndef H5
   try {
-    const m = uni.getStorageSync(MAP_MODE_KEY)
-    return m === 'native' || m === 'schematic' ? m : 'auto'
-  } catch (e) {
-    return 'auto'
+    plus.runtime.openURL(target)
+  } catch (err) {
+    uni.setClipboardData({ data: target, success: () => uni.showToast({ title: '链接已复制，请在浏览器打开', icon: 'none' }) })
   }
+  // #endif
 }
 
-export function saveMapMode(mode) {
-  try {
-    if (mode === 'native' || mode === 'schematic') uni.setStorageSync(MAP_MODE_KEY, mode)
-    else uni.removeStorageSync(MAP_MODE_KEY)
-  } catch (e) { /* 忽略存储异常，下次按 auto 处理 */ }
+// 地图功能是否可用：⚠ 必须填写高德 Key 才能查看在线车辆走向。
+// App 端 Key 随安装包内置（manifest 的 sdkConfigs），故恒为可用；
+// H5 / 小程序等未内置 Key 的端，只有 hasMapKey() 为真时才启用地图（否则地图页显示引导锁屏）。
+export function mapFeatureAvailable() {
+  // #ifdef APP-PLUS
+  return true
+  // #endif
+  // #ifndef APP-PLUS
+  return hasMapKey()
+  // #endif
 }
 
-// 当前是否应该渲染原生 <map>：两处入口（设置页 / 地图页）必须共用这一个判据，
-// 否则会出现“设置页显示原生、地图页却画自绘”的不一致。
+// 当前是否渲染原生 <map>：已去掉「自动 / 走向图 / 原生」三档选项，底层一律用原生地图。
+// 有 Key → 原生地图；无 Key → 地图功能不启用（mapFeatureAvailable 为假，地图页显示引导锁屏），
+// 因此 useNativeMap() 实际等价于 hasMapKey()，仅在 mapFeatureAvailable 为真的页面上才会被用到。
 export function useNativeMap() {
-  if (getMapMode() === 'schematic') return false
   return hasMapKey()
 }
 

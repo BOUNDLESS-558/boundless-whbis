@@ -15,7 +15,6 @@ import path from 'node:path'
 
 const LINE_NO = process.argv[2] || '337'
 const BASE = process.env.PROBE_BASE || 'http://localhost:5173/boundless-whbis/'
-const OUT = path.join('.openchamber', 'screenshots')
 const EDGE = 'C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe'
 const PORT = 9344
 const PROFILE = path.join(process.env.TMP || '.', 'edge-ctrl-prof')

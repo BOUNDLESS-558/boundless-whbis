@@ -25,9 +25,9 @@ npm run deploy:pages # 构建 + 强推 origin/pages（GitHub Pages）
 
 端口不确定时用 `PROBE_BASE` 传真实地址。⚠️ 默认 base 是 `http://localhost:5173/boundless-whbis/`——**必须带子路径**（`manifest.json` 的 `h5.router.base`），写成 `/` 会 404。
 
-**探针不产出任何文件**：不调 `captureScreenshot`、不写日志。视觉核对靠控制台里的量测值（矩形坐标、文案、类名、计算样式、存储值），跑完即完，不落盘。
+**探针不产出任何文件**：不调 `captureScreenshot`、不写日志。视觉核对靠控制台里的量测值（矩形坐标、文案、类名、计算样式、存储值），跑完即完，不落盘。**所有探针脚本的 `shot()` 已统一改为空实现**（调用点保留，临时排查时自行恢复）；仅存的两个合法写文件例外：`probe-osrm-visual.mjs` 导出 `.openchamber/geom-*.json` 给 `probe-roadfit.mjs` 做几何交接、`scan-lines.mjs` 落盘线路库数据资产。
 
-（历史脚本里仍残留 `shot()` 写图代码；要跑它们先把该函数改成空实现，别让它往项目里写文件。）
+**完成功能后自动清理临时生成文件**：`.openchamber/` 里的几何交接文件用完即删；`%TEMP%` 下 `edge-*` 探针 profile 目录（每次运行前会自删重建，但异常中断会残留）定期清掉；任何截图、日志、中间产物都不许留在仓库里。
 
 | 命令 | 作用 |
 | --- | --- |
@@ -102,7 +102,9 @@ npm run deploy:pages # 构建 + 强推 origin/pages（GitHub Pages）
 
 `map.vue` 的 `DIR_STYLE`：**上行青蓝 `#06B6D4`/`#22D3EE`，下行玫红 `#F43F5E`/`#FB7185`**。`line.vue` 用 `.dir-up`/`.dir-down` 的 CSS 变量镜像，**改色必须两处同改**。选青/玫红而非红/绿是为色盲友好。
 - 上下行同屏**必须分轨**，否则后画的整条盖掉先画的：SVG 投影后各偏 3.5px，原生地图 `offsetPolyline()` 各偏 14m。
-- 原生折线层序：先铺两个方向的白色外描边（width 9），再画方向色主线（width 5）。下行主线 `dottedLine: true`。
+- 原生折线层序：先铺两个方向的白色外描边（width 9），再画方向色主线（width 5）。**下行不加虚线**——玫红虚线压在同一条走廊上会和青蓝主线互相打架，方向靠 14m 分轨偏移 + 色相已足够区分。
+- 原生视野必须由 `fitNativeView()` 自适应：`fitRoute()` 只算自绘相机的 `cam`，不写 `mapScale`/`mapCenter` 的话原生 `<map>` 会永远停在初始 `scale: 13`，跨区线路被压成屏幕中间一小团（这是「走向图不好看」的头号原因）。scale 用线路包围盒按 `fitRect()` 可绘制区反算，并同步 `_view` 防止 silent 刷新把视野拽回。
+- 站点图标按方向/首末站分四张（`stop-dot-{0,1}.png` 11→13px 白心圆环、`stop-end-{0,1}.png` 19px 实心大圆），由 `scripts/make-stop-dot.ps1` 生成；车辆图标同理由 `scripts/make-bus-icons.ps1` 生成 `bus-live-{0,1}.png`（方向色实心圆 + 白描边）。站名用 `label`：白底贴片 + 方向色压暗文字（`labelText`），并显式把 `borderColor` 置透明，否则 uni-h5 会按方向色描一圈边。
 - 车辆圆点同色系提亮一档（`#67E8F9`/`#FDA4AF`）+ 白描边，否则在同色线上糊成一团；`.ttag` 地铁标签用紫色是为了不撞上行青蓝。
 
 ### 地图页的 uni-h5 陷阱（踩过且无人报错）

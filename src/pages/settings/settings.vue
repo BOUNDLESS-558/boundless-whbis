@@ -3,26 +3,8 @@
     <view class="card glass">
       <view class="title">地图服务设置</view>
       <view class="desc">
-        实时地图使用高德「Web端(JS API)」。填入你自己申请的 Key 后，地图用量计入你的高德账号；
-        留空则使用内置 Key（开发模式）。
-      </view>
-
-      <view class="field">
-        <view class="label">地图渲染方式</view>
-        <view class="seg">
-          <view
-            v-for="m in modeOptions"
-            :key="m.value"
-            class="seg-item"
-            :class="{ on: mapMode === m.value }"
-            @click="pickMode(m.value)"
-          >
-            <text class="si-t">{{ m.label }}</text>
-            <text class="si-d">{{ m.desc }}</text>
-          </view>
-        </view>
-        <view class="hint">「走向图」不依赖 Key，上下行分色双轨、站名白底贴片，与未填 Key 时的效果一致；
-          「原生地图」需高德 Key，底图更丰富（POI / 地铁站等）。切换后自动重载。</view>
+        实时地图使用高德「Web 端(JS API)」原生地图，必须填写你自己申请的 Key 才能启用地图在线查看实时运营车辆；
+        填好后地图用量计入你的高德账号。App 端 Key 随安装包内置，无需配置。
       </view>
 
       <view class="field">
@@ -55,6 +37,8 @@
         <view class="btn" v-if="hasCustom" @click="clear">清除自定义</view>
       </view>
 
+      <view class="btn-link" @click="applyKey">前往高德开放平台申请 Key ↗</view>
+
       <view class="help">
         <view class="help-title">如何获取（约 2 分钟）</view>
         <view class="help-step">1. 打开高德开放平台控制台 console.amap.com，登录后进入「应用管理 → 我的应用」；</view>
@@ -67,14 +51,7 @@
 </template>
 
 <script>
-import { getUserAmapConfig, saveUserAmapConfig, clearUserAmapConfig, getMapMode, saveMapMode } from '../../config.js'
-
-// 三档：自动（跟随有无 Key）/ 强制走向图 / 强制原生地图
-const MODE_OPTIONS = [
-  { value: 'auto', label: '自动', desc: '跟随有无 Key' },
-  { value: 'schematic', label: '走向图', desc: '双色分轨 · 免 Key' },
-  { value: 'native', label: '原生地图', desc: '高德底图 · 需 Key' },
-]
+import { getUserAmapConfig, saveUserAmapConfig, clearUserAmapConfig, openExternal, AMAP_CONSOLE_URL } from '../../config.js'
 
 export default {
   data() {
@@ -82,8 +59,6 @@ export default {
       amapKey: '',
       amapJsCode: '',
       hasCustom: false,
-      mapMode: 'auto',
-      modeOptions: MODE_OPTIONS,
     }
   },
   computed: {
@@ -100,20 +75,8 @@ export default {
       this.amapJsCode = c.securityJsCode || ''
       this.hasCustom = true
     }
-    this.mapMode = getMapMode()
   },
   methods: {
-    // 渲染方式是页面创建时读一次的（useMap 不响应存储变化），必须整页重载才生效
-    pickMode(mode) {
-      if (mode === this.mapMode) return
-      if (mode === 'native' && !this.hasCustom && !(this.amapKey || '').trim()) {
-        uni.showToast({ title: '原生地图需先填写高德 Key', icon: 'none' })
-        return
-      }
-      this.mapMode = mode
-      saveMapMode(mode)
-      this.reload()
-    },
     save() {
       const key = (this.amapKey || '').trim()
       const jscode = (this.amapJsCode || '').trim()
@@ -130,6 +93,10 @@ export default {
       this.amapJsCode = ''
       this.hasCustom = false
       this.reload()
+    },
+    // 打开高德开放平台控制台，引导申请 Web端(JS API) Key
+    applyKey() {
+      openExternal(AMAP_CONSOLE_URL)
     },
     // 高德 SDK 一经加载无法换 Key，必须整页重载
     reload() {
@@ -287,6 +254,25 @@ export default {
   background: linear-gradient(135deg, #6366f1, #06b6d4);
   border: none;
   box-shadow: 0 14rpx 34rpx rgba(99, 102, 241, 0.45), inset 0 1rpx 0 rgba(255, 255, 255, 0.3);
+}
+/* 外部链接按钮：高德开放平台申请 Key */
+.btn-link {
+  display: block;
+  text-align: center;
+  font-size: 25rpx;
+  font-weight: 600;
+  color: #67e8f9;
+  background: rgba(34, 211, 238, 0.10);
+  border: 2rpx solid rgba(34, 211, 238, 0.32);
+  border-radius: 999rpx;
+  padding: 20rpx 0;
+  margin: -12rpx 0 40rpx;
+  cursor: pointer;
+  transition: transform 0.15s, background 0.2s;
+}
+.btn-link:active {
+  transform: scale(0.98);
+  background: rgba(34, 211, 238, 0.18);
 }
 .help {
   border-top: 2rpx solid rgba(255, 255, 255, 0.1);

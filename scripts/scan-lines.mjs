@@ -275,6 +275,15 @@ for (const l of kept) {
 if (byReal.size !== kept.length) console.log(`合并重复编号：${kept.length} 条 → ${byReal.size} 条`)
 merged = [...byReal.values()].sort(byNo)
 
+// 7) 运行状态（静态基座）：探测不到站点数据（stops=0）= 已从营运线网撤下 = 停运；
+//    有站点数据 = 仍在营运线网。至于「营运中 / 已收班」随一天时间变化，不在静态数据里写死，
+//    由前端 utils/lineIndex.js 的 lineStatus() 结合首末班时间实时判定，这里只落一个稳定的基座字段。
+for (const l of merged) {
+  l.status = l.stops ? '营运' : '停运'
+}
+const offCount = merged.filter((l) => l.status === '停运').length
+console.log(`运行状态：营运 ${merged.length - offCount} 条 / 停运（无站点数据）${offCount} 条`)
+
 const out = {
   city: CITY,
   cityName: '武汉',

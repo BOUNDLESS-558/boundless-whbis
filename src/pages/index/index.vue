@@ -1,169 +1,181 @@
 <template>
   <view class="page">
-    <!-- 居中主区：无结果时占满视口垂直居中 -->
-    <view class="center-zone" :class="{ 'cz-full': !hasResult }">
-      <!-- 顶部标题 -->
-      <view class="hero">
-        <view class="hero-head">
-          <image class="hero-logo" :src="logoUrl" mode="aspectFit" />
-          <view class="hero-headtext">
-            <view class="hero-title">武汉公交信息实时查询</view>
-            <view class="hero-sub">在线营运线路 · 站点 · 实时车辆</view>
+    <!-- 统一模块栈：所有内容都是“整卡包裹 + 行分块”，与地图页 .ctrl 同一套语言 -->
+    <view class="stack">
+      <!-- 主控卡：品牌行 / 搜索行 / 快捷行 -->
+      <view class="mod mod-main">
+        <!-- 品牌行：只放标识与标题，操作键全部下沉到下面的搜索行 -->
+        <view class="mod-row brand-row">
+          <image class="brand-logo" :src="logoUrl" mode="aspectFit" />
+          <view class="brand-text">
+            <view class="brand-title">武汉公交信息实时查询</view>
+            <view class="brand-sub">在线营运线路 · 站点 · 实时车辆</view>
           </view>
+          <text class="brand-count">线路库 {{ lineCount }}</text>
         </view>
-      </view>
 
-      <!-- 搜索卡片（毛玻璃） -->
-      <view class="search-card glass">
-        <text class="search-icon">🔍</text>
-        <input
-          class="search-input"
-          v-model="lineNo"
-          type="text"
-          placeholder="输入公交线路号，如 337 / 电1"
-          placeholder-class="search-ph"
-          confirm-type="search"
-          @input="onInput"
-          @confirm="doSearch"
-        />
-        <!-- 线路库联想：本地匹配输入，点一条直达对应线路（不发试探请求） -->
-        <view class="sug-panel" v-if="suggestOpen && suggestList.length">
-          <view class="sug-head">
-            <text class="sug-head-t">相关线路 {{ suggestTotal }} 条</text>
-            <text class="sug-head-s">线路库 {{ lineCount }} 条 · 本地匹配</text>
+        <view class="mod-div"></view>
+
+        <!-- 搜索行：凹槽输入 + 查询 + 设置键，一条水平分块（联想面板挂在这一行下沿） -->
+        <view class="mod-row search-row">
+          <view class="search-groove">
+            <text class="search-icon">🔍</text>
+            <input
+              class="search-input"
+              v-model="lineNo"
+              type="text"
+              placeholder="输入线路号，如 337 / 电1"
+              placeholder-class="search-ph"
+              confirm-type="search"
+              @input="onInput"
+              @confirm="doSearch"
+            />
           </view>
-          <view class="sug-item" v-for="s in suggestList" :key="s.no" @click="pickSuggest(s)">
-            <text class="sug-no">{{ s.no }}</text>
-            <view class="sug-body">
-              <text class="sug-route">{{ s.start || '起点未知' }} → {{ s.end || '终点未知' }}</text>
-              <text class="sug-meta">{{ s.stops ? s.stops + ' 站' : '站数未知' }} · {{ s.dirs.length > 1 ? '双向' : '单向' }}</text>
-            </view>
-            <text class="sug-go">›</text>
-          </view>
-        </view>
-        <view class="sug-panel sug-none" v-else-if="suggestEmpty">
-          <text class="sug-empty">线路库未收录「{{ lineNo }}」，点「查询」仍可直接向后端查一次</text>
-        </view>
-      </view>
-
-      <!-- 查询按钮（居中） -->
-      <view class="search-btn-wrap">
-        <view class="search-btn" @click="doSearch">查 询</view>
-      </view>
-
-      <!-- 快捷线路 -->
-      <view class="quick-wrap">
-        <view class="quick-title">快捷查询</view>
-        <view class="quick-tags">
+          <view class="search-btn" @click="doSearch">查询</view>
           <view
-            v-for="item in quickLines"
-            :key="item"
-            class="quick-tag glass-soft"
-            @click="quickSearch(item)"
-          >{{ item }}</view>
-        </view>
-      </view>
-
-      <!-- 地图服务设置（BYOK）：展开式卡片 -->
-      <view class="map-cfg glass" v-if="showSettings">
-        <view class="mc-head">
-          <view class="mc-title">地图服务设置</view>
-          <view class="mc-close" @click="showSettings = false">✕</view>
-        </view>
-        <view class="mc-desc">实时地图使用高德「Web端(JS API)」。填入你自己申请的 Key 后，地图用量计入你的高德账号；留空则使用内置 Key（开发模式）。</view>
-
-        <view class="field">
-          <view class="label">地图渲染方式</view>
-          <view class="mc-seg">
-            <view
-              v-for="m in modeOptions"
-              :key="m.value"
-              class="mc-seg-item"
-              :class="{ on: mapMode === m.value }"
-              @click="pickMode(m.value)"
-            >
-              <text class="ms-t">{{ m.label }}</text>
-              <text class="ms-d">{{ m.desc }}</text>
+            class="row-btn"
+            :class="{ on: showSettings }"
+            title="地图服务设置"
+            @click="showSettings = !showSettings"
+          >⚙</view>
+          <!-- 线路库联想：本地匹配输入，点一条直达对应线路（不发试探请求） -->
+          <view class="sug-panel" v-if="suggestOpen && suggestList.length">
+            <view class="sug-head">
+              <text class="sug-head-t">相关线路 {{ suggestTotal }} 条</text>
+              <text class="sug-head-s">线路库 {{ lineCount }} 条 · 本地匹配</text>
             </view>
+            <view class="sug-item" v-for="s in suggestList" :key="s.no" @click="pickSuggest(s)">
+              <text class="sug-no">{{ s.no }}</text>
+              <view class="sug-body">
+                <text class="sug-route">{{ s.start || '起点未知' }} → {{ s.end || '终点未知' }}</text>
+                <text class="sug-meta">{{ s.stops ? s.stops + ' 站' : '站数未知' }} · {{ s.dirs.length > 1 ? '双向' : '单向' }}</text>
+              </view>
+              <text class="st-badge" :class="'st-' + statusOf(s).key">{{ statusOf(s).label }}</text>
+              <text class="sug-go">›</text>
+            </view>
+          </view>
+          <view class="sug-panel sug-none" v-else-if="suggestEmpty">
+            <text class="sug-empty">线路库未收录「{{ lineNo }}」，点「查询」仍可直接向后端查一次</text>
           </view>
         </view>
 
-        <view class="field">
-          <view class="label">高德 JS Key</view>
-          <input class="input" v-model="amapKey" type="text" placeholder="32 位小写字母 + 数字" placeholder-class="ph" />
-        </view>
-        <view class="field">
-          <view class="label">安全密钥 securityJsCode</view>
-          <input class="input" v-model="amapJsCode" type="text" placeholder="与 Key 配对的安全密钥" placeholder-class="ph" />
-        </view>
+        <view class="mod-div"></view>
 
-        <view class="mc-state" v-if="hasCustom">
-          <text class="mc-dot"></text>当前已启用自定义 Key：{{ maskedKey }}
-        </view>
-
-        <view class="mc-btns">
-          <view class="mc-btn primary" @click="saveAmap">保存并重载</view>
-          <view class="mc-btn" v-if="hasCustom" @click="clearAmap">清除自定义</view>
-        </view>
-
-        <view class="mc-help">
-          <view class="mc-help-title">如何获取（约 2 分钟）</view>
-          <view class="mc-step">1. 打开高德开放平台控制台 console.amap.com，登录后进入「应用管理 → 我的应用」；</view>
-          <view class="mc-step">2. 创建新 Key，「启用平台」选择 <text class="em">Web端(JS API)</text>；</view>
-          <view class="mc-step">3. 域名白名单可留空（留空表示不限制来源）；</view>
-          <view class="mc-step">4. 把生成的 Key 和配套「安全密钥」复制粘贴到上方，保存后页面会自动重载生效。</view>
+        <!-- 快捷行：与地图页“视图工具”同款小胶囊，宽屏一行放得下，窄屏自动换行 -->
+        <view class="mod-row quick-row">
+          <text class="quick-label">快捷</text>
+          <view class="quick-tags">
+            <view
+              v-for="item in quickLines"
+              :key="item"
+              class="quick-tag"
+              @click="quickSearch(item)"
+            >{{ item }}</view>
+          </view>
         </view>
       </view>
-    </view>
 
-    <!-- 搜索结果：线路列表 -->
-    <view class="result-list" v-if="lines.length">
-      <view
-        class="line-card glass"
-        v-for="(line, idx) in lines"
-        :key="idx"
-        @click="goLine(line)"
-      >
-        <view class="lc-badge">{{ line.lineName }}</view>
-        <view class="lc-body">
-          <view class="lc-route">
-            <text class="route-start">{{ line.startStop }}</text>
-            <text class="route-arrow">→</text>
-            <text class="route-end">{{ line.endStop }}</text>
-            <!-- 所属营运公司（由时刻表车辆编号首位推断）：紧跟走向后方 -->
-            <view class="lc-org" v-if="line.companies && line.companies.length">
-              <view class="org-tag" v-for="c in line.companies" :key="c.no">
-                <text class="org-no">{{ c.no }}</text>
-                <text class="org-name">{{ c.label }}</text>
+      <!-- 地图服务设置（BYOK）：同一套模块卡语言 -->
+      <view class="mod" v-if="showSettings">
+        <view class="mod-row mc-head">
+          <view class="mc-title">地图服务设置</view>
+          <view class="row-btn" @click="showSettings = false">✕</view>
+        </view>
+
+        <view class="mod-div"></view>
+
+        <view class="mod-body">
+          <view class="mc-desc">实时地图使用高德「Web端(JS API)」原生地图，必须填写你自己申请的 Key 才能启用地图在线查看实时运营车辆。填好后地图用量计入你的高德账号。</view>
+
+          <view class="field">
+            <view class="label">高德 JS Key</view>
+            <input class="input" v-model="amapKey" type="text" placeholder="32 位小写字母 + 数字" placeholder-class="ph" />
+          </view>
+          <view class="field">
+            <view class="label">安全密钥 securityJsCode</view>
+            <input class="input" v-model="amapJsCode" type="text" placeholder="与 Key 配对的安全密钥" placeholder-class="ph" />
+          </view>
+
+          <view class="mc-state" v-if="hasCustom">
+            <text class="mc-dot"></text>当前已启用自定义 Key：{{ maskedKey }}
+          </view>
+
+          <view class="mc-btns">
+            <view class="mc-btn primary" @click="saveAmap">保存并重载</view>
+            <view class="mc-btn" v-if="hasCustom" @click="clearAmap">清除自定义</view>
+          </view>
+
+          <view class="mc-link" @click="applyKey">前往高德开放平台申请 Key ↗</view>
+
+          <view class="mc-help">
+            <view class="mc-help-title">如何获取（约 2 分钟）</view>
+            <view class="mc-step">1. 打开高德开放平台控制台 console.amap.com，登录后进入「应用管理 → 我的应用」；</view>
+            <view class="mc-step">2. 创建新 Key，「启用平台」选择 <text class="em">Web端(JS API)</text>；</view>
+            <view class="mc-step">3. 域名白名单可留空（留空表示不限制来源）；</view>
+            <view class="mc-step">4. 把生成的 Key 和配套「安全密钥」复制粘贴到上方，保存后页面会自动重载生效。</view>
+          </view>
+        </view>
+      </view>
+
+      <!-- 查询结果：模块卡 + 方向分段 + 行列表 -->
+      <view class="mod mod-list" v-if="lines.length">
+        <view class="mod-row result-head">
+          <!-- 方向分段：与地图页 .ctrl-dir 同款凹槽 + tab -->
+          <view class="rh-seg">
+            <view class="rh-tab" :class="{ on: dirFilter === 'all' }" @click="dirFilter = 'all'">全部</view>
+            <view class="rh-tab up" :class="{ on: dirFilter === 0 }" @click="dirFilter = 0">上行</view>
+            <view class="rh-tab down" :class="{ on: dirFilter === 1 }" @click="dirFilter = 1">下行</view>
+          </view>
+          <text class="rh-s">{{ keyword }} · {{ lines.length }} 个方向</text>
+        </view>
+
+        <view class="mod-div"></view>
+
+        <view
+          class="line-row"
+          v-for="(line, idx) in shownLines"
+          :key="idx"
+          @click="goLine(line)"
+        >
+          <view class="lr-badge" :class="line.direction === 0 ? 'up' : 'down'">{{ line.lineName }}</view>
+          <view class="lr-body">
+            <view class="lr-route">
+              <text class="lr-start">{{ line.startStop }}</text>
+              <text class="lr-arrow">→</text>
+              <text class="lr-end">{{ line.endStop }}</text>
+              <text class="st-badge" :class="'st-' + statusOf(line).key">{{ statusOf(line).label }}</text>
+              <!-- 所属营运公司（由时刻表车辆编号首位推断）：紧跟走向后方 -->
+              <view class="lr-org" v-if="line.companies && line.companies.length">
+                <view class="org-tag" v-for="c in line.companies" :key="c.no">
+                  <text class="org-no">{{ c.no }}</text>
+                  <text class="org-name">{{ c.label }}</text>
+                </view>
               </view>
             </view>
+            <view class="lr-meta">
+              <text class="chip">首班 {{ line.earlyHour }}</text>
+              <text class="chip">末班 {{ line.lastHour }}</text>
+              <text class="chip">¥{{ line.price }}</text>
+              <text class="chip">{{ line.stopCount }}站</text>
+              <text class="chip chip-dir" :class="line.direction === 0 ? 'up' : 'down'">{{ line.direction === 0 ? '上行' : '下行' }}</text>
+            </view>
           </view>
-          <view class="lc-meta">
-            <text class="chip">首班 {{ line.earlyHour }}</text>
-            <text class="chip">末班 {{ line.lastHour }}</text>
-            <text class="chip">¥{{ line.price }}</text>
-            <text class="chip">{{ line.stopCount }}站</text>
-            <text class="chip chip-dir">{{ line.direction === 0 ? '上行' : '下行' }}</text>
-          </view>
+          <view class="lr-go">›</view>
         </view>
-        <view class="lc-arrow">›</view>
       </view>
-    </view>
 
-    <!-- 地图服务设置入口（右上角齿轮） -->
-    <view class="cfg-fab glass-soft" @click="showSettings = !showSettings" title="地图服务设置">⚙</view>
+      <!-- 空状态 -->
+      <view class="mod mod-empty" v-if="searched && !loading && !lines.length">
+        <view class="empty-icon">🚌</view>
+        <view class="empty-text">未查询到「{{ keyword }}」线路信息</view>
+        <view class="api-error" v-if="apiError">{{ apiError }}</view>
+      </view>
 
-    <!-- 空状态 -->
-    <view class="empty glass" v-if="searched && !loading && !lines.length">
-      <view class="empty-icon">🚌</view>
-      <view class="empty-text">未查询到「{{ keyword }}」线路信息</view>
-      <view class="api-error" v-if="apiError">{{ apiError }}</view>
-    </view>
-
-    <!-- 加载中 -->
-    <view class="loading" v-if="loading">
-      <view class="loading-dot"></view>
-      <view class="loading-text">正在查询...</view>
+      <!-- 加载中 -->
+      <view class="mod mod-loading" v-if="loading">
+        <view class="loading-dot"></view>
+        <text class="loading-text">正在查询...</text>
+      </view>
     </view>
 
     <!-- 联想面板的“点外部关闭”遮罩，必须在页面最外层，否则被卡片背景裁切 -->
@@ -173,16 +185,9 @@
 
 <script>
 import { fetchLine, fetchPlanTime, fetchRealTime, decryptBusId, onBusIdReady } from '../../utils/api.js'
-import { buildLineCode, getUserAmapConfig, saveUserAmapConfig, clearUserAmapConfig, getMapMode, saveMapMode } from '../../config.js'
+import { buildLineCode, getUserAmapConfig, saveUserAmapConfig, clearUserAmapConfig, openExternal, AMAP_CONSOLE_URL } from '../../config.js'
 import { assetUrl } from '../../utils/asset.js'
-import { suggestLines, countMatches, normNo, LINE_COUNT } from '../../utils/lineIndex.js'
-
-// 渲染方式三档：自动（跟随有无 Key）/ 强制走向图 / 强制原生地图
-const MODE_OPTIONS = [
-  { value: 'auto', label: '自动', desc: '有 Key 用原生' },
-  { value: 'schematic', label: '走向图', desc: '自绘双色分轨' },
-  { value: 'native', label: '原生地图', desc: '高德底图' },
-]
+import { suggestLines, countMatches, normNo, lineStatus, LINE_COUNT } from '../../utils/lineIndex.js'
 
 export default {
   data() {
@@ -200,11 +205,11 @@ export default {
       amapJsCode: '',
       // 搜索联想面板开关（点选 / 查询 / 点外部都关闭）
       suggestOpen: false,
+      // 结果卡的方向分段：'all' | 0（上行）| 1（下行）
+      dirFilter: 'all',
       // 线路库条数（scripts/scan-lines.mjs 生成，运行时0 请求）
       lineCount: LINE_COUNT,
       hasCustom: false,
-      mapMode: 'auto',
-      modeOptions: MODE_OPTIONS,
     }
   },
   computed: {
@@ -215,6 +220,11 @@ export default {
     // 已有查询结果（或已搜索过）时，主区不再占满视口，结果紧随其下
     hasResult() {
       return this.searched || this.loading
+    },
+    // 方向分段过滤后的结果行（'all' 时原样返回）
+    shownLines() {
+      if (this.dirFilter === 'all') return this.lines
+      return this.lines.filter((l) => l.direction === this.dirFilter)
     },
     maskedKey() {
       const k = this.amapKey
@@ -241,9 +251,12 @@ export default {
       this.amapJsCode = c.securityJsCode || ''
       this.hasCustom = true
     }
-    this.mapMode = getMapMode()
   },
   methods: {
+    // 运行状态徽标：兼容联想项（status/early/last）与后端结果（stopCount/earlyHour/lastHour）
+    statusOf(item) {
+      return lineStatus(item)
+    },
     // 用户输入即展开联想（不用 watch，避免“点选后设值”又把面板弹回来）
     onInput() {
       this.suggestOpen = true
@@ -268,6 +281,7 @@ export default {
     },
     quickSearch(no) {
       this.lineNo = no
+      this.keyword = no
       this.searchLine(no)
     },
     // 查询指定线路（上下行两个方向）
@@ -277,6 +291,7 @@ export default {
       this.loading = true
       this.searched = true
       this.lines = []
+      this.dirFilter = 'all'
       this.apiError = ''
       try {
         const results = []
@@ -350,17 +365,6 @@ export default {
       } catch (e) { /* 忽略 */ }
       fill()
     },
-    // 渲染方式是页面创建时读一次的（useMap 不响应存储变化），必须整页重载才生效
-    pickMode(mode) {
-      if (mode === this.mapMode) return
-      if (mode === 'native' && !this.hasCustom && !(this.amapKey || '').trim()) {
-        uni.showToast({ title: '原生地图需先填写高德 Key', icon: 'none' })
-        return
-      }
-      this.mapMode = mode
-      saveMapMode(mode)
-      this.reloadAmapCfg()
-    },
     // 保存自定义高德 Key：高德 SDK 一经加载无法换 Key，必须整页重载
     saveAmap() {
       const key = (this.amapKey || '').trim()
@@ -378,6 +382,10 @@ export default {
       this.amapJsCode = ''
       this.hasCustom = false
       this.reloadAmapCfg()
+    },
+    // 打开高德开放平台控制台，引导申请 Web端(JS API) Key
+    applyKey() {
+      openExternal(AMAP_CONSOLE_URL)
     },
     reloadAmapCfg() {
       // #ifdef H5
@@ -402,113 +410,214 @@ export default {
 <style>
 .page {
   min-height: 100vh;
-  padding: 32rpx 32rpx 60rpx;
+  padding: 40rpx 32rpx 72rpx;
   box-sizing: border-box;
 }
-/* 居中主区：水平居中；无结果时撑满视口垂直居中 */
-.center-zone {
+/* 模块栈：统一内容宽度。rpx 在 ≥960px 桌面上按 375 基准缩（1rpx=0.5px），
+   所以宽度也用 rpx 定，让卡片与内部字号一起缩，宽屏才不会拉成一条细长条 */
+.stack {
+  width: 100%;
+  max-width: 1320rpx;
+  margin: 0 auto;
   display: flex;
   flex-direction: column;
-  align-items: center;
-  width: 100%;
+  gap: 24rpx;
 }
-.cz-full {
-  min-height: 88vh;
-  justify-content: center;
-}
-/* 毛玻璃基元 */
-.glass {
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.12), rgba(255, 255, 255, 0.05));
-  backdrop-filter: blur(30px) saturate(180%);
-  -webkit-backdrop-filter: blur(30px) saturate(180%);
-  border: 2rpx solid rgba(255, 255, 255, 0.14);
-  border-radius: 32rpx;
-  box-shadow: 0 24rpx 64rpx rgba(0, 0, 0, 0.42), inset 0 1rpx 0 rgba(255, 255, 255, 0.20);
-}
-.glass-soft {
-  background: rgba(255, 255, 255, 0.07);
-  backdrop-filter: blur(18px) saturate(160%);
-  -webkit-backdrop-filter: blur(18px) saturate(160%);
-  border: 2rpx solid rgba(255, 255, 255, 0.12);
-}
-/* 标题 */
-.hero {
-  padding: 24rpx 0 40rpx;
-  width: 100%;
-  max-width: 860rpx;
-}
-.hero-head {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  margin-bottom: 4rpx;
-}
-.hero-logo {
-  width: 120rpx;
-  height: 120rpx;
-  flex-shrink: 0;
-  margin-right: 26rpx;
-  padding: 14rpx;
+/* 模块卡：整卡包裹（背景/圆角/描边/阴影），内部只靠 .mod-row + .mod-div 分块 */
+.mod {
+  position: relative;
   box-sizing: border-box;
   border-radius: 28rpx;
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.16), rgba(255, 255, 255, 0.06));
-  border: 2rpx solid rgba(255, 255, 255, 0.16);
-  box-shadow: 0 16rpx 40rpx rgba(0, 0, 0, 0.35), inset 0 1rpx 0 rgba(255, 255, 255, 0.25);
+  background: rgba(17, 22, 33, 0.86);
+  backdrop-filter: blur(30px) saturate(170%);
+  -webkit-backdrop-filter: blur(30px) saturate(170%);
+  border: 2rpx solid rgba(255, 255, 255, 0.09);
+  box-shadow: 0 26rpx 64rpx rgba(0, 0, 0, 0.5), inset 0 1rpx 0 rgba(255, 255, 255, 0.08);
 }
-.hero-headtext {
+/* 主控卡必须压在联想遮罩(41)之上，否则面板会被遮罩盖住 */
+.mod-main {
+  z-index: 50;
+}
+/* 结果卡要裁掉行 hover 背景在圆角外的溢出 */
+.mod-list {
+  overflow: hidden;
+}
+/* 模块内的行：统一的水平分块 */
+.mod-row {
+  display: flex;
+  align-items: center;
+  gap: 20rpx;
+  padding: 22rpx 26rpx;
+  box-sizing: border-box;
+}
+/* 不是“行”的内容区（BYOK 表单） */
+.mod-body {
+  padding: 26rpx;
+  box-sizing: border-box;
+}
+/* 细分隔线：行与行之间的模块边界 */
+.mod-div {
+  height: 2rpx;
+  margin: 0 26rpx;
+  background: rgba(255, 255, 255, 0.07);
+}
+/* ---- 品牌行 ---- */
+.brand-row {
+  padding: 26rpx 26rpx 22rpx;
+}
+.brand-logo {
+  width: 92rpx;
+  height: 92rpx;
+  flex-shrink: 0;
+  padding: 10rpx;
+  box-sizing: border-box;
+  border-radius: 22rpx;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.16), rgba(255, 255, 255, 0.06));
+  border: 2rpx solid rgba(255, 255, 255, 0.14);
+  box-shadow: 0 12rpx 30rpx rgba(0, 0, 0, 0.32), inset 0 1rpx 0 rgba(255, 255, 255, 0.22);
+}
+.brand-text {
   flex: 1;
   min-width: 0;
 }
-.hero-title {
-  font-size: 48rpx;
+.brand-title {
+  font-size: 38rpx;
   font-weight: 800;
   letter-spacing: 1rpx;
-  line-height: 1.2;
+  line-height: 1.25;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
   background: linear-gradient(120deg, #ffffff 0%, #dbe4ff 45%, #a5f3fc 100%);
   -webkit-background-clip: text;
   background-clip: text;
   color: transparent;
 }
-.hero-sub {
-  margin-top: 10rpx;
-  font-size: 24rpx;
-  color: rgba(255, 255, 255, 0.55);
-  letter-spacing: 2rpx;
+.brand-sub {
+  margin-top: 8rpx;
+  font-size: 22rpx;
+  letter-spacing: 1rpx;
+  color: rgba(255, 255, 255, 0.45);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
-/* 搜索卡片：兼做联想面板的定位容器（面板浮在“查询”按钮上方，不撑高布局） */
-.search-card {
+/* 右上角线路库总数：品牌行的“数据量”标签，不与操作键争位置 */
+.brand-count {
+  flex: 0 0 auto;
+  align-self: flex-start;
+  padding: 6rpx 16rpx;
+  border-radius: 999rpx;
+  font-size: 19rpx;
+  line-height: 1;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+  color: rgba(255, 255, 255, 0.5);
+  background: rgba(255, 255, 255, 0.05);
+  border: 2rpx solid rgba(255, 255, 255, 0.09);
+}
+/* 行内小方键（齿轮 / 关闭）：与地图页 .dir-swap 同一套触感 */
+.row-btn {
+  flex: 0 0 auto;
+  width: 64rpx;
+  height: 64rpx;
   display: flex;
   align-items: center;
-  width: 100%;
-  max-width: 860rpx;
-  box-sizing: border-box;
-  padding: 16rpx 16rpx 16rpx 32rpx;
+  justify-content: center;
+  border-radius: 18rpx;
+  font-size: 30rpx;
+  color: rgba(255, 255, 255, 0.72);
+  background: rgba(255, 255, 255, 0.06);
+  border: 2rpx solid rgba(255, 255, 255, 0.10);
+  cursor: pointer;
+  transition: background 0.18s, color 0.18s, border-color 0.18s, transform 0.15s;
+}
+.row-btn:hover {
+  background: rgba(255, 255, 255, 0.12);
+  color: #fff;
+}
+.row-btn:active {
+  transform: scale(0.94);
+}
+.row-btn.on {
+  color: #67e8f9;
+  background: rgba(34, 211, 238, 0.16);
+  border-color: rgba(34, 211, 238, 0.45);
+}
+/* 搜索行：兼做联想面板的定位容器（面板浮在这一行下沿，不撑高布局） */
+.search-row {
   position: relative;
   z-index: 42;
-  transition: box-shadow 0.25s, border-color 0.25s;
+  padding: 18rpx 22rpx;
+  gap: 12rpx;
 }
-.search-card:focus-within {
-  border-color: rgba(129, 140, 248, 0.55);
-  box-shadow: 0 24rpx 64rpx rgba(0, 0, 0, 0.42), 0 0 0 4rpx rgba(99, 102, 241, 0.22), inset 0 1rpx 0 rgba(255, 255, 255, 0.20);
+/* 输入凹槽：与地图页 .ctrl-search 同款，输入框是“卡片里的一个槽”，不是自带阴影的独立胶囊 */
+.search-groove {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 12rpx;
+  height: 72rpx;
+  padding: 0 20rpx;
+  box-sizing: border-box;
+  background: rgba(255, 255, 255, 0.06);
+  border: 2rpx solid rgba(255, 255, 255, 0.10);
+  border-radius: 18rpx;
+  transition: background 0.2s, border-color 0.2s;
+}
+.search-groove:focus-within {
+  background: rgba(255, 255, 255, 0.09);
+  border-color: rgba(34, 211, 238, 0.45);
 }
 .search-icon {
-  font-size: 30rpx;
-  margin-right: 16rpx;
+  flex: 0 0 auto;
+  font-size: 26rpx;
   opacity: 0.7;
 }
 .search-input {
   flex: 1;
   min-width: 0;
-  font-size: 30rpx;
+  height: 68rpx;
+  line-height: 68rpx;
+  font-size: 28rpx;
   color: #fff;
 }
 .search-ph {
-  color: rgba(255, 255, 255, 0.4);
+  color: rgba(255, 255, 255, 0.35);
 }
-/* 线路库联想面板 */
+/* 查询键：与凹槽同高，紧贴其右侧 */
+.search-btn {
+  flex: 0 0 auto;
+  height: 72rpx;
+  line-height: 72rpx;
+  padding: 0 32rpx;
+  border-radius: 18rpx;
+  font-size: 26rpx;
+  font-weight: 700;
+  letter-spacing: 2rpx;
+  color: #fff;
+  background: linear-gradient(135deg, #6366f1, #06b6d4);
+  box-shadow: 0 10rpx 26rpx rgba(79, 110, 247, 0.42), inset 0 1rpx 0 rgba(255, 255, 255, 0.3);
+  cursor: pointer;
+  transition: transform 0.15s, box-shadow 0.2s, filter 0.2s;
+}
+.search-btn:hover {
+  filter: brightness(1.08);
+  box-shadow: 0 14rpx 32rpx rgba(79, 110, 247, 0.5), inset 0 1rpx 0 rgba(255, 255, 255, 0.3);
+}
+.search-btn:active {
+  transform: scale(0.96);
+}
+/* 搜索行里的齿轮：与凹槽、查询键同高，一排三个控件垂直居中 */
+.search-row .row-btn {
+  width: 72rpx;
+  height: 72rpx;
+}
+/* 线路库联想面板：直接贴满卡片宽度，看上去像卡片向下展开的一层 */
 .sug-panel {
   position: absolute;
-  top: calc(100% + 12rpx);
+  top: calc(100% + 6rpx);
   left: 0;
   right: 0;
   z-index: 43;
@@ -602,138 +711,242 @@ export default {
   height: 100vh;
   z-index: 41;
 }
-/* 查询按钮：水平居中 */
-.search-btn-wrap {
-  display: flex;
-  justify-content: center;
-  margin-top: 36rpx;
+/* ---- 快捷行：与地图页“视图工具”同款小胶囊 ---- */
+.quick-row {
+  padding: 16rpx 22rpx 20rpx;
+  gap: 16rpx;
 }
-.search-btn {
-  background: linear-gradient(135deg, #6366f1, #8b5cf6 55%, #06b6d4);
-  color: #fff;
-  font-size: 30rpx;
-  font-weight: 700;
-  letter-spacing: 8rpx;
-  border-radius: 999rpx;
-  padding: 0 96rpx;
-  height: 88rpx;
-  line-height: 88rpx;
-  box-shadow: 0 14rpx 34rpx rgba(99, 102, 241, 0.5), inset 0 1rpx 0 rgba(255, 255, 255, 0.3);
-  transition: transform 0.15s, box-shadow 0.2s;
-}
-.search-btn:hover {
-  transform: translateY(-4rpx);
-  box-shadow: 0 20rpx 44rpx rgba(99, 102, 241, 0.6), inset 0 1rpx 0 rgba(255, 255, 255, 0.3);
-}
-.search-btn:active {
-  transform: scale(0.96);
-  box-shadow: 0 6rpx 16rpx rgba(99, 102, 241, 0.5);
-}
-/* 快捷查询 */
-.quick-wrap {
-  margin-top: 40rpx;
-  width: 100%;
-  max-width: 860rpx;
-}
-.quick-title {
-  font-size: 24rpx;
-  color: rgba(255, 255, 255, 0.5);
-  margin-bottom: 20rpx;
-  text-align: center;
+.quick-label {
+  flex: 0 0 auto;
+  font-size: 22rpx;
+  letter-spacing: 1rpx;
+  color: rgba(255, 255, 255, 0.38);
 }
 .quick-tags {
+  flex: 1;
+  min-width: 0;
   display: flex;
   flex-wrap: wrap;
-  justify-content: center;
+  gap: 12rpx;
 }
 .quick-tag {
-  padding: 14rpx 34rpx;
-  border-radius: 999rpx;
-  font-size: 28rpx;
-  font-weight: 500;
-  color: #e5e9ff;
-  margin: 0 18rpx 18rpx 0;
-  transition: transform 0.18s, background 0.2s, border-color 0.2s;
+  height: 56rpx;
+  line-height: 56rpx;
+  padding: 0 22rpx;
+  border-radius: 14rpx;
+  font-size: 24rpx;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: rgba(255, 255, 255, 0.82);
+  background: rgba(255, 255, 255, 0.06);
+  border: 2rpx solid rgba(255, 255, 255, 0.10);
+  transition: background 0.18s, border-color 0.18s, color 0.18s, transform 0.15s;
 }
 .quick-tag:hover {
-  transform: translateY(-4rpx);
-  border-color: rgba(129, 140, 248, 0.5);
+  color: #fff;
+  background: rgba(34, 211, 238, 0.16);
+  border-color: rgba(34, 211, 238, 0.45);
 }
 .quick-tag:active {
   transform: scale(0.95);
 }
-/* 结果卡片 */
-.result-list {
-  margin-top: 44rpx;
+/* ---- 结果卡：分段头 + 行列表 ---- */
+.result-head {
+  padding: 18rpx 22rpx;
+  gap: 16rpx;
 }
-.line-card {
-  position: relative;
+/* 方向分段：与地图页 .ctrl-dir 同款凹槽 + tab */
+.rh-seg {
   display: flex;
   align-items: center;
-  padding: 30rpx 32rpx;
-  margin-bottom: 26rpx;
-  overflow: hidden;
-  transition: transform 0.22s, box-shadow 0.22s, border-color 0.22s;
+  gap: 6rpx;
+  padding: 6rpx;
+  box-sizing: border-box;
+  background: rgba(255, 255, 255, 0.06);
+  border: 2rpx solid rgba(255, 255, 255, 0.10);
+  border-radius: 16rpx;
 }
-.line-card::before {
-  content: '';
-  position: absolute;
-  left: 0;
-  top: 0;
-  bottom: 0;
-  width: 8rpx;
-  background: linear-gradient(180deg, #6366f1, #06b6d4);
-  opacity: 0.9;
+.rh-tab {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 52rpx;
+  padding: 0 24rpx;
+  box-sizing: border-box;
+  font-size: 24rpx;
+  line-height: 1;
+  white-space: nowrap;
+  color: rgba(255, 255, 255, 0.68);
+  border-radius: 12rpx;
+  cursor: pointer;
+  transition: background 0.18s, color 0.18s;
 }
-.line-card:hover {
-  transform: translateY(-6rpx);
-  border-color: rgba(129, 140, 248, 0.45);
-  box-shadow: 0 30rpx 70rpx rgba(0, 0, 0, 0.5), inset 0 1rpx 0 rgba(255, 255, 255, 0.20);
-}
-.line-card:active {
-  transform: translateY(-2rpx) scale(0.995);
-}
-.lc-badge {
-  flex-shrink: 0;
-  min-width: 100rpx;
-  text-align: center;
-  font-size: 40rpx;
-  font-weight: 800;
+.rh-tab:hover {
   color: #fff;
-  background: linear-gradient(135deg, #6366f1, #06b6d4);
-  border-radius: 22rpx;
-  padding: 16rpx 18rpx;
-  box-shadow: 0 10rpx 28rpx rgba(6, 182, 212, 0.42), inset 0 1rpx 0 rgba(255, 255, 255, 0.35);
+  background: rgba(255, 255, 255, 0.10);
 }
-.lc-body {
+.rh-tab.on {
+  color: #fff;
+  font-weight: 700;
+  background: linear-gradient(135deg, #6366f1, #06b6d4);
+}
+/* 上/下行选中态直接用方向色，与详情页走向线同色 */
+.rh-tab.up.on {
+  color: #062a33;
+  background: linear-gradient(135deg, #67e8f9, #06b6d4);
+  box-shadow: 0 6rpx 18rpx rgba(6, 182, 212, 0.32);
+}
+.rh-tab.down.on {
+  color: #fff;
+  background: linear-gradient(135deg, #fb7185, #e11d48);
+  box-shadow: 0 6rpx 18rpx rgba(225, 29, 72, 0.32);
+}
+.rh-s {
+  margin-left: auto;
+  font-size: 21rpx;
+  white-space: nowrap;
+  color: rgba(255, 255, 255, 0.42);
+}
+/* 结果行：一个方向一行，hover 只亮行底、无位移（模块内的行不该浮起来） */
+.line-row {
+  display: flex;
+  align-items: center;
+  gap: 22rpx;
+  padding: 24rpx 26rpx;
+  box-sizing: border-box;
+  cursor: pointer;
+  transition: background 0.18s;
+}
+.line-row:hover {
+  background: rgba(255, 255, 255, 0.045);
+}
+.line-row:active {
+  background: rgba(255, 255, 255, 0.075);
+}
+.lr-badge {
+  flex: 0 0 auto;
+  min-width: 104rpx;
+  padding: 14rpx 16rpx;
+  box-sizing: border-box;
+  text-align: center;
+  font-size: 34rpx;
+  font-weight: 800;
+  line-height: 1.1;
+  letter-spacing: 1rpx;
+  font-variant-numeric: tabular-nums;
+  color: #fff;
+  border-radius: 20rpx;
+  background: linear-gradient(135deg, #6366f1, #06b6d4);
+  box-shadow: 0 10rpx 26rpx rgba(6, 182, 212, 0.32), inset 0 1rpx 0 rgba(255, 255, 255, 0.34);
+}
+.lr-badge.up {
+  color: #062a33;
+  background: linear-gradient(135deg, #67e8f9, #06b6d4);
+}
+.lr-badge.down {
+  background: linear-gradient(135deg, #fb7185, #e11d48);
+  box-shadow: 0 10rpx 26rpx rgba(225, 29, 72, 0.32), inset 0 1rpx 0 rgba(255, 255, 255, 0.34);
+}
+.lr-body {
   flex: 1;
   min-width: 0;
-  margin: 0 24rpx;
+  display: flex;
+  flex-direction: column;
+  gap: 12rpx;
 }
-.lc-route {
+.lr-route {
   display: flex;
   align-items: baseline;
   flex-wrap: wrap;
-  font-size: 30rpx;
-  color: #fff;
+  font-size: 27rpx;
   font-weight: 600;
-  line-height: 1.5;
+  line-height: 1.45;
+  color: #fff;
 }
-.route-start, .route-end {
+.lr-start, .lr-end {
   white-space: normal;
   word-break: break-all;
 }
-.route-arrow {
-  margin: 0 14rpx;
-  color: #a5b4fc;
+.lr-arrow {
+  margin: 0 12rpx;
+  color: rgba(255, 255, 255, 0.42);
 }
 /* 营运公司徽标：紧跟走向后方 */
-.lc-org {
+.lr-org {
   display: inline-flex;
   flex-wrap: wrap;
   align-items: center;
-  margin-left: 16rpx;
 }
+.lr-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10rpx;
+}
+.lr-go {
+  flex: 0 0 auto;
+  font-size: 34rpx;
+  line-height: 1;
+  color: rgba(255, 255, 255, 0.28);
+  transition: transform 0.18s, color 0.18s;
+}
+.line-row:hover .lr-go {
+  color: #fff;
+  transform: translateX(4rpx);
+}
+/* 小信息片：首末班 / 票价 / 站数 / 方向 */
+.chip {
+  font-size: 20rpx;
+  line-height: 1;
+  padding: 8rpx 16rpx;
+  border-radius: 999rpx;
+  white-space: nowrap;
+  color: rgba(255, 255, 255, 0.72);
+  background: rgba(255, 255, 255, 0.06);
+  border: 2rpx solid rgba(255, 255, 255, 0.10);
+}
+.chip-dir.up {
+  color: #67e8f9;
+  background: rgba(6, 182, 212, 0.18);
+  border-color: rgba(34, 211, 238, 0.34);
+}
+.chip-dir.down {
+  color: #fda4af;
+  background: rgba(244, 63, 94, 0.18);
+  border-color: rgba(251, 113, 133, 0.34);
+}
+/* 运行状态徽标：营运中（翠绿）/ 已收班（琥珀）/ 已停运（石板灰）
+   刻意避开青蓝（上行）/玫红（下行），不与方向色打架 */
+.st-badge {
+  flex: 0 0 auto;
+  align-self: center;
+  display: inline-flex;
+  align-items: center;
+  height: 34rpx;
+  padding: 0 14rpx;
+  box-sizing: border-box;
+  border-radius: 999rpx;
+  font-size: 19rpx;
+  line-height: 1;
+  white-space: nowrap;
+  font-weight: 700;
+  border: 2rpx solid transparent;
+}
+.st-live {
+  color: #34d399;
+  background: rgba(16, 185, 129, 0.16);
+  border-color: rgba(52, 211, 153, 0.42);
+}
+.st-ended {
+  color: #fbbf24;
+  background: rgba(245, 158, 11, 0.14);
+  border-color: rgba(251, 191, 36, 0.38);
+}
+.st-off {
+  color: #94a3b8;
+  background: rgba(100, 116, 139, 0.16);
+  border-color: rgba(148, 163, 184, 0.34);
+}
+/* 营运公司徽标（金底圆形编号 + 公司名） */
 .org-tag {
   display: inline-flex;
   align-items: center;
@@ -763,77 +976,43 @@ export default {
   font-size: 20rpx;
   color: #fcd34d;
 }
-.lc-meta {
-  display: flex;
-  flex-wrap: wrap;
-  margin-top: 16rpx;
-}
-.chip {
-  font-size: 21rpx;
-  color: rgba(255, 255, 255, 0.78);
-  background: rgba(255, 255, 255, 0.06);
-  border: 2rpx solid rgba(255, 255, 255, 0.10);
-  border-radius: 999rpx;
-  padding: 6rpx 20rpx;
-  margin: 0 12rpx 10rpx 0;
-}
-.chip-dir {
-  color: #67e8f9;
-  background: rgba(6, 182, 212, 0.16);
-}
-.lc-arrow {
-  font-size: 40rpx;
-  color: rgba(255, 255, 255, 0.6);
-  flex-shrink: 0;
-  width: 56rpx;
-  height: 56rpx;
-  line-height: 52rpx;
-  text-align: center;
-  border-radius: 50%;
-  background: rgba(255, 255, 255, 0.06);
-  border: 2rpx solid rgba(255, 255, 255, 0.12);
-  transition: transform 0.2s, background 0.2s;
-}
-.line-card:hover .lc-arrow {
-  background: rgba(129, 140, 248, 0.22);
-  transform: translateX(4rpx);
-}
-/* 空状态 */
-.empty {
-  margin-top: 60rpx;
-  padding: 70rpx 40rpx;
+/* 空状态：也是一张模块卡，居中即可 */
+.mod-empty {
+  padding: 56rpx 40rpx;
   text-align: center;
 }
 .empty-icon {
-  font-size: 84rpx;
+  font-size: 76rpx;
+  line-height: 1;
 }
 .empty-text {
-  margin-top: 24rpx;
+  margin-top: 20rpx;
   font-size: 28rpx;
   color: rgba(255, 255, 255, 0.65);
 }
 .api-error {
   margin-top: 20rpx;
   font-size: 24rpx;
+  line-height: 1.6;
   color: #fca5a5;
 }
-/* 加载 */
-.loading {
-  margin-top: 70rpx;
+/* 加载：一行卡，不再占大块高度 */
+.mod-loading {
   display: flex;
   flex-direction: column;
   align-items: center;
+  gap: 18rpx;
+  padding: 46rpx;
 }
 .loading-dot {
-  width: 56rpx;
-  height: 56rpx;
+  width: 52rpx;
+  height: 52rpx;
   border-radius: 50%;
   border: 6rpx solid rgba(255, 255, 255, 0.18);
   border-top-color: #818cf8;
   animation: spin 0.9s linear infinite;
 }
 .loading-text {
-  margin-top: 22rpx;
   font-size: 26rpx;
   color: rgba(255, 255, 255, 0.6);
 }
@@ -841,66 +1020,20 @@ export default {
   to { transform: rotate(360deg); }
 }
 /* ===== 地图服务设置（BYOK）===== */
-/* 右上角齿轮入口 */
-.cfg-fab {
-  position: fixed;
-  top: 28rpx;
-  right: 28rpx;
-  z-index: 20;
-  width: 72rpx;
-  height: 72rpx;
-  line-height: 72rpx;
-  text-align: center;
-  border-radius: 50%;
-  font-size: 36rpx;
-  color: rgba(255, 255, 255, 0.8);
-  box-shadow: 0 12rpx 32rpx rgba(0, 0, 0, 0.35);
-  cursor: pointer;
-  transition: transform 0.25s, background 0.2s;
-}
-.cfg-fab:hover {
-  background: rgba(129, 140, 248, 0.28);
-  transform: rotate(60deg);
-}
-/* 展开式设置卡片 */
-.map-cfg {
-  width: 100%;
-  max-width: 860rpx;
-  box-sizing: border-box;
-  margin-top: 44rpx;
-  padding: 36rpx 40rpx;
-}
 .mc-head {
-  display: flex;
-  align-items: center;
   justify-content: space-between;
-  margin-bottom: 14rpx;
 }
 .mc-title {
-  font-size: 34rpx;
+  font-size: 30rpx;
   font-weight: 800;
   color: #fff;
 }
-.mc-close {
-  width: 56rpx;
-  height: 56rpx;
-  line-height: 56rpx;
-  text-align: center;
-  border-radius: 50%;
-  font-size: 28rpx;
-  color: rgba(255, 255, 255, 0.65);
-  background: rgba(255, 255, 255, 0.08);
-  border: 2rpx solid rgba(255, 255, 255, 0.14);
-  cursor: pointer;
-}
-.mc-close:hover {
-  background: rgba(255, 255, 255, 0.16);
-}
+/* 说明文案：表单区顶部的一段灰字 */
 .mc-desc {
-  font-size: 24rpx;
+  font-size: 23rpx;
   line-height: 1.7;
-  color: rgba(255, 255, 255, 0.6);
-  margin-bottom: 30rpx;
+  color: rgba(255, 255, 255, 0.55);
+  margin-bottom: 26rpx;
 }
 .field {
   margin-bottom: 24rpx;
@@ -1003,6 +1136,25 @@ export default {
   background: linear-gradient(135deg, #6366f1, #06b6d4);
   border: none;
   box-shadow: 0 14rpx 34rpx rgba(99, 102, 241, 0.45), inset 0 1rpx 0 rgba(255, 255, 255, 0.3);
+}
+/* 外部链接按钮：高德开放平台申请 Key */
+.mc-link {
+  display: block;
+  text-align: center;
+  font-size: 25rpx;
+  font-weight: 600;
+  color: #67e8f9;
+  background: rgba(34, 211, 238, 0.10);
+  border: 2rpx solid rgba(34, 211, 238, 0.32);
+  border-radius: 999rpx;
+  padding: 18rpx 0;
+  margin: -12rpx 0 32rpx;
+  cursor: pointer;
+  transition: transform 0.15s, background 0.2s;
+}
+.mc-link:active {
+  transform: scale(0.98);
+  background: rgba(34, 211, 238, 0.18);
 }
 .mc-help {
   border-top: 2rpx solid rgba(255, 255, 255, 0.1);
