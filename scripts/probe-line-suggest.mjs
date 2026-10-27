@@ -12,6 +12,7 @@
 import { spawn } from 'node:child_process'
 import fs from 'node:fs'
 import path from 'node:path'
+import { seedLogin } from './probe-auth.mjs'
 
 const BASE = process.env.PROBE_BASE || 'http://localhost:5173/boundless-whbis/'
 const EDGE = 'C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe'
@@ -165,6 +166,7 @@ const runCase = async (c) => {
 ws.onopen = async () => {
   await send('Page.enable')
   await send('Runtime.enable')
+  await seedLogin({ send, evalV, BASE, sleep })
 
   for (const vp of [{ w: 1440, h: 900, tag: 'desktop', mobile: false }, { w: 390, h: 844, tag: 'mobile', mobile: true }]) {
     await send('Emulation.setDeviceMetricsOverride', { width: vp.w, height: vp.h, deviceScaleFactor: 1, mobile: vp.mobile })

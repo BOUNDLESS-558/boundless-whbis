@@ -6,6 +6,7 @@ import { spawn } from 'node:child_process'
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
+import { seedLogin } from './probe-auth.mjs'
 
 const EDGE = 'C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe'
 const PORT = 9338
@@ -53,6 +54,7 @@ ws.onmessage = (ev) => {
 ws.onopen = async () => {
   await send('Page.enable')
   await send('Runtime.enable')
+  await seedLogin({ send, BASE: URL_PAGE.split('#')[0], sleep })
   if (MOBILE) await send('Emulation.setDeviceMetricsOverride', { width: 390, height: 844, deviceScaleFactor: 2, mobile: true })
   await send('Page.navigate', { url: URL_PAGE })
   await sleep(WAIT * 1000)

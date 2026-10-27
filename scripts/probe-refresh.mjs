@@ -7,6 +7,7 @@
 import { spawn } from 'node:child_process'
 import fs from 'node:fs'
 import path from 'node:path'
+import { seedLogin } from './probe-auth.mjs'
 
 const LINE_NO = process.argv[2] || '337'
 const BASE = process.env.PROBE_BASE || 'http://localhost:5173/boundless-whbis/'
@@ -133,6 +134,7 @@ const readMarkers = async () => {
 ws.onopen = async () => {
   await send('Page.enable')
   await send('Runtime.enable')
+  await seedLogin({ send, evalV, BASE, sleep })
   await send('Network.enable')
   await send('Page.navigate', { url: URL_PAGE })
   await sleep(9000)

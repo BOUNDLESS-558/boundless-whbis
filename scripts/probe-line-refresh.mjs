@@ -9,6 +9,7 @@
 import { spawn } from 'node:child_process'
 import fs from 'node:fs'
 import path from 'node:path'
+import { seedLogin } from './probe-auth.mjs'
 
 const LINE_NO = process.argv[2] || '337'
 const BASE = process.env.PROBE_BASE || 'http://localhost:5173/boundless-whbis/'
@@ -124,6 +125,7 @@ const check = (ok, label, extra = '') => {
 ws.onopen = async () => {
   await send('Page.enable')
   await send('Runtime.enable')
+  await seedLogin({ send, evalV, BASE, sleep })
   await send('Network.enable')
   // 换新文档再进目标页：uni-app 是 hash 路由，同文档内改 hash 不会重建页面
   await send('Page.navigate', { url: 'about:blank' })
