@@ -43,7 +43,7 @@
           class="search-input"
           v-model="lineNo"
           type="text"
-          placeholder="线路号 / 车辆自编号，如 337 · 3240"
+          :placeholder="searchPlaceholder"
           placeholder-class="search-ph"
           confirm-type="search"
           @input="onInput"
@@ -68,7 +68,7 @@
         </view>
       </view>
       <view class="sug-panel sug-none" v-else-if="suggestEmpty">
-        <text class="sug-empty">线路库未收录「{{ lineNo }}」，点「查询」可通查在运车辆或直接向后端查一次</text>
+        <text class="sug-empty">{{ emptyHint }}</text>
       </view>
     </view>
 
@@ -112,6 +112,9 @@ export default {
     // 当前线路号：顶栏实例与地图态实例是两个不同的组件，冷启动选完线整块换挂载，
     // 若不把宿主的线路号灌进来，搜索框会在切视图那一刻被清空（用户视角是「刚输的没了」）
     lineNoProp: { type: String, default: '' },
+    // 全市公交态：搜索框升级为「线路号 / 自编号」通查（自编号找车只在全市快照里有意义）；
+    // 其它视图（实时地图/实时线路/线路库）仍只认线路号，文案与提示随之切换
+    cityMode: { type: Boolean, default: false },
   },
   emits: ['pick', 'view-change', 'account'],
   data() {
@@ -137,6 +140,15 @@ export default {
     // 输入了东西但库里没收录：提示仍可直接查询，不拦截
     suggestEmpty() {
       return !!this.suggestOpen && !!normNo(this.lineNo) && !this.suggestList.length
+    },
+    // 占位与提示按视图切换：只有全市态通查自编号，其余视图仅线路号
+    searchPlaceholder() {
+      return this.cityMode ? '线路号 / 车辆自编号，如 337 · 3240' : '输入线路号，如 337 / 电1'
+    },
+    emptyHint() {
+      return this.cityMode
+        ? `线路库未收录「${this.lineNo}」，点「查询」可按自编号找车或直接向后端查一次`
+        : `线路库未收录「${this.lineNo}」，点「查询」仍可直接向后端查一次`
     },
   },
   watch: {
@@ -175,7 +187,7 @@ export default {
       this.suggestOpen = false
       const no = (this.lineNo || '').trim()
       if (!no) {
-        uni.showToast({ title: '请输入线路号或车辆自编号', icon: 'none' })
+        uni.showToast({ title: this.cityMode ? '请输入线路号或车辆自编号' : '请输入线路号', icon: 'none' })
         return
       }
       this.$emit('pick', this.buildPick(no, no))
