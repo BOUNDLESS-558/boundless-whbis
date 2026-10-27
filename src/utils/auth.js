@@ -30,6 +30,7 @@ const EMBEDDED_ACCOUNTS = [
   'wxid_byqyi6k0nr3r22',
   'WG6120BEVHR3',
   'Lazian-',
+  'XY8xiaoyu8',
 ]
 const EMBEDDED_MAP = new Map(EMBEDDED_ACCOUNTS.map((n) => [normAccount(n), n]))
 

@@ -22,3 +22,6 @@ dist
 *.njsproj
 *.sln
 *.sw?
+
+# 预置账号明文清单（含 13 位口令）：仅本地存储，不入库、不进 H5 产物、不推远端
+accounts.txt
