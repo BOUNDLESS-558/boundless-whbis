@@ -7,8 +7,10 @@
         :active-view="view"
         :meta="metaText"
         :line-no-prop="lineName || lineNo"
+        :account="account"
         @pick="onPickLine"
         @view-change="switchView"
+        @account="onAccount"
       />
     </view>
 
@@ -33,8 +35,10 @@
             :views="views"
             :active-view="view"
             :line-no-prop="lineName || lineNo"
+            :account="account"
             @pick="onPickLine"
             @view-change="switchView"
+            @account="onAccount"
           />
         </template>
       </LineMap>
@@ -70,6 +74,37 @@
         @close="view = 'map'"
       >
         <LineDb plain @pick="onPickLine" />
+      </FloatWin>
+
+      <!-- 账号窗：登录身份 + 注销入口（非地图态也能开，所以不挂在 stage 里）。
+           注销二次确认在窗内切态完成，不用 uni.showModal（白底系统框与全局玻璃风不符，同激活弹窗的否决理由） -->
+      <FloatWin
+        v-if="accountShow"
+        title="登录账号"
+        sub="本地账号 · 仅存本机"
+        :width-rpx="640"
+        max-height="60vh"
+        @close="accountShow = false"
+      >
+        <view class="acct" v-if="!acctConfirm">
+          <view class="acct-row">
+            <text class="acct-label">当前账号</text>
+            <text class="acct-value">{{ account || '—' }}</text>
+          </view>
+          <view class="acct-row">
+            <text class="acct-label">登录状态</text>
+            <text class="acct-value ok">{{ account ? '已登录（30 天免登录）' : '会话已失效' }}</text>
+          </view>
+          <view class="acct-tip">注销后回到登录页，本机账号保留，下次可直接登录</view>
+          <view class="acct-logout" @click="acctConfirm = true">注销登录</view>
+        </view>
+        <view class="acct" v-else>
+          <view class="acct-q">确定退出账号「{{ account }}」吗？</view>
+          <view class="acct-btns">
+            <view class="acct-btn ghost" @click="acctConfirm = false">取消</view>
+            <view class="acct-btn main" @click="onLogout">注销</view>
+          </view>
+        </view>
       </FloatWin>
 
       <!-- 未选线路时的整屏线路库（全市公交视图自己铺满，不走这里） -->
@@ -113,6 +148,7 @@ import LineStops from '../../components/LineStops.vue'
 import LineDb from '../../components/LineDb.vue'
 import FloatWin from '../../components/FloatWin.vue'
 import { buildLineCode } from '../../config.js'
+import { requireLogin, currentAccount, logout } from '../../utils/auth.js'
 
 // 上次查过的线路：下次进来直接落在地图上，省掉「每次都要搜一遍」
 const HOME_LINE_KEY = 'whbis:home-line'
@@ -130,6 +166,10 @@ export default {
   data() {
     return {
       view: 'db',
+      // 登录账号（顶栏账号胶囊展示）与账号窗开关；acctConfirm = 窗内注销二次确认态
+      account: '',
+      accountShow: false,
+      acctConfirm: false,
       // 全市公交激活弹窗
       actShow: false,
       actCode: '',
@@ -163,6 +203,9 @@ export default {
     },
   },
   onLoad(query) {
+    // 登录守卫：未登录一律回登录页（pages.json 首页已指向 login，这里兜底深链/回退）
+    if (!requireLogin()) return
+    this.account = currentAccount()
     const q = query || {}
     if (q.lineCode) {
       this.applyPick({
@@ -191,6 +234,8 @@ export default {
   onShow() {
     // 组件不触发页面生命周期：自动刷新定时器统一由宿主转发（只在 onLoad 建会叠出多个）
     this.fire(['onShow', 'restartAutoRefresh'])
+    // 从登录页回来（守卫重定向后 reLaunch 回本页可能不触发 onLoad）时补账号
+    if (!this.account) this.account = currentAccount()
   },
   onHide() {
     this.fire(['onHide', 'stopAutoRefresh'])
@@ -225,6 +270,13 @@ export default {
     },
     // 顶栏搜索与线路库窗共用的选线出口
     onPickLine(p) {
+      // 全市公交态：顶栏搜索是全站唯一的线路号查询入口 → 就地筛选全市视图（面板不再另设查询框）；
+      // 带 fromCity 的来自全市内部的「打开线路」出口（车辆详情 / 已筛选芯片），仍走换线
+      if (this.view === 'city' && !p.fromCity) {
+        const c = this.$refs.mapC
+        if (c) c.cityFilterByNo(p.lineName || p.lineNo || '')
+        return
+      }
       const code = p.lineCode || buildLineCode(p.lineName || p.lineNo || '', p.direction || 0)
       // 同线路重复查询：lineCode 不变时 LineMap 的 watch 不会触发，需手动强刷重发请求
       const sameLine = this.mapMount && code === this.lineCode
@@ -310,6 +362,24 @@ export default {
       } else {
         uni.showToast({ title: '激活码错误', icon: 'none' })
       }
+    },
+    // 顶栏账号胶囊：开账号窗；会话已失效时胶囊会引导重新登录
+    onAccount() {
+      this.acctConfirm = false
+      this.account = currentAccount()
+      if (!this.account) {
+        uni.redirectTo({ url: '/pages/login/login' })
+        return
+      }
+      this.accountShow = true
+    },
+    // 账号窗内确认注销：清会话回登录页
+    onLogout() {
+      logout()
+      this.account = ''
+      this.accountShow = false
+      this.acctConfirm = false
+      uni.reLaunch({ url: '/pages/login/login' })
     },
     // 窗内切方向 → 反向同步给地图视角（地图那侧的 watch 会跟着换标记集）
     onSetDir(dir) {
@@ -473,5 +543,103 @@ export default {
 @keyframes act-pop {
   from { opacity: 0; transform: scale(0.92); }
   to { opacity: 1; transform: scale(1); }
+}
+
+/* ── 账号窗（FloatWin 内）：信息行 + 注销键，同款玻璃口径 ── */
+.acct {
+  padding: 26rpx 28rpx 30rpx;
+  box-sizing: border-box;
+}
+.acct-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20rpx;
+  padding: 14rpx 0;
+}
+.acct-label {
+  flex: 0 0 auto;
+  font-size: 24rpx;
+  color: rgba(255, 255, 255, 0.5);
+}
+.acct-value {
+  flex: 1;
+  min-width: 0;
+  text-align: right;
+  font-size: 26rpx;
+  font-weight: 700;
+  color: #eef1ff;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.acct-value.ok {
+  color: #34d399;
+}
+.acct-tip {
+  margin-top: 10rpx;
+  font-size: 21rpx;
+  line-height: 1.6;
+  color: rgba(255, 255, 255, 0.38);
+}
+.acct-logout {
+  margin-top: 24rpx;
+  height: 76rpx;
+  line-height: 76rpx;
+  text-align: center;
+  border-radius: 18rpx;
+  font-size: 27rpx;
+  font-weight: 700;
+  letter-spacing: 2rpx;
+  color: #fb7185;
+  background: rgba(244, 63, 94, 0.12);
+  border: 2rpx solid rgba(244, 63, 94, 0.4);
+  cursor: pointer;
+  transition: background 0.18s, transform 0.15s;
+}
+.acct-logout:hover {
+  background: rgba(244, 63, 94, 0.2);
+}
+.acct-logout:active {
+  transform: scale(0.97);
+}
+/* 窗内二次确认态 */
+.acct-q {
+  padding: 18rpx 0 26rpx;
+  font-size: 27rpx;
+  line-height: 1.6;
+  text-align: center;
+  color: #eef1ff;
+}
+.acct-btns {
+  display: flex;
+  gap: 20rpx;
+}
+.acct-btn {
+  flex: 1;
+  height: 76rpx;
+  line-height: 76rpx;
+  text-align: center;
+  border-radius: 16rpx;
+  font-size: 28rpx;
+  font-weight: 600;
+  cursor: pointer;
+  transition: transform 0.15s, filter 0.2s;
+}
+.acct-btn.ghost {
+  color: rgba(255, 255, 255, 0.72);
+  background: rgba(255, 255, 255, 0.08);
+  border: 2rpx solid rgba(255, 255, 255, 0.14);
+}
+.acct-btn.main {
+  color: #fff;
+  background: linear-gradient(135deg, #f43f5e, #fb7185);
+  box-shadow: 0 10rpx 26rpx rgba(244, 63, 94, 0.35), inset 0 1rpx 0 rgba(255, 255, 255, 0.3);
+}
+.acct-btn.main:hover {
+  filter: brightness(1.08);
+}
+.acct-btn:active {
+  transform: scale(0.96);
 }
 </style>

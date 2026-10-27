@@ -26,6 +26,11 @@
         >{{ plain ? (v.short || v.label) : v.label }}</view>
       </view>
       <text class="vr-meta" v-if="meta && !plain">{{ meta }}</text>
+      <!-- 账号胶囊：点开账号窗（内含注销入口）；未登录/会话失效时点击引导重新登录 -->
+      <view class="vr-acct" :title="account ? '登录账号：' + account + '，点按查看/注销' : '未登录，点击去登录'" @click="$emit('account')">
+        <text class="vr-acct-ico">👤</text>
+        <text class="vr-acct-t">{{ account || '未登录' }}</text>
+      </view>
     </view>
 
     <view class="mod-div" v-if="views.length && !plain"></view>
@@ -38,7 +43,7 @@
           class="search-input"
           v-model="lineNo"
           type="text"
-          placeholder="输入线路号，如 337 / 电1"
+          placeholder="线路号 / 车辆自编号，如 337 · 3240"
           placeholder-class="search-ph"
           confirm-type="search"
           @input="onInput"
@@ -63,7 +68,7 @@
         </view>
       </view>
       <view class="sug-panel sug-none" v-else-if="suggestEmpty">
-        <text class="sug-empty">线路库未收录「{{ lineNo }}」，点「查询」仍可直接向后端查一次</text>
+        <text class="sug-empty">线路库未收录「{{ lineNo }}」，点「查询」可通查在运车辆或直接向后端查一次</text>
       </view>
     </view>
 
@@ -102,11 +107,13 @@ export default {
     // 裸形态：宿主已给出卡壳（首页地图视图把它放进 LineMap 的 .ctrl 里）——
     // 自己不再带玻璃背景、不留左右内边距、不重复状态文案
     plain: { type: Boolean, default: false },
+    // 当前登录账号（顶栏右侧胶囊展示，点按上抛 account 事件由宿主开账号窗/引导登录）
+    account: { type: String, default: '' },
     // 当前线路号：顶栏实例与地图态实例是两个不同的组件，冷启动选完线整块换挂载，
     // 若不把宿主的线路号灌进来，搜索框会在切视图那一刻被清空（用户视角是「刚输的没了」）
     lineNoProp: { type: String, default: '' },
   },
-  emits: ['pick', 'view-change'],
+  emits: ['pick', 'view-change', 'account'],
   data() {
     return {
       lineNo: this.lineNoProp || '',
@@ -168,7 +175,7 @@ export default {
       this.suggestOpen = false
       const no = (this.lineNo || '').trim()
       if (!no) {
-        uni.showToast({ title: '请输入线路号', icon: 'none' })
+        uni.showToast({ title: '请输入线路号或车辆自编号', icon: 'none' })
         return
       }
       this.$emit('pick', this.buildPick(no, no))
@@ -232,6 +239,15 @@ export default {
 /* 首行右侧不再让位（齿轮已移除），裸形态顶栏整行铺满卡片 */
 .mod-main.is-plain .view-row {
   padding-right: 0;
+}
+/* 裸形态里胶囊再压一档，保证 .ctrl（720rpx）内方向行不溢出 */
+.mod-main.is-plain .vr-acct {
+  height: 40rpx;
+  padding: 0 10rpx;
+  max-width: 150rpx;
+}
+.mod-main.is-plain .vr-acct-t {
+  font-size: 19rpx;
 }
 .mod-main.is-plain .seg-tab {
   height: 48rpx;
@@ -368,6 +384,41 @@ export default {
   font-size: 20rpx;
   line-height: 1.4;
   color: rgba(255, 255, 255, 0.42);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+/* 账号胶囊：分段行右侧，可压缩（账号名出省略号），窄屏不撑爆控制卡 */
+.vr-acct {
+  flex: 0 1 auto;
+  min-width: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 6rpx;
+  height: 44rpx;
+  padding: 0 14rpx;
+  box-sizing: border-box;
+  border-radius: 999rpx;
+  background: rgba(255, 255, 255, 0.06);
+  border: 2rpx solid rgba(255, 255, 255, 0.12);
+  cursor: pointer;
+  transition: background 0.18s, border-color 0.18s;
+}
+.vr-acct:hover {
+  background: rgba(99, 102, 241, 0.16);
+  border-color: rgba(129, 140, 248, 0.45);
+}
+.vr-acct-ico {
+  flex: 0 0 auto;
+  font-size: 20rpx;
+  opacity: 0.75;
+}
+.vr-acct-t {
+  min-width: 0;
+  font-size: 20rpx;
+  line-height: 1;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.78);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;

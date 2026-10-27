@@ -251,8 +251,9 @@
       </view>
       <view class="view-alert" v-if="routeAlert && !cityOn">{{ routeAlert }}</view>
 
-      <!-- 全市公交区：指标区（数字重 / 标签轻）+ 查线路 + 查车 + 拉取操作。
-           只在全市视图出现，不跟线路态的视图工具行抢位置；卡片加高是安全的（fitRect 读实测 bottom） -->
+      <!-- 全市公交区：指标区（数字重 / 标签轻）+ 次操作键行。
+           线路号与自编号通查不在这里：顶栏搜索是全站唯一查询入口，全市态下查询=就地
+           筛选线路 / 定位车辆（已筛选芯片可清除/打开线路）；卡片加高是安全的（fitRect 读实测 bottom） -->
       <block v-if="cityOn">
         <view class="ctrl-div"></view>
         <view class="ctrl-city">
@@ -270,10 +271,10 @@
               <text class="f-sub" v-if="cityFig.sub">{{ cityFig.sub }}</text>
               <text class="f-lab">{{ cityFig.lab }}</text>
             </view>
-            <!-- 已筛选某条线：不再占掉一个整按钮位，挂在指标末尾一枚小徽标上 -->
-            <view class="cc-chip" v-if="cityFilterNo" :title="'只看 ' + cityFilterNo + ' 路，点 ✕ 看回全市'">
+            <!-- 已筛选某条线：芯片整体可点 = 正式打开这条线路；✕ 才是看回全市 -->
+            <view class="cc-chip" v-if="cityFilterNo" :title="'只看 ' + cityFilterNo + ' 路 · 点卡片打开线路，✕ 看回全市'" @click="openFilteredLine">
               <text class="chip-txt">已筛选 {{ cityFilterNo }}</text>
-              <text class="chip-x" @click="clearCityQuery">✕</text>
+              <text class="chip-x" @click.stop="clearCityQuery" title="清除筛选，看回全市">✕</text>
             </view>
           </view>
           <view class="cc-meta">
@@ -283,18 +284,10 @@
           <view class="cc-bar" v-if="cityBusy"><view class="cc-bar-in" :style="{ width: cityProgress + '%' }"></view></view>
         </view>
         <view class="ctrl-city-row">
-          <input class="cc-input" v-model="cityQueryNo" type="text" placeholder="线路号，如 578 / 电1" placeholder-class="cc-ph" confirm-type="search" @confirm="cityQueryLine" />
-          <view class="cc-btn" @click="cityQueryLine">查线路</view>
-        </view>
-        <view class="ctrl-city-row">
-          <input class="cc-input" v-model="cityFindNo" type="text" placeholder="自编号，如 3240" placeholder-class="cc-ph" confirm-type="search" @confirm="cityFind" />
-          <view class="cc-btn" @click="cityFind">查车</view>
-          <view class="cc-btn ghost" :class="{ on: cityShowOrgId }" title="近景给每辆车标出自编号" @click="toggleCityTags">自编号</view>
-        </view>
-        <view class="ctrl-city-row">
           <view class="cc-btn ghost" v-if="!cityBusy" :title="'重新拉取全网（约 ' + cityCost + ' 个请求）'" @click="runCity(true)">↻ 重扫</view>
           <view class="cc-btn ghost" v-else title="中止本轮拉取（保留已扫到的部分结果）" @click="cancelCity">✕ 中止</view>
           <view class="cc-btn ghost" :class="{ on: cityFollow > 0 }" :title="cityFollowTitle" @click="cycleCityFollow">{{ cityFollowLabel }}</view>
+          <view class="cc-btn ghost" :class="{ on: cityShowOrgId }" title="近景给每辆车标出自编号" @click="toggleCityTags">自编号</view>
         </view>
       </block>
     </view>
@@ -692,8 +685,6 @@ export default {
       cityMeta: null,
       // 按线路号筛选（缩小到某条线的车，不重新请求）
       cityFilterNo: '',
-      // 自编号查车输入框
-      cityFindNo: '',
       // 自动跟随间隔（分钟，0=手动）
       cityFollow: 0,
       // 自绘模式下的全市圆点/聚合团（屏幕坐标，由 renderSchematic 算出）
@@ -707,8 +698,6 @@ export default {
       cityNetBusy: false,
       // 线网就绪计数：_net 非响应式，靠它推原生折线重算
       cityNetTick: 0,
-      // 线路号查询输入（点「查线路」才落到 cityFilterNo，避免边打字边重排千条走向）
-      cityQueryNo: '',
       // 线路号查询命中线网时的条目（统计行要显示它的方向数/站数）
       cityHitLine: null,
       // 近景是否给单车标自编号
@@ -1568,8 +1557,6 @@ export default {
       this.cityNetPaths = []
       this.cityTags = []
       this.cityFilterNo = ''
-      this.cityQueryNo = ''
-      this.cityFindNo = ''
       this.cityHitLine = null
       this.selectedBus = null
       // 回到线路视图：清掉全市视野与“用户已移动”标记，重新量占位并自适应整条线
@@ -1977,39 +1964,33 @@ export default {
       // 聚合团：以该点为锚放大，把团展开成单车
       this.zoomAt(d.x, d.y, 1.2)
     },
-    // 自编号查车：正向 MD5 在快照里命中（无需等编号字典）
-    cityFind() {
-      const q = String(this.cityFindNo || '').trim()
-      if (!q) {
-        uni.showToast({ title: '请输入车辆自编号', icon: 'none' })
-        return
-      }
-      const b = findBusByOrgId(q, this.cityBuses)
-      if (!b) {
-        uni.showToast({ title: `快照里没有自编号 ${q} 的车（已收班/回场，或不在本次扫描里）`, icon: 'none' })
-        return
-      }
-      // 筛选会把它藏起来，先整组清掉再定位（连线路号输入框一起，否则输入框还留着上一次的筛选）
-      this.cityFilterNo = ''
-      this.cityQueryNo = ''
-      this.cityHitLine = null
-      this.selectBus(b)
-      this.focusBus(b)
-    },
-    // 线路号查走向：命中线网就把画面收到那条线（只绘它的两个方向）；
-    // 底图里没有这条几何、但快照里有它的车时退化成「只筛车」，两者都空才报未命中
-    cityQueryLine() {
-      const raw = String(this.cityQueryNo || '').trim()
+    // 通查（顶栏搜索是全站唯一查询入口，宿主在全市态把 pick 转交到这里）：
+    // ① 线路号命中线网 → 收景到那条线（只绘它的两个方向）；
+    // ② 底图无几何但快照里有它的车 → 退化成「只筛车」；
+    // ③ 线路维度全空 → 再按车辆自编号在快照里找车（正向 MD5，无需编号字典）；
+    // ④ 全空才报未命中。一框通吃线路号与自编号（3240 这类自编号不是线路号）
+    cityFilterByNo(raw) {
+      raw = String(raw == null ? '' : raw).trim()
       if (!raw) {
-        uni.showToast({ title: '请输入线路号，如 578 / 电1', icon: 'none' })
+        uni.showToast({ title: '请输入线路号或车辆自编号', icon: 'none' })
         return
       }
       const hit = netSearchLines(raw, 1)[0] || null
       if (!hit) {
         const inSnap = this.cityBuses.some((b) => String(b.no).includes(raw) || String(b.code) === raw)
         if (!inSnap) {
-          uni.showToast({ title: `线网与在运车辆里都没有「${raw}」`, icon: 'none' })
-          this.clearCityQuery()
+          const b = findBusByOrgId(raw, this.cityBuses)
+          if (!b) {
+            uni.showToast({ title: `线网与在运车辆里都没有「${raw}」`, icon: 'none' })
+            this.clearCityQuery()
+            return
+          }
+          // 筛选会把它藏起来，先整组清掉再定位
+          this.cityFilterNo = ''
+          this.cityHitLine = null
+          this.selectBus(b)
+          this.focusBus(b)
+          uni.showToast({ title: `自编号 ${b.orgId || raw} · ${b.no} 路（${b.dir === 0 ? '上行' : '下行'}）已定位`, icon: 'none' })
           return
         }
         this.cityHitLine = null
@@ -2020,7 +2001,6 @@ export default {
       }
       // 归一成线网里的真实线路号：lineCode 与展示线路号不是一回事（1001 是电1、2001 是 J1），
       // 拿用户敲进去的数字段去精确匹配会一条都不中
-      this.cityQueryNo = hit.no
       this.cityHitLine = hit
       this.cityFilterNo = hit.no
       this.selectedBus = null
@@ -2029,11 +2009,7 @@ export default {
     },
     // 清除线路筛选，看回全市（不动视野：用户可能正盯着某个角落）
     clearCityQuery() {
-      if (!this.cityFilterNo && !this.cityHitLine) {
-        this.cityQueryNo = ''
-        return
-      }
-      this.cityQueryNo = ''
+      if (!this.cityFilterNo && !this.cityHitLine) return
       this.cityHitLine = null
       this.cityFilterNo = ''
       this._applyCityFilter(false)
@@ -2062,7 +2038,8 @@ export default {
         icon: 'none',
       })
     },
-    // 从一辆车跳到它所属的线路（交给宿主换线，同时退出全市图层）
+    // 从一辆车跳到它所属的线路（交给宿主换线，同时退出全市图层）；fromCity 标记 = 全市内部
+    // 的「打开线路」出口，宿主在全市态收到它仍走换线，而不是当成顶栏查询转交筛选
     openCityLine(bus) {
       if (!bus || !bus.code) return
       this.exitCity()
@@ -2072,6 +2049,30 @@ export default {
         direction: Number(bus.dir || 0),
         startStop: '',
         endStop: '',
+        fromCity: true,
+      })
+    },
+    // 「已筛选」芯片点击：把当前筛选的线路正式打开（退出全市 → 宿主换线）；✕ 才是看回全市
+    openFilteredLine() {
+      const no = String(this.cityFilterNo || '').trim()
+      if (!no) return
+      // 优先用线网命中的真实 lineCode（电1 的 code 是 1001 这类），快照兜底，最后才按号码拼
+      let code = this.cityHitLine && this.cityHitLine.code
+      if (!code) {
+        const b =
+          this.cityBuses.find((x) => String(x.no) === no) ||
+          this.cityBuses.find((x) => String(x.no).includes(no))
+        code = b && b.code
+      }
+      if (!code) code = buildLineCode(no, 0)
+      this.exitCity()
+      this.$emit('pick-line', {
+        lineCode: code,
+        lineName: no,
+        direction: 0,
+        startStop: '',
+        endStop: '',
+        fromCity: true,
       })
     },
     // 原生地图平移/缩放后记住视野，供自动刷新重建地图时还原
@@ -4419,7 +4420,8 @@ export default {
   color: rgba(255, 255, 255, 0.5);
   white-space: nowrap;
 }
-/* 已筛选徽标：琥珀色表示“现在看到的是子集”，✕ 就在它里面，不必去按钮行找 */
+/* 已筛选徽标：琥珀色表示“现在看到的是子集”，✕ 就在它里面，不必去按钮行找；
+   芯片整体可点（打开该线路），hover 微亮提示 */
 .cc-chip {
   display: inline-flex;
   align-items: center;
@@ -4429,6 +4431,11 @@ export default {
   border-radius: 999rpx;
   background: rgba(245, 158, 11, 0.14);
   border: 2rpx solid rgba(251, 191, 36, 0.4);
+  cursor: pointer;
+  transition: background 0.2s;
+}
+.cc-chip:hover {
+  background: rgba(252, 211, 77, 0.22);
 }
 .chip-txt {
   font-size: 19rpx;
@@ -4474,28 +4481,13 @@ export default {
   background: linear-gradient(90deg, #6366f1, #22d3ee);
   transition: width 0.25s ease-out;
 }
-/* 筛选 / 查车行：两个输入框 + 三个次操作键，窄屏允许换行 */
+/* 全市次操作键行（重扫 / 自动跟随 / 自编号），窄屏允许换行 */
 .ctrl-city-row {
   display: flex;
   align-items: center;
   gap: 10rpx;
   flex-wrap: wrap;
   padding: 0 4rpx 2rpx;
-}
-.cc-input {
-  flex: 1 1 180rpx;
-  min-width: 0;
-  height: 56rpx;
-  padding: 0 16rpx;
-  box-sizing: border-box;
-  font-size: 22rpx;
-  color: #fff;
-  background: rgba(255, 255, 255, 0.06);
-  border: 2rpx solid rgba(255, 255, 255, 0.12);
-  border-radius: 14rpx;
-}
-.cc-ph {
-  color: rgba(255, 255, 255, 0.34);
 }
 /* 与视图工具行的 .tool-btn.sm 同尺寸，保持卡片内动作键一致 */
 .cc-btn {
