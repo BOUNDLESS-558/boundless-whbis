@@ -1,6 +1,7 @@
 # 武汉公交信息实时查询在线营运线路信息 API 接口文档
 
-> 数据来源：`https://customized.wuhanbus.com/gps-resapi/wechat/bus/...`
+> 数据来源：`https://customized.wuhanbus.com/gps-resapi/wechat/bus/...`（一 ~ 六章）
+> 第二数据源：`https://hanqizhihuichuxing.top/api/bus/...`（汉奇智慧出行，见第七章）
 > 服务端：`nginx/1.20.1`，请求/返回格式均为 `application/json`（UTF-8）。
 > 本项目实测来源：`src/utils/api.js`（请求层封装）、`src/config.js`（鉴权与公共参数）、`API信息.txt`（原始抓包数据）。
 > 本版文档为对项目实际调用 API 的全面整理，字段说明与示例均来自真实抓包与联调实测（2026-10-22）。
@@ -15,6 +16,8 @@
 | 2 | 获取在线运营车辆实时信息（GPS，车辆编号 MD5 加密） | POST | `/bus/detailData` | `fetchRealTime(lineId)` |
 | 3 | 获取计划营运车辆信息（发车计划/时刻表） | POST | `/bus/detailPlanTime` | `fetchPlanTime(lineId)` |
 | 4 | 获取站点实时信息（途经线路 + 即将到站车辆） | POST | `/bus/station` | —（待接入 `fetchStation(stopId)`） |
+| 5 | 汉奇：周边车辆/线路 | GET | `/bus/nearby` | `fetchNearby(lat, lng, radius)` → `src/utils/hanqi.js`（七章） |
+| 6 | 汉奇：线路详情 + 实时车辆 | GET | `/bus/realtime` | `fetchLine(lineId)` / `fetchRealtime(lineId)` → 同上（七章） |
 
 **基础地址（BASE URL）**：`https://customized.wuhanbus.com/gps-resapi/wechat/bus`
 
@@ -455,6 +458,108 @@ buildLineCode(lineNo, dir)            ← src/config.js
    ├─ ② POST /detailData   { lineId } → 在线车辆 GPS + plans → 15s 轮询，geo.js 匹配最近站点，busId.js 还原自编号
    └─ ③ POST /detailPlanTime { lineId } → 计划发车班次 → 时刻表 Tab
 ```
+
+---
+
+## 七、汉奇智慧出行 API（第二数据源，独立接口体系）
+
+> 本节字段与示例均来自 2026-11-01 真实抓包与联调实测。
+
+- **基础地址**：`https://hanqizhihuichuxing.top/api/bus`
+- **请求方法**：GET + query 参数（与武汉公交的 POST + header 鉴权协议完全不同，**无任何鉴权参数**）
+- **响应判据**：`code === 200` 时取 `data`；失败时读 `msg`（`src/utils/hanqi.js` 的 `req()` 封装）
+- **CORS**：服务器按请求 Origin 回显 `Access-Control-Allow-Origin`，H5 浏览器可直连，**无需 Cloudflare Worker 反代理**
+- **坐标**：同时给 GCJ-02（`lat`/`lng`，与本项目地图同投影，直接用）与 WGS-84（`wgsLat`/`wgsLng`），**不要再做互转**
+- **编号明文**：`lineId` 为 17 位数字串、`busId` 为车辆自编号明文（如 `460C32D0`，正是武汉公交接口缺失的「车型编号」），**不需要附录 A 的 MD5 反算**
+- **方向口径**：`directionCode` 取值 `"up"` / `"down"`（字符串，非 0/1）；`isBidirectional` 标记双向线。汉奇实时接口一次只返回单向（start→end）数据，反向由前端反转（`LineMap.vue`）
+
+### 接口 5：周边车辆 / 线路 `GET /nearby`
+
+- **用途**：按坐标拉周边在线车辆（每辆车携带其线路摘要），线路库的汉奇枚举也靠它（多锚点扫描去重）
+- **项目封装**：`fetchNearby(lat, lng, radius=5000)`；`fetchHanqiLines(extra)` 用 7 个武汉锚点各扫一轮（radius 6000）合并去重
+
+**请求参数（query）**
+
+| 参数 | 必填 | 类型 | 说明 | 示例 |
+| ---- | ---- | ---- | ---- | ---- |
+| `lat` | ✅ | Number | 中心纬度（GCJ-02） | `30.592` |
+| `lng` | ✅ | Number | 中心经度 | `114.305` |
+| `radius` | ✅ | Number | 半径（米） | `6000` |
+
+**响应 `data.buses[]` 元素字段（实测样例：汉口中心 6km 返回 63 辆车 / 6 条线路）**
+
+| 字段 | 类型 | 说明 | 示例值 |
+| ---- | ---- | ---- | ------ |
+| `lineId` | String | 汉奇线路 ID（17 位数字串，`/realtime` 的查询键） | `"00000318038118829"` |
+| `routeName` | String | 线路名（展示名，含「汉奇」前缀） | `"汉奇K6"` |
+| `stationName` | String | 车辆当前所到/最近站名 | `"团结大道武汉火车站"` |
+| `arrivalTime` | String/Number | 预计到站时间 | —（取值待补测） |
+| `distance` | Number | 距车最近站距离（米） | — |
+| `status` | String | 车辆状态 | —（取值待补测） |
+| `serviceStatus` | String | 营运状态 | —（取值待补测） |
+| `crowded` | Number | 拥挤度 | — |
+| `direction` | String | 方向描述（中文名） | — |
+| `directionCode` | String | 方向编码 | `"up"` / `"down"` |
+| `Level` | String/Number | 车辆等级 | —（取值待补测） |
+| `lat` / `lng` | Number | 车辆纬度 / 经度（GCJ-02） | `30.601234` |
+| `isBidirectional` | Boolean | 该线路是否双向 | `true` |
+| `hasLiveBus` | Boolean | 该线路当前是否有在线车辆 | `true` |
+| `realStationsAway` / `realDistMeters` | Number | 距该车下一站的站数 / 米数 | — |
+| `realStationsAway2` / `realDistMeters2` | Number | 第二辆车的同口径值 | — |
+
+> ⚠ `/nearby` **不返回起讫站与逐站明细**，线路级信息（`startStation`/`endStation`/`stations`）要靠 `/realtime` 补。
+
+### 接口 6：线路详情 + 实时车辆 `GET /realtime`
+
+- **用途**：一次拿齐单条线路某方向的：基础信息 + 全部站点（含坐标）+ **贴路轨迹 polyline** + 发车计划 + 在线车辆。项目地图页拿它同时当「线路详情」和「实时 GPS」两个用途（免 OSRM 吸附、免 MD5 还原）
+- **项目封装**：`fetchLine(lineId)`（归一化 stations/polyline/scheduleTimes 供绘图）、`fetchRealtime(lineId)`（取在线 buses）
+
+**请求参数（query）**
+
+| 参数 | 必填 | 类型 | 说明 | 示例 |
+| ---- | ---- | ---- | ---- | ---- |
+| `lineId` | ✅ | String | 汉奇线路 ID（由 `/nearby` 取得） | `00000318038118829` |
+
+**响应 `data` 字段（实测样例：汉奇K6，起讫团结大道武汉火车站→武昌火车站综合体）**
+
+| 字段 | 类型 | 说明 | 示例值 |
+| ---- | ---- | ---- | ------ |
+| `lineId` | String | 线路 ID | `"00000318038118829"` |
+| `lineName` | String | 线路名 | `"汉奇K6"` |
+| `startStation` / `endStation` | String | 起点 / 终点站名（上行口径） | `"团结大道武汉火车站"` |
+| `firstTime` / `lastTime` | String | 首班 / 末班（HH:mm） | `"02:30"` / `"04:10"` |
+| `price` | String | 票价（**含单位后缀**，与武汉公交纯数字不同） | `"10元"` |
+| `state` / `stateDesc` | String | 线路营运状态码 / 描述 | —（取值待补测） |
+| `realData` | Object | 实时概要（服务端预汇总的到站数据） | — |
+| `scheduleTimes` | Array | 发车计划（时刻表） | — |
+| `nextDepartTime` | String | 下一班发车时间 | — |
+| `reverseFallback` | Boolean/Object | 反向数据缺失时的后端兜底标记，具体形态待补测 | — |
+| `stations` | Array | 站点列表：`{ name, order, lat, lng, wgsLat, wgsLng }`（GCJ-02 + WGS-84 双坐标） | — |
+| `polyline` | Array | **贴路轨迹**点串（已沿道路行走，直接连线即真实走向，免 OSRM） | `[{lat, lng}, …]` |
+| `buses` | Array | 在线车辆：`{ busId(自编号明文), lat, lng, stationIndex, floatIndex, stationName, terminalTip, etaByOrder{}, distanceByOrder{} }` | — |
+
+### 项目内使用位置
+
+| 位置 | 用法 |
+| ---- | ---- |
+| `src/utils/hanqi.js` | 请求层封装（`req()`）+ 四个适配函数 + 7 个武汉锚点 `WH_ANCHORS` |
+| `src/components/LineMap.vue` | `loadHanqiLine()` 拉线路详情绘制；实时轮询走 `fetchRealtime()` |
+| `src/components/LineDb.vue` | 汉奇页签直读本地持久化库；↻ 手动重扫时调 `fetchHanqiLines()` |
+| `scripts/scan-hanqi.mjs` | 数据生成器：锚点 `/nearby` + 逐条 `/realtime` 富化，写入 `src/data/lines.json` 的 `hanqi` 块（`npm run scan:hanqi`），前端据此免重复请求 |
+
+### 与武汉公交接口的对照
+
+| 维度 | 武汉公交（customized.wuhanbus.com） | 汉奇（hanqizhihuichuxing.top） |
+| ---- | ---- | ---- |
+| 方法 / 鉴权 | POST，`openId` 必放 header（不校验值） | GET query，无鉴权 |
+| 成功判据 | `success===true && msg.code==='20000'` | `code===200` |
+| 线路键 | `lineCode` = `420100-线路号-方向` | `lineId` = 17 位数字串 |
+| 方向 | `0` / `1`，且响应值与请求相反 | `"up"` / `"down"`，单向返回、前端反转 |
+| 车辆编号 | `busId = MD5(自编号)`，需枚举碰撞还原 | `busId` 明文（如 `460C32D0`） |
+| 轨迹 | 只给站点，需 OSRM 吸附贴路 | 直接给 `polyline` 贴路轨迹 |
+| 坐标 | 站点 GCJ-02（已实测） | GCJ-02 + WGS-84 双份 |
+| 线路列表 | 无接口，靠 `scan-lines.mjs` 枚举探测 | 无接口，靠 `/nearby` 多锚点扫描（`scan-hanqi.mjs`） |
+| 生产跨域 | 上游无 CORS，须 Cloudflare Worker 反代理 | 按 Origin 回显，直连即可 |
 
 ---
 

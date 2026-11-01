@@ -66,7 +66,7 @@
         >{{ s.label }}</view>
       </view>
     </view>
-    </view>
+    </template>
   </view>
 
   <!-- 结果列表：武汉公交 -->
@@ -100,16 +100,17 @@
   <view class="db-mod db-list" :class="{ plain: plain }" v-else>
     <view class="db-row db-lhead">
       <text class="db-lh-t">汉奇公交 · 匹配 {{ hanqiFiltered.length }} 条</text>
-      <text class="db-lh-s" v-if="hanqiLoading">加载中…</text>
-      <text class="db-go" v-else @click="loadHanqi" title="重新扫描汉奇线路">↻</text>
+      <text class="db-lh-s" v-if="hanqiLoading">重新扫描中…</text>
+      <text class="db-lh-s" v-else-if="HQ_UPDATED" title="数据由 scripts/scan-hanqi.mjs 生成，随包内置不再每次现扫">本地 {{ hqUpdatedText }}</text>
+      <text class="db-go" @click="loadHanqi" title="重新扫描汉奇线路（仅此处联网）">↻</text>
     </view>
     <view class="db-div"></view>
 
     <view class="db-item" v-for="l in hanqiVisible" :key="l.lineId" @click="openHanqi(l)">
       <text class="db-no hanqi">{{ l.lineNo }}</text>
       <view class="db-item-body">
-        <text class="db-route">{{ l.first && l.last ? l.first + ' – ' + l.last : '运营中' }} · {{ l.price || '票价未知' }}</text>
-        <text class="db-meta">{{ (l.dirs && l.dirs.length > 1) ? '双向' : '单向' }}</text>
+        <text class="db-route">{{ l.start && l.end ? l.start + ' → ' + l.end : (l.first && l.last ? l.first + ' – ' + l.last : '运营中') }}</text>
+        <text class="db-meta">{{ l.stops ? l.stops + ' 站 · ' : '' }}{{ (l.dirs && l.dirs.length > 1) ? '双向' : '单向' }} · {{ l.price || '票价未知' }}</text>
       </view>
       <text class="db-go">›</text>
     </view>
@@ -151,7 +152,7 @@
 </template>
 
 <script>
-import { allLines, linePrefix, lineStatus, LINE_COUNT } from '../utils/lineIndex.js'
+import { allLines, linePrefix, lineStatus, LINE_COUNT, HQ_LINES, HQ_UPDATED } from '../utils/lineIndex.js'
 import { buildLineCode } from '../config.js'
 import { fetchHanqiLines } from '../utils/hanqi.js'
 
@@ -179,9 +180,11 @@ export default {
       ],
       shown: PAGE,
       detail: null,
-      // 数据源：whbus（武汉公交，自有）/ hanqi（汉奇智慧出行，第三方实时接口）
+      // 数据源：whbus（武汉公交，自有）/ hanqi（汉奇智慧出行，第三方实时接口）。
+      // 汉奇列表直读 lines.json 的持久化块（scan-hanqi.mjs 生成），不再每次切页签现扫
       source: 'whbus',
-      hanqiLines: [],
+      hanqiLines: HQ_LINES.slice(),
+      HQ_UPDATED,
       hanqiLoading: false,
       hanqiErr: '',
     }
@@ -219,6 +222,10 @@ export default {
     },
     hanqiVisible() {
       return this.hanqiFiltered.slice(0, this.shown)
+    },
+    // 持久化数据生成日（只显月-日，完整时间看 title）
+    hqUpdatedText() {
+      return HQ_UPDATED ? HQ_UPDATED.slice(5, 10) : ''
     },
   },
   watch: {
@@ -269,14 +276,15 @@ export default {
     loadMore() {
       this.shown += PAGE
     },
-    // 切换数据源：武汉公交 / 汉奇公交（首次切到汉奇时懒加载扫描一遍）
+    // 切换数据源：武汉公交 / 汉奇公交。汉奇列表已随包内置，切换零请求；
+    // 仅旧版数据块缺失时才补扫一次（↻ 随时可手动重扫）
     setSource(s) {
       if (s === this.source) return
       this.source = s
       this.shown = PAGE
       if (s === 'hanqi' && !this.hanqiLines.length && !this.hanqiLoading) this.loadHanqi()
     },
-    // 扫描汉奇线路：用武汉锚点散点覆盖全市，合并去重（仅 7 个轻量请求）
+    // 手动重扫汉奇线路：用武汉锚点散点覆盖全市，合并去重（仅 7 个轻量请求）
     async loadHanqi() {
       this.hanqiLoading = true
       this.hanqiErr = ''

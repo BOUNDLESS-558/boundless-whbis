@@ -12,6 +12,12 @@ import DB from '../data/lines.json'
 export const LINE_COUNT = DB.count
 export const LINE_UPDATED = DB.updated
 
+// 汉奇公交持久化库（scripts/scan-hanqi.mjs 生成，与武汉公交共用 lines.json、各占一块）：
+// 每项 { lineId, lineName, first, last, price, dirs, start, end, stops }，前端直接读本地数据，
+// 不再每次切页签现扫；旧版 JSON 没有该块时给空数组兜底。
+export const HQ_LINES = (DB.hanqi && Array.isArray(DB.hanqi.lines)) ? DB.hanqi.lines : []
+export const HQ_UPDATED = (DB.hanqi && DB.hanqi.updated) || ''
+
 /** 全角数字/字母 → 半角，并统一大写、去掉空白与连接符（"电 1" / "ｋ１" / "K-1" 都能命中） */
 const FW = '０１２３４５６７８９ＡＢＣＤＥＦＧＨＩＪＫＬＭＮＯＰＱＲＳＴＵＶＷＸＹＺ'
 const HW = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ'

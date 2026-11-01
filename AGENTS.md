@@ -13,6 +13,7 @@ npm run build:app    # → dist/build/app（之后必须 HBuilderX 云打包，�
 npm run test:md5     # MD5 单测（RFC 1321 向量 + 实测对照）
 npm run test:busid   # 车辆编号还原（全量建字典约 400ms，30s 超时保护）
 npm run scan:lines   # 枚举探测线路网，合并写入 src/data/lines.json（数据生成器，会写文件）
+npm run scan:hanqi   # 汉奇线路锚点扫描 + /realtime 富化，写进 lines.json 的 hanqi 块（同会写文件）
 npm run deploy:pages # 构建 + 强推 origin/pages（GitHub Pages）
 ```
 
@@ -25,7 +26,7 @@ npm run deploy:pages # 构建 + 强推 origin/pages（GitHub Pages）
 
 端口不确定时用 `PROBE_BASE` 传真实地址。⚠️ 默认 base 是 `http://localhost:5173/boundless-whbis/`——**必须带子路径**（`manifest.json` 的 `h5.router.base`），写成 `/` 会 404。
 
-**探针不产出任何文件**：不调 `captureScreenshot`、不写日志。视觉核对靠控制台里的量测值（矩形坐标、文案、类名、计算样式、存储值），跑完即完，不落盘。**所有探针脚本的 `shot()` 已统一改为空实现**（调用点保留，临时排查时自行恢复）；仅存的两个合法写文件例外：`probe-osrm-visual.mjs` 导出 `.openchamber/geom-*.json` 给 `probe-roadfit.mjs` 做几何交接、`scan-lines.mjs` 落盘线路库数据资产。
+**探针不产出任何文件**：不调 `captureScreenshot`、不写日志。视觉核对靠控制台里的量测值（矩形坐标、文案、类名、计算样式、存储值），跑完即完，不落盘。**所有探针脚本的 `shot()` 已统一改为空实现**（调用点保留，临时排查时自行恢复）；仅存的合法写文件例外：`probe-osrm-visual.mjs` 导出 `.openchamber/geom-*.json` 给 `probe-roadfit.mjs` 做几何交接、两个数据生成器（`scan-lines.mjs` / `scan-hanqi.mjs`）落盘线路库数据资产。
 
 **完成功能后自动清理临时生成文件**：`.openchamber/` 里的几何交接文件用完即删；`%TEMP%` 下 `edge-*` 探针 profile 目录（每次运行前会自删重建，但异常中断会残留）定期清掉；任何截图、日志、中间产物都不许留在仓库里。
 
@@ -48,6 +49,7 @@ npm run deploy:pages # 构建 + 强推 origin/pages（GitHub Pages）
 后端只有「按 lineCode 查单条」的 `/line`，**没有线路列表接口**，所以线路库靠枚举探测生成：
 
 - `scripts/scan-lines.mjs` → `src/data/lines.json`（当前 1137 条：数字 529 / D 546 / K 56 / 电 5 / BRT 1）。它是**唯一允许主动写文件的 script**（产物就是数据资产）。`utils/lineIndex.js` 直接 `import` 该 JSON，构建期进 bundle，联想时 0 请求。
+- **汉奇公交持久化在同一份 lines.json 的 `hanqi` 块**（`npm run scan:hanqi` → `scripts/scan-hanqi.mjs`：7 锚点 `/nearby` 去重 + 逐条 `/realtime` 富化起讫站/站数）。`lineIndex.js` 导出 `HQ_LINES/HQ_UPDATED`，`LineDb.vue` 汉奇页签**直读本地数据（切页签 0 请求）**，↻ 才是手动重扫；两个生成器各管各的块，`scan-lines.mjs` 重写时会原样带走 `hanqi` 块，别改成整文件覆盖。汉奇线展示名用 `lineName`（routeName，如「汉奇K6」），查询键是 17 位数字 `lineId`（`lineCode` 编码为 `hanqi-{lineId}`），**严禁把数字 ID 当线路号显示**（曾有 BUG，见 `applyHostLine()`/`probe-hanqi-name.mjs`）。接口协议见文档第七章。
 - **判据是「`lineName` 有值」**，不是「站点非空」：2/3/5/11/19 路都是 `20000` + 有 `lineName` + `stopDetailList` 为空，按站点判会漏 14 条。反向复核顺便用另一方向补站数/起讫站（反向起点 = 正向终点）。
 - **`lineCode` ≠ 线路号**：后端 lineCode 是内部编码，`1001` 实际是「电1」、`2001` 是「J1」、`81` 是「H81」。JSON 里 `no` = 按 `lineName` 归一后的真实线路号（展示/联想用），`code` = lineCode（查询用）。别把两者混用，否则 J/H 线会以数字编号混进库里。
 - **前缀白名单只有 `电 / BRT / K / D`**（用户确认）：`--prefix` 传其它字母会直接报错退出，别再扫 26 个字母；落盘前还会剔除名字带 H/J 前缀及「测试/内部线路」的条目。

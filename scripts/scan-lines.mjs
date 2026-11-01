@@ -293,11 +293,15 @@ const fresh = found.map((f) => ({
   dirs: dirsOf.get(f.code) || [0],
 })).sort(byNo)
 
-// 5) 合并已有数据（分批扫描时保留之前扫到的线路）
+// 5) 合并已有数据（分批扫描时保留之前扫到的线路）；旧文档整体留着，末尾还要带走 hanqi 块
 let merged = fresh
-if (MERGE && fs.existsSync(OUT)) {
+let oldDoc = null
+if (fs.existsSync(OUT)) {
+  try { oldDoc = JSON.parse(fs.readFileSync(OUT, 'utf8')) } catch (e) { oldDoc = null }
+}
+if (MERGE && oldDoc) {
   try {
-    const old = JSON.parse(fs.readFileSync(OUT, 'utf8'))
+    const old = oldDoc
     const map = new Map((old.lines || []).map((l) => [l.no, l]))
     fresh.forEach((f) => {
       const o = map.get(f.no)
@@ -387,6 +391,8 @@ const out = {
   count: merged.length,
   lines: merged,
 }
+// 汉奇块（scan-hanqi.mjs 维护的静态资产）原样带走，两个生成器各管各的块互不覆盖
+if (oldDoc && oldDoc.hanqi) out.hanqi = oldDoc.hanqi
 
 fs.mkdirSync(path.dirname(OUT), { recursive: true })
 fs.writeFileSync(OUT, JSON.stringify(out, null, 2) + '\n', 'utf8')
