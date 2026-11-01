@@ -483,6 +483,7 @@ import { APP_CONFIG, buildLineCode, useNativeMap } from '../config.js'
 import { assetUrl } from '../utils/asset.js'
 import { distance } from '../utils/geo.js'
 import { allLines } from '../utils/lineIndex.js'
+import { createResizable } from '../utils/panelResize.js'
 import {
   citySweepCost, sweepCity, loadSnapshot, loadLastSnapshot, snapshotAge,
   findBusByOrgId, refreshOrgIds, clusterPoints, SPEED_BANDS, CITY_FRESH_MS,
@@ -968,6 +969,7 @@ export default {
       return out
     },
     // 所属营运公司：由当前视角在线车辆自编号（orgId）首位推断，1 → 武汉公交集团第一营运公司，依次类推
+    //（汉奇线的车同为武汉公交集团各营运公司车辆，自编号同一口径，因此一并按首位推断）
     operatorCompanies() {
       const set = new Set()
       this.shownBuses.forEach((b) => {
@@ -1046,6 +1048,7 @@ export default {
     this.$nextTick(() => {
       this.bindGestures()
       this.bindHover()
+      this.setupPanelResize()
     })
     // 拉起自动刷新定时器（组件没有 onShow，这里统一兜底启动；
     // 独立页通过 wrapper 的 onShow 转发 restartAutoRefresh 会先停后起，重复调用无害）
@@ -1080,6 +1083,7 @@ export default {
       this.unbindGestures()
       this.unbindHover()
       this.unbindSheetDrag()
+      if (this._resizers) { this._resizers.forEach((r) => r && r.destroy && r.destroy()); this._resizers = null }
       if (this._locTimer) clearTimeout(this._locTimer)
       // 在途的全网扫描：卸载后没人再消费它的结果，直接停掉（已扫到的部分不写缓存）
       if (this._cityToken) this._cityToken.cancelled = true
@@ -2288,6 +2292,27 @@ export default {
       this.projCenter = { x: this.canvas.w / 2, y: this.canvas.h / 2 }
       this.renderSchematic()
     },
+    // 面板自由缩放（仅 H5/桌面）：给控制卡 / 右侧栏 / 车辆卡 / 时刻表卡挂拖拽手柄，
+    // 尺寸记忆在 localStorage（键见 panelResize.js），双击手柄复位。
+    // 幂等：同一 DOM 节点只挂一次（__rs 标记）；面板随 v-if 重建出的新节点在下次 measureUi 时补挂。
+    setupPanelResize() {
+      if (typeof document === 'undefined' || typeof window === 'undefined') return
+      const vw = window.innerWidth || 1280
+      const vh = window.innerHeight || 800
+      const upx = (r) => { try { return uni.upx2px(r) } catch (e) { return Math.round(r / 2) } }
+      const specs = [
+        { sel: '.ctrl', opts: { key: 'ctrl', axis: 'x', edge: 'right', minW: upx(560), maxW: Math.min(upx(1200), vw - 48), onResize: () => this.measureUi() } },
+        { sel: '.side-col', opts: { key: 'side', axis: 'x', edge: 'left', minW: upx(520), maxW: Math.round(vw * 0.6), onResize: () => this.measureUi() } },
+        { sel: '.panel', opts: { key: 'panel', axis: 'y', edge: 'bottom', heightProp: 'maxHeight', minH: 120, maxH: vh - 48, onResize: () => this.measureUi() } },
+        { sel: '.plan-side', opts: { key: 'plan', axis: 'y', edge: 'bottom', heightProp: 'maxHeight', minH: 120, maxH: vh - 48, onResize: () => this.measureUi() } },
+      ]
+      specs.forEach((sp) => {
+        const el = document.querySelector(sp.sel)
+        if (!el || el.__rs) return
+        el.__rs = createResizable(el, sp.opts)
+        ;(this._resizers || (this._resizers = [])).push(el.__rs)
+      })
+    },
     // 量取控制卡 / 右侧栏（车辆面板 + 时刻表面板）/ 图例实际占位（此项目样式用 rpx，不能用固定 px 推算）
     measureUi() {
       const q = uni.createSelectorQuery().in(this)
@@ -2314,6 +2339,8 @@ export default {
         const resized = prevCanvas.w !== this.canvas.w || prevCanvas.h !== this.canvas.h
         if (!this.camInited || ((grew || resized) && !this._userMoved)) this.fitRoute()
         else this.renderSchematic()
+        // 面板可能刚随 v-if 出现（如切离全市态出侧栏、载入线路出时刻表卡）→ 补挂缩放手柄
+        this.setupPanelResize()
       })
     },
     // 可绘制矩形：避开左上控制卡、右侧栏（桌面）/ 底部横栏（手机）、底部图例
@@ -3587,7 +3614,7 @@ export default {
   position: absolute;
   top: 24rpx;
   left: 24rpx;
-  width: 720rpx;
+  width: 860rpx;
   max-width: calc(100vw - 48rpx);
   display: flex;
   flex-direction: column;
@@ -3760,7 +3787,8 @@ export default {
   background: rgba(244, 63, 94, 0.16);
   border-color: rgba(244, 63, 94, 0.42);
 }
-/* 线路号徽章：靠右，与左侧三个方向 tab 用留白分开；胶囊描边 + 靛蓝点缀 */
+/* 线路号徽章：靠右，与左侧三个方向 tab 用留白分开；胶囊描边 + 靛蓝点缀。
+   可收缩 + min-width:0：长线路名（如汉奇中文全名）宁可在卡内省略号，也不能把后面的徽标顶出卡外造成错位 */
 .dir-cur {
   display: inline-flex;
   align-items: center;
@@ -3771,7 +3799,8 @@ export default {
   background: rgba(129, 140, 248, 0.14);
   border: 2rpx solid rgba(129, 140, 248, 0.38);
   white-space: nowrap;
-  flex: 0 0 auto;
+  flex: 0 1 auto;
+  min-width: 0;
 }
 /* 无线路时的弱化态 */
 .dir-cur.none {
@@ -3786,12 +3815,18 @@ export default {
   line-height: 1;
   color: #c7d2fe;
   font-variant-numeric: tabular-nums;
+  /* 作为 dir-cur 的 flex 子项可收缩，溢出时省略号收尾（dir-cur 已继承 white-space:nowrap） */
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 .dc-unit {
   margin-left: 5rpx;
   font-size: 20rpx;
   line-height: 1;
   color: rgba(199, 210, 254, 0.65);
+  flex: 0 0 auto;
 }
 /* 营运公司徽标：紧跟线路号同一行（不换行）；地方不够时只把公司名省成省略号 */
 .ctrl-org {
@@ -3843,7 +3878,7 @@ export default {
   position: absolute;
   top: 24rpx;
   right: 24rpx;
-  width: 640rpx;
+  width: 720rpx;
   max-height: calc(100vh - 48rpx);
   display: flex;
   flex-direction: column;
@@ -3958,6 +3993,7 @@ export default {
 /* 发车时刻表：独立一张卡挂在车辆面板下方（与 .panel 同款玻璃卡壳与字号），
    卡壳在这里、标题行与列表在 LinePlan 里，高度超额时由列表自己滚 */
 .plan-side {
+  position: relative;
   flex: 0 1 auto;
   min-height: 0;
   /* 上下行两组同屏 + 动辄几十班，给到 46vh；再长由列表自己滚 */

@@ -31,6 +31,8 @@
 </template>
 
 <script>
+import { createResizable } from '../utils/panelResize.js'
+
 // 夹在视口内的最小边距（px），免得拖远后窗口找不回来
 const PAD = 6
 
@@ -43,6 +45,10 @@ export default {
     // 窗宽（rpx）：由 uni.upx2px 换算，默认定位与限幅都要用同一个数值
     widthRpx: { type: Number, default: 900 },
     maxHeight: { type: String, default: '74vh' },
+    // 缩放记忆键（仅 H5）：传入后出现拖拽手柄，可改尺寸并持久化；不传则尺寸固定
+    resizeKey: { type: String, default: '' },
+    // 缩放轴：'x'（右边手柄只改宽、高度由内容+maxHeight 定，默认）/ 'both'（右下角同时改宽+高）
+    resizeAxis: { type: String, default: 'x' },
   },
   emits: ['close'],
   data() {
@@ -55,6 +61,9 @@ export default {
       pinned: false,
       // 原生监听要挂在具体 DOM 上，同屏可能有多扇窗，故给根节点一个唯一 id
       domId: 'fw-' + Math.random().toString(36).slice(2, 8),
+      // 手动缩放后的像素尺寸（null = 用 props 默认）；winStyle 以此为准，避免位置拖动重渲染把宽度刷回
+      rsW: null,
+      rsH: null,
     }
   },
   computed: {
@@ -62,7 +71,13 @@ export default {
       return Math.round(uni.upx2px(this.widthRpx))
     },
     winStyle() {
-      const st = { width: this.widthPx + 'px', maxHeight: this.maxHeight }
+      const st = { width: (this.rsW || this.widthPx) + 'px' }
+      if (this.rsH) {
+        st.height = this.rsH + 'px'
+        st.maxHeight = 'none'
+      } else {
+        st.maxHeight = this.maxHeight
+      }
       if (this.pos) {
         st.left = this.pos.x + 'px'
         // 只有拖过之后才改成 top 锚定（拖之前一律贴底）
@@ -76,6 +91,8 @@ export default {
   },
   mounted() {
     this.bindDrag()
+    // 先挂缩放（会同步应用记忆尺寸到 el.style），再量默认位置，center() 才能量到实际宽度
+    this.attachResize()
     // 默认位置由 JS 量完实体再写死：根节点上不能留 transform，
     // 否则窗口会变成内部 fixed 后代（线路库详情弹层 / 刷新下拉遮罩）的包含块，弹层就被锁在窗口里
     this.center()
@@ -83,6 +100,7 @@ export default {
   },
   beforeUnmount() {
     this.unbindDrag()
+    if (this._resizer) { this._resizer.destroy(); this._resizer = null }
     if (typeof window !== 'undefined') window.removeEventListener('resize', this.reclamp)
   },
   methods: {
@@ -200,6 +218,34 @@ export default {
         x: this.clampX(this.pos.x, r.width),
         y: this.pos.y == null ? null : this.clampY(this.pos.y, r.height),
       }
+    },
+    // 挂右下角缩放手柄（仅 H5、仅传了 resizeKey、且非窄屏）；createResizable 会先应用记忆尺寸
+    attachResize() {
+      if (!this.resizeKey || typeof document === 'undefined' || typeof window === 'undefined') return
+      if (window.matchMedia && window.matchMedia('(max-width: 720px)').matches) return
+      const el = this._rootEl || document.getElementById(this.domId)
+      if (!el) return
+      this._rootEl = el
+      const wide = this.resizeAxis === 'x' // 只调宽：右边横向手柄
+      this._resizer = createResizable(el, {
+        key: this.resizeKey,
+        axis: this.resizeAxis === 'x' ? 'x' : 'both',
+        edge: wide ? 'right' : 'corner',
+        minW: 320,
+        maxW: (window.innerWidth || 1280) - 40,
+        minH: 160,
+        maxH: (window.innerHeight || 800) - 40,
+        onResize: () => this._syncResize(),
+      })
+    },
+    // 把当前实际尺寸回写进 data，交给 winStyle 固定（否则下次因 pos 变化重渲染会用 widthPx 把宽度刷回去）
+    // 只调宽（resizeAxis='x'）时不写 rsH，让高度继续由内容 + maxHeight 决定
+    _syncResize() {
+      if (!this._rootEl) return
+      const r = this._rootEl.getBoundingClientRect()
+      this.rsW = Math.round(r.width)
+      if (this.resizeAxis !== 'x') this.rsH = Math.round(r.height)
+      this.reclamp()
     },
   },
 }

@@ -55,6 +55,7 @@ npm run deploy:pages # 构建 + 强推 origin/pages（GitHub Pages）
 - **前缀白名单只有 `电 / BRT / K / D`**（用户确认）：`--prefix` 传其它字母会直接报错退出，别再扫 26 个字母；落盘前还会剔除名字带 H/J 前缀及「测试/内部线路」的条目。
 - 分批扫描一律带 `--merge`（只补强不降级：`dirs` 取并集，站数/起讫站/首末班仅在空值时回填）。**改完后处理逻辑不想联网**时用 `node scripts/scan-lines.mjs --normalize-only --merge`。
 - 已知数据缺口：73 条无站数、10 条无起讫站（后端两个方向都空），UI 显示「站数未知 / 起点未知」兜底，不是 bug。
+- **地图/首页联想同时覆盖汉奇线**：`lineIndex.js` 里 `suggestLines`/`countMatches` 走 `SEARCH_INDEX = INDEX.concat(HQ_INDEX)`（汉奇项带 `source:'hanqi'` + `lineId`），而 **`allLines()` 仍只回武汉公交**（`LineDb` 武汉页签、`LineMap` 全市线网 lib 都靠它，别把汉奇混进去污染）。`LineSearch` 点选/查询命中汉奇时上抛 `{ source:'hanqi', lineId, lineName }`（与 `LineDb.openHanqi` 同口径），宿主 `applyPick` 据此切 `lineSource='hanqi'`。汉奇 `HQ_INDEX.alt` 故意留空——起讫站常含「地铁」，拿来匹配会让「电」这类关键词误命中、打乱联想排序（`probe-line-suggest.mjs` 的「电=5 条」断言依赖这一点）。
 
 ## 接口协议（三条铁律）
 
@@ -74,6 +75,7 @@ npm run deploy:pages # 构建 + 强推 origin/pages（GitHub Pages）
 - **`busId.js`**：`busId = MD5(自编号)`，枚举 0~200000 建反查字典。分片异步（每片 8000 + `setTimeout`）防卡 UI；**就绪前 `decryptBusId()` 返回 null**，页面必须用 `onBusIdReady(cb)` 二次刷新。终止条件必须 `end >= DICT_MAX`，写成 `n <= DICT_MAX` 会在 `n == DICT_MAX` 死循环。
 - **`geo.js`**：Haversine + 车辆匹配最近站点。⚠️ 接口坐标**已是 GCJ-02**，直接上高德；`wgs84ToGcj02()` 只用于确实持有 WGS-84 的场景，误用会整体偏数百米。
 - **`asset.js`**：`assetUrl()` 用 `import.meta.env.BASE_URL` 拼前缀，适配 `manifest.json` 的 `h5.router.base = /boundless-whbis/`（hash 路由）。marker icon / `<image>` / CSS 背景等不经构建期改写的引用必须走它。
+- **本地账号（`auth.js`）**：预置账号制，默认口令 = `genPass(账号)`（确定性 md5 派生，不落地）。用户可在「账号与设置 → 登录密码」改成自己的密码：只把 `hashPass(账号,新密码)` 写进本机 `whbis:pass-override`（按 `normAccount` 小写主键），**仍不存明文**；未改过的账号不进表。**登录/校验一律走 `verifyPass()`**（有覆盖比哈希、无覆盖比 `genPass`），别再在别处直接比 `genPass`。改密/恢复默认都要求先验当前密码（`changePassword`/`resetPassword`），防会话被人顺手改掉。这是「使用门槛」非安全机制。
 
 ### 地图双模式（判据是 `useNativeMap()`，不是 `hasMapKey()`）
 
@@ -117,9 +119,20 @@ npm run deploy:pages # 构建 + 强推 origin/pages（GitHub Pages）
 - **`focusBus()` 是真定位**：原生要**同时**写 `mapCenter`/`mapScale`/`_view`，否则下一轮 silent 刷新拽回去。定位点不能死写屏幕中心（浮窗正好盖住），`freeSpot()` 跳过与 `.bus-sheet`/`.ctrl`/`.panel` 相交的位置，再用 `invMercX/invMercY` 反算中心。
 - **自动刷新可选**（0/15/20/30 秒，持久化 `whbis:map-refresh-sec`）。定时器统一由 `restartAutoRefresh()` 建，**`onShow` 拉起、`onHide`+`onUnload` 停止**——只在 `onLoad` 建会因「进设置页再回来」叠出多个。silent 刷新（`loadLive(true)`）不关浮窗、不改中心，且浮窗打开时跳过该 tick。
 - 刷新会 `mapKey++` 重建 `<map>`（清 callout 残留），所以重建前要用 `_view` 还原视野。
-- **左上控制卡是“整卡包裹”**：`.ctrl` 本身就是那张玻璃卡片（`padding: 12rpx` + `border-radius: 26rpx` + 背景/描边/阴影），内部依次是 搜索行 → `.ctrl-div` → 主操作行（只剩「一键查询」并独占整行）→ `.ctrl-div` → 方向行（全部/上行/下行 + 循环切换键 `⇄` + 线路号 + 营运公司徽标）→ `.ctrl-div` → 视图工具行（缩放 / 全览 / 站名 / 底图）。视图工具栏在**最底部、方向行下方**；卡片内不放操作说明文字（原来那段“青蓝上行 / 玫红下行…”已按用户要求删除，不要再加回去）。**子块不要再自带背景、描边、阴影**，否则又退回“一堆漂浮胶囊”的碎片感。卡片宽度固定 720rpx，`fitRect()` 读 `.ctrl` 实测 bottom 让绘制区避开它，所以加高卡片是安全的。
+- **左上控制卡是“整卡包裹”**：`.ctrl` 本身就是那张玻璃卡片（`padding: 12rpx` + `border-radius: 26rpx` + 背景/描边/阴影），内部依次是 搜索行 → `.ctrl-div` → 主操作行（只剩「一键查询」并独占整行）→ `.ctrl-div` → 方向行（全部/上行/下行 + 循环切换键 `⇄` + 线路号 + 营运公司徽标）→ `.ctrl-div` → 视图工具行（缩放 / 全览 / 站名 / 底图）。视图工具栏在**最底部、方向行下方**；卡片内不放操作说明文字（原来那段“青蓝上行 / 玫红下行…”已按用户要求删除，不要再加回去）。**子块不要再自带背景、描边、阴影**，否则又退回“一堆漂浮胶囊”的碎片感。卡片默认宽 860rpx（可拖右下角缩放，见「面板自由缩放」），`fitRect()` 读 `.ctrl` 实测 bottom 让绘制区避开它，所以加高/加宽卡片都是安全的（缩放后必须 `measureUi()` 重排）。
 - `.ctrl-dir` 是**单行**（`nowrap`）：全部/上行/下行/`⇄`/线路号/公司徽标必须同排，别改回 `wrap`；线路号用 `margin-left: auto` 靠右，公司徽标紧跟其后（`.ctrl-org` 可压缩、公司名出省略号）。`.dir-tab` 用 `height + inline-flex` 双轴居中，只靠 padding 会因中文基线和加粗跳字。“切换方向”（`cycleDirView`）必须是 `.dir-swap` 小方键、**紧贴三个 tab 右侧**（用户明确表示挂在一键查询旁边难看），着色类 `'d' + dirFilter`（d0 青 / d1 玫红 / d2 中性）。
 - 站名标签：窄屏（canvas < 600px）按 `stride` 抽稀到约 10 个并把 zoom 门槛放到 10.5，否则 390px 里全碰撞只剩首末站；首末站恒显示，碰撞时上下微移。
+
+### 面板自由缩放（`utils/panelResize.js`，仅 H5/桌面）
+
+所有浮层面板都可拖拽改宽/高并持久化记忆，双击手柄复位。实现是一个**纯 DOM 辅助** `createResizable(el, opts)`（不依赖 Vue 响应式）：挂一个 `.rs-grip` 手柄（`edge: right|left|bottom|corner`），Pointer Events 拖动实时写 `el.style`，松手落库。接线点：
+
+- **控制卡 `.ctrl`**（`key:'ctrl'`, **右边手柄只改宽、高度固定**）、**右侧栏 `.side-col`**（`key:'side'`, 左边手柄只改宽，右锚定向左变长）、**车辆卡 `.panel`** / **时刻表卡 `.plan-side`**（`key:'panel'/'plan'`, 底边手柄写 `max-height`）在 `LineMap.setupPanelResize()` 里挂；`FloatWin` 靠 `resize-key` prop（stops/db/account）在自身 `mounted` 挂，**默认 `resize-axis='x'`（右边手柄只改宽、高度由内容+maxHeight 定，三窗均此）**，传 `'both'` 才改回右下角同时改宽+高（`_syncResize` 对 `'x'` 不写 `rsH`）。
+- **`.ctrl`/`.side-col` 缩放后必须回调 `measureUi()`**，否则 `fitRect()` 不会避让新尺寸。`setupPanelResize()` 用 `el.__rs` 标记幂等，并在 `measureUi` 末尾补挂（覆盖 `v-if` 重建出的新面板），销毁函数收进 `this._resizers`，`cleanup()` 里逐个 `destroy`。
+- **键统一 `whbis:panel-size:v1:<key>`**，存 `{w,h}`（px，只存适用轴）；`FloatWin` 的记忆值经 `rsW/rsH` data 回流到 `winStyle`，否则位置拖动重渲染会用 `widthPx` 把宽度刷回去。
+- **手柄用 JS 内联样式绘制，不走 scoped CSS**：`document.createElement` 出来的节点拿不到 Vue 编译期的 `data-v-*`，scoped 选择器匹配不到。
+- **仅 H5**：App 端无 `document`，`createResizable` 直接返回 noop，面板保持固定尺寸；窄屏（`matchMedia('(max-width:720px)')`）不接管，沿用各面板自带的响应式塌缩。
+- 默认宽：`.ctrl 860rpx / .side-col 720rpx`（`.plan-side` 需 `position:relative` 才兜得住它的底边手柄）。
 
 ## 写探针的坑（`scripts/probe-*.mjs`）
 
@@ -142,7 +155,7 @@ CDP 驱动 Edge headless 做真实浏览器实测，`node scripts/probe-xxx.mjs`
 ## 其他约定
 
 - 详情页刷新控件与地图页同款（`↻ | 间隔 ▾` 双层胶囊 + 下拉 0/15/20/30 秒）：**默认 15 秒**（旧行为），持久化在 `whbis:line-refresh-sec`，与地图页的 `whbis:map-refresh-sec` **各自独立**（两页使用节奏不同）。定时器统一由 `restartAutoRefresh()` 重建，`onShow` 拉起、`onHide` + `onUnload` 停止；切到自动模式时立刻补拉一次。新增异步任务/定时器同样要在 `onUnload` 收尾（地图页还有 `_autoTimer`/`_locTimer`/手势监听）。
-- 营运公司徽标由自编号首位推断（1 → 第一营运公司），`index` 优先用时刻表 `orgBusId` 明文，缺失才回退实时车辆（需 MD5 还原）。
+- 营运公司徽标由自编号首位推断（1 → 第一营运公司），`index` 优先用时刻表 `orgBusId` 明文，缺失才回退实时车辆（需 MD5 还原）。**汉奇线同口径**：其车辆同为武汉公交集团各营运公司车辆，自编号首位一样代表营运公司，所以 `operatorCompanies` / `busCompanyText` / 复制的 `companyOf` 不分数据源、一律按首位推断（不要给汉奇特例返回空或改标「汉奇智慧出行」）。但 `.dir-cur` 必须 `flex: 0 1 auto + min-width: 0`（`.dc-no` 配 `overflow:hidden; text-overflow:ellipsis`）：汉奇中文全名长，徽标回到方后若胶囊不可收缩会把徽标顶出定宽控制卡、造成错位。
 - 方向徽标文字写全「上行 / 下行」，不要缩成「上 / 下」。
 - 中文源文件均为 UTF-8；PowerShell `Get-Content`/`Select-String` 输出到控制台会乱码，读文件用编辑器工具，别把乱码当文件损坏。
 - `README.md` 已与实际同步；若仍有出入，**以代码为准**。
