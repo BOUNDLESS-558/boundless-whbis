@@ -36,7 +36,6 @@
 <script>
 import { fetchPlanTime, decryptBusId, onBusIdReady, isBusIdReady } from '../utils/api.js'
 import { buildLineCode } from '../config.js'
-import { fetchLine as hqFetchLine } from '../utils/hanqi.js'
 
 // 方向常量：0 上行 / 1 下行（两方向同屏，顺序与地图控制卡一致）
 const DIRS = [0, 1]
@@ -45,10 +44,6 @@ export default {
   name: 'LinePlan',
   props: {
     lineNo: { type: String, default: '' },
-    // 汉奇线路 ID（非空时用汉奇 scheduleTimes，空则走武汉公交 /detailPlanTime）
-    hqLineId: { type: String, default: '' },
-    // 数据源（'hanqi' 时跳过武汉公交接口，'whbus' 时跳过汉奇）
-    dataSource: { type: String, default: 'whbus' },
   },
   data() {
     return {
@@ -77,17 +72,6 @@ export default {
       this.plansByDir = { 0: [], 1: [] }
       this.loadPlan()
     },
-    // 汉奇线路或数据源变化：重拉对应班次
-    hqLineId(v) {
-      if (this.dataSource === 'hanqi') {
-        this.plansByDir = { 0: [], 1: [] }
-        this.loadPlan()
-      }
-    },
-    dataSource(v) {
-      this.plansByDir = { 0: [], 1: [] }
-      this.loadPlan()
-    },
   },
   mounted() {
     this.loadPlan()
@@ -109,10 +93,6 @@ export default {
       // 换线时在途请求不会自动作废：每次加载发一个令牌，回来时已有更新的加载在跑就丢弃结果，
       // 否则上一条线路的慢响应会盖掉新线路的班次（时刻表残留旧线路的根因）
       const token = (this._planToken = (this._planToken || 0) + 1)
-      // 汉奇数据源：走汉奇 scheduleTimes（双向各一份，上行=原始方向，下行=反转）
-      if (this.dataSource === 'hanqi' && this.hqLineId) {
-        return this.loadHanqiPlan(token)
-      }
       if (!this.lineNo) {
         this.plansByDir = { 0: [], 1: [] }
         return
@@ -125,26 +105,6 @@ export default {
       if (token !== this._planToken) return // 已切线路，丢弃过期响应
       this.plansByDir = { 0: up, 1: down }
       this.loading = false
-    },
-    // 汉奇班次：拉 realtime 的 scheduleTimes（纯时间字符串数组，如 ["06:30","07:15",...]）
-    // 上行 = 原始顺序；下行 = 反转（末班变首班），车辆编号未知，显示 '--'
-    async loadHanqiPlan(token) {
-      this.loading = true
-      try {
-        const data = await hqFetchLine(this.hqLineId)
-        if (token !== this._planToken) return // 已换线，旧汉奇线路的响应不再上屏
-        const fwd = data.scheduleTimes || []
-        const rev = fwd.slice().reverse()
-        const toRow = (t, dir) => ({ dir, planStartTime: t, bus: '', busId: '' })
-        this.plansByDir = {
-          0: fwd.map((t) => toRow(t, 0)),
-          1: rev.map((t) => toRow(t, 1)),
-        }
-      } catch (e) {
-        if (token === this._planToken) this.plansByDir = { 0: [], 1: [] }
-      } finally {
-        if (token === this._planToken) this.loading = false
-      }
     },
     // 拉取失败：该方向置空（走空态文案），只提示一次
     warn(dir, e) {

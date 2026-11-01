@@ -58,10 +58,10 @@
           <text class="sug-head-t">相关线路 {{ suggestTotal }} 条</text>
           <text class="sug-head-s">线路库 {{ lineCount }} 条 · 本地匹配</text>
         </view>
-        <view class="sug-item" v-for="s in suggestList" :key="s.source + '-' + (s.lineId || s.code || s.no)" @click="pickSuggest(s)">
-          <text class="sug-no" :class="{ hq: s.source === 'hanqi' }">{{ s.source === 'hanqi' ? '汉奇' : s.no }}</text>
+        <view class="sug-item" v-for="s in suggestList" :key="s.code || s.no" @click="pickSuggest(s)">
+          <text class="sug-no">{{ s.no }}</text>
           <view class="sug-body">
-            <text class="sug-route">{{ s.source === 'hanqi' ? s.no : (s.start || '起点未知') + ' → ' + (s.end || '终点未知') }}</text>
+            <text class="sug-route">{{ (s.start || '起点未知') + ' → ' + (s.end || '终点未知') }}</text>
             <text class="sug-meta">{{ sugMeta(s) }}</text>
           </view>
           <text class="st-badge" :class="'st-' + statusOf(s).key">{{ statusOf(s).label }}</text>
@@ -93,7 +93,7 @@
 <script>
 import { buildLineCode } from '../config.js'
 import { assetUrl } from '../utils/asset.js'
-import { suggestLines, countMatches, normNo, lineStatus, LINE_COUNT, findHanqiLine } from '../utils/lineIndex.js'
+import { suggestLines, countMatches, normNo, lineStatus, LINE_COUNT } from '../utils/lineIndex.js'
 
 export default {
   name: 'LineSearch',
@@ -166,14 +166,10 @@ export default {
     statusOf(item) {
       return lineStatus(item)
     },
-    // 联想项副标题：武汉公交显「N 站 · 双向」；汉奇线路名已占主行，副行补起讫站
+    // 联想项副标题：武汉公交显「N 站 · 双向」
     sugMeta(s) {
       const dir = s.dirs && s.dirs.length > 1 ? '双向' : '单向'
       const stops = s.stops ? s.stops + ' 站' : '站数未知'
-      if (s.source === 'hanqi') {
-        const route = s.start && s.end ? s.start + ' → ' + s.end + ' · ' : ''
-        return route + stops + ' · ' + dir
-      }
       return stops + ' · ' + dir
     },
     // 用户输入即展开联想（不用 watch，避免“点选后设值”又把面板弹回来）
@@ -193,11 +189,6 @@ export default {
     pickSuggest(s) {
       this.suggestOpen = false
       this.lineNo = s.no
-      // 汉奇线路：无数字 lineCode，上抛 source/lineId 让宿主按汉奇接口加载（与线路库直达同一口径）
-      if (s.source === 'hanqi') {
-        this.$emit('pick', { source: 'hanqi', lineId: s.lineId, lineName: s.no, direction: 0, startStop: '', endStop: '' })
-        return
-      }
       // 库里的 no 是真实线路号，code 才是后端 lineCode（电1 的 code 是 1001）
       this.$emit('pick', this.buildPick(s.code || s.no, s.no, s.start, s.end))
     },
@@ -206,12 +197,6 @@ export default {
       const no = (this.lineNo || '').trim()
       if (!no) {
         uni.showToast({ title: this.cityMode ? '请输入线路号或车辆自编号' : '请输入线路号', icon: 'none' })
-        return
-      }
-      // 输入与汉奇线路号完全相等：直达汉奇线（否则会被当成武汉公交 lineCode 向后端空查一次）
-      const hq = findHanqiLine(no)
-      if (hq) {
-        this.$emit('pick', { source: 'hanqi', lineId: hq.lineId, lineName: hq.no, direction: 0, startStop: '', endStop: '' })
         return
       }
       this.$emit('pick', this.buildPick(no, no))
@@ -586,13 +571,6 @@ export default {
   color: #062a33;
   background: linear-gradient(135deg, #67e8f9, #06b6d4);
   font-variant-numeric: tabular-nums;
-}
-/* 汉奇线路徽标：换靓紫渐变与数字线的青蓝区分流（不同数据源），固定显「汉奇」二字 */
-.sug-no.hq {
-  background: linear-gradient(135deg, #a5b4fc, #6366f1);
-  color: #0b1020;
-  font-size: 22rpx;
-  letter-spacing: 1rpx;
 }
 .sug-body {
   flex: 1;

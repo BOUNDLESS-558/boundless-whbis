@@ -27,8 +27,6 @@
         :city-mode="view === 'city'"
         :embedded="true"
         :fs-enabled="false"
-        :data-source-prop="lineSource"
-        :hq-line-id-prop="hqLineId"
         @pick-line="onPickLine"
         @exit-city="onExitCity"
       >
@@ -71,7 +69,7 @@
         />
       </FloatWin>
 
-      <!-- 线路库：同样只在地图里开一扇窗，点一条直达该线路（窗宽留足汉奇长线路名 + 起讫站） -->
+      <!-- 线路库：同样只在地图里开一扇窗，点一条直达该线路（窗宽留足长线路名 + 起讫站） -->
       <FloatWin
         v-else-if="hasLine && view === 'db'"
         title="线路库"
@@ -340,10 +338,6 @@ export default {
       direction: 0,
       startStop: '',
       endStop: '',
-      // 数据源：whbus（武汉公交，默认）/ hanqi（汉奇智慧出行）
-      lineSource: 'whbus',
-      // 汉奇线路 ID（lineSource === 'hanqi' 时透传给 LineMap）
-      hqLineId: '',
       // 分段四档一律用全名（悬浮窗时代，「线路 / 线路库」这种短名反而看不懂）
       views: [
         { key: 'map', label: '实时地图' },
@@ -393,9 +387,6 @@ export default {
     if (v && VIEW_KEYS.includes(v)) {
       if (v === 'city' && !this.isCityActivated()) {
         if (this.hasLine) this.view = 'map'
-      } else if (v === 'stops' && this.lineSource === 'hanqi') {
-        // 汉奇线没有武汉公交时刻表/站点接口，实时线路窗拉不到数据，落在地图
-        this.view = 'map'
       } else {
         this.view = !this.hasLine && LINE_VIEWS.includes(v) ? 'db' : v
       }
@@ -433,22 +424,11 @@ export default {
     },
     // 选线：lineCode 形如 {cityCode}-{线路号}-{方向}，线路号由它反解
     applyPick(p) {
-      const src = p.source || 'whbus'
-      this.lineSource = src
-      if (src === 'hanqi') {
-        // 汉奇线路：用 lineId 作查询键，lineName 用于展示
-        this.hqLineId = p.lineId || ''
-        this.lineCode = 'hanqi-' + this.hqLineId
-        this.lineNo = p.lineName || ''
-        this.lineName = p.lineName || ''
-      } else {
-        this.hqLineId = ''
-        const code = p.lineCode || buildLineCode(p.lineName || p.lineNo || '', p.direction || 0)
-        const no = String(code).split('-')[1] || p.lineName || ''
-        this.lineCode = code
-        this.lineNo = no
-        this.lineName = p.lineName || no
-      }
+      const code = p.lineCode || buildLineCode(p.lineName || p.lineNo || '', p.direction || 0)
+      const no = String(code).split('-')[1] || p.lineName || ''
+      this.lineCode = code
+      this.lineNo = no
+      this.lineName = p.lineName || no
       this.direction = Number(p.direction || 0)
       this.startStop = p.startStop || ''
       this.endStop = p.endStop || ''
@@ -471,21 +451,8 @@ export default {
       this.writeHomeLine()
       if (sameLine) {
         const c = this.$refs.mapC
-        if (c) {
-          // 汉奇模式：lineNo 是线路名而非数字，loadByLine 会生成错误的 buildLineCode；
-          // 改用 loadHanqiLine 直接按 hqLineId 拉数据
-          if (this.lineSource === 'hanqi') {
-            c.loadHanqiLine()
-          } else {
-            c.loadByLine(this.lineNo, this.direction)
-          }
-        }
+        if (c) c.loadByLine(this.lineNo, this.direction)
       }
-    },
-    // 切数据源（汉奇 → 武汉公交，或反之）：LineMap 会重拉对应线路；这里清掉失效的线路记忆
-    setLineSource(src) {
-      this.lineSource = src
-      if (src === 'whbus') this.hqLineId = ''
     },
     // 分段切换：有线路时是「开窗 / 收窗」，没线路时单条线路类档位不可达（全市公交始终可达）
     switchView(key) {
@@ -495,12 +462,6 @@ export default {
       if (key === this.view) { this.view = home; return }
       // 全市公交需激活：未激活弹窗校验，已激活直接进
       if (key === 'city') { this.enterCity(); return }
-      // 实时线路窗只服务武汉公交（LineStops 按 420100-lineCode 协议拉站点/车辆），
-      // 汉奇线开了只会空窗，还会把车型码首位当公司号误挂徽标 → 直接拦在此处
-      if (key === 'stops' && this.lineSource === 'hanqi') {
-        uni.showToast({ title: '汉奇线路暂不支持实时线路视图', icon: 'none' })
-        return
-      }
       if (!this.hasLine && LINE_VIEWS.includes(key)) {
         uni.showToast({ title: '请先选择一条线路', icon: 'none' })
         return
@@ -525,9 +486,6 @@ export default {
           direction: this.direction,
           startStop: this.startStop,
           endStop: this.endStop,
-          // 数据源（汉奇/武汉公交）与汉奇线路 ID，恢复时一并还原
-          source: this.lineSource,
-          lineId: this.hqLineId,
         })
       } catch (e) {
         /* 存储不可用就只影响下次记忆的恢复，不打扰用户 */
@@ -541,6 +499,8 @@ export default {
         saved = null
       }
       if (!saved || !saved.lineCode) return
+      // 清理旧版外部线路记忆（其 lineCode 形如 hanqi-xxx，现有数据源拉不到数据，直接忽略）
+      if (saved.source === 'hanqi' || String(saved.lineCode).startsWith('hanqi-')) return
       this.applyPick(typeof saved === 'string' ? JSON.parse(saved) : saved)
       this.view = 'map'
     },

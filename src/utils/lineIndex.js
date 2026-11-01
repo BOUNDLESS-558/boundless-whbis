@@ -12,12 +12,6 @@ import DB from '../data/lines.json'
 export const LINE_COUNT = DB.count
 export const LINE_UPDATED = DB.updated
 
-// 汉奇公交持久化库（scripts/scan-hanqi.mjs 生成，与武汉公交共用 lines.json、各占一块）：
-// 每项 { lineId, lineName, first, last, price, dirs, start, end, stops }，前端直接读本地数据，
-// 不再每次切页签现扫；旧版 JSON 没有该块时给空数组兜底。
-export const HQ_LINES = (DB.hanqi && Array.isArray(DB.hanqi.lines)) ? DB.hanqi.lines : []
-export const HQ_UPDATED = (DB.hanqi && DB.hanqi.updated) || ''
-
 /** 全角数字/字母 → 半角，并统一大写、去掉空白与连接符（"电 1" / "ｋ１" / "K-1" 都能命中） */
 const FW = '０１２３４５６７８９ＡＢＣＤＥＦＧＨＩＪＫＬＭＮＯＰＱＲＳＴＵＶＷＸＹＺ'
 const HW = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ'
@@ -52,34 +46,8 @@ const INDEX = DB.lines.map((l) => ({
   order: /^\d+$/.test(l.no) ? Number(l.no) : Number((l.no.match(/\d+$/) || [0])[0]) + 100000,
 }))
 
-// 汉奇线路检索索引（并入地图/首页联想；allLines() 仍只交武汉公交，线路库武汉页签不受影响）：
-// 汉奇线路号即 routeName（如「汉奇2」「光谷二高汉奇通学2号线」），没有数字 lineCode，
-// 选中后按 lineId 走汉奇接口。alt 故意留空——汉奇起讫站常含「地铁」等字，
-// 若拿来匹配会让「电」这类关键词误命中、污染联想排序。
-const HQ_INDEX = HQ_LINES.map((l, i) => {
-  const nm = l.lineName || l.lineNo || ''
-  return {
-    no: nm,
-    code: '',
-    name: nm,
-    key: normNo(nm),
-    alt: '',
-    start: l.start || '',
-    end: l.end || '',
-    stops: l.stops || 0,
-    dirs: l.dirs && l.dirs.length ? l.dirs : [0],
-    price: l.price || '',
-    status: '营运',
-    early: l.first || '',
-    last: l.last || '',
-    source: 'hanqi',
-    lineId: l.lineId,
-    order: 200000 + i, // 同分时排在武汉公交之后
-  }
-})
-
-// 联想检索池 = 武汉公交 + 汉奇（只喂 suggestLines / countMatches；allLines 仍只回武汉公交）
-const SEARCH_INDEX = INDEX.concat(HQ_INDEX)
+// 联想检索池 = 武汉公交全量（只喂 suggestLines / countMatches；allLines 仍只回武汉公交）
+const SEARCH_INDEX = INDEX
 
 const toMin = (t) => {
   const m = /^(\d{1,2}):(\d{2})/.exec(String(t == null ? '' : t).trim())
@@ -148,25 +116,6 @@ export function findLine(no) {
   if (!q) return null
   const hit = INDEX.find((l) => l.key === q)
   return hit || null
-}
-
-/** 精确查一条汉奇线路（线路号完全相等）；命中项含 source:'hanqi' 与 lineId，供选线上抛 */
-export function findHanqiLine(no) {
-  const q = normNo(no)
-  if (!q) return null
-  return HQ_INDEX.find((l) => l.key === q) || null
-}
-
-/**
- * 汉奇线路的所属营运公司全名（按 lineId 查线路库静态 org，buspedia 采集）。
- * 汉奇车辆的 busId 是车型编号（如 460C32D0），首位并非公司号，
- * 按自编号首位推断会得到错误公司；线路级徽标必须用这个静态归属。
- * 无匹配或该线路未收录 org 时返回空字符串。
- */
-export function hanqiRouteOrg(lineId) {
-  if (!lineId) return ''
-  const l = HQ_LINES.find((x) => x.lineId === lineId)
-  return (l && l.org) || ''
 }
 
 /**

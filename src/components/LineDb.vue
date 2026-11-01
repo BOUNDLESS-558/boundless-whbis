@@ -9,17 +9,6 @@
       <text class="db-count">共 {{ total }} 条</text>
     </view>
 
-    <!-- 数据源：武汉公交（自有） / 汉奇智慧出行（第三方实时接口，直连） -->
-    <view class="db-row db-src">
-      <text class="db-fl">数据源</text>
-      <view class="db-chips">
-        <view class="db-chip" :class="{ on: source === 'all' }" @click="setSource('all')">全部</view>
-        <view class="db-chip" :class="{ on: source === 'whbus' }" @click="setSource('whbus')">武汉公交</view>
-        <view class="db-chip" :class="{ on: source === 'hanqi' }" @click="setSource('hanqi')">汉奇公交</view>
-      </view>
-    </view>
-
-    <template v-if="source !== 'hanqi'">
     <view class="db-div"></view>
 
     <view class="db-row db-stat">
@@ -81,95 +70,66 @@
         >{{ o.label }}</view>
       </view>
     </view>
-    </template>
-  </view>
 
-  <!-- 结果列表：全部（武汉+汉奇合并）/ 武汉公交 -->
-  <view class="db-mod db-list" :class="{ plain: plain }" v-if="source !== 'hanqi'">
-    <view class="db-row db-lhead">
-      <text class="db-lh-t">匹配 {{ filtered.length }} 条</text>
-      <view class="db-copy" v-if="filtered.length" @click.stop="copyFiltered" title="一键复制当前筛选命中的全部线路信息（TSV，可直接粘贴进表格）">⧉ 复制</view>
-      <text class="db-lh-s" v-if="filtered.length">按线路号排序</text>
-    </view>
-    <view class="db-div"></view>
-
-    <view class="db-item" v-for="l in visibleLines" :key="l.source === 'hanqi' ? 'hq-' + l.lineId : l.no" @click="l.source === 'hanqi' ? openHanqi(l) : openDetail(l)">
-      <text class="db-no" :class="{ hanqi: l.source === 'hanqi' }">{{ l.source === 'hanqi' ? l.lineName : l.no }}</text>
-      <view class="db-item-body">
-        <text class="db-route">{{ l.start || '起点未知' }} → {{ l.end || '终点未知' }}<text class="db-hq-tag" v-if="l.source === 'hanqi'"> · 汉奇</text></text>
-        <text class="db-meta">{{ l.stops ? l.stops + ' 站' : '站数未知' }} · {{ l.dirs.length > 1 ? '双向' : '单向' }} · {{ l.price ? '¥' + l.price : '票价未知' }}</text>
+    <!-- 结果列表 -->
+    <view class="db-mod db-list" :class="{ plain: plain }">
+      <view class="db-row db-lhead">
+        <text class="db-lh-t">匹配 {{ filtered.length }} 条</text>
+        <view class="db-copy" v-if="filtered.length" @click.stop="copyFiltered" title="一键复制当前筛选命中的全部线路信息（TSV，可直接粘贴进表格）">⧉ 复制</view>
+        <text class="db-lh-s" v-if="filtered.length">按线路号排序</text>
       </view>
-      <text class="db-badge" :class="'db-badge-' + statusOf(l).key">{{ statusOf(l).label }}</text>
-      <text class="db-go">›</text>
-    </view>
+      <view class="db-div"></view>
 
-    <view class="db-none" v-if="!filtered.length">
-      <text class="db-none-t">没有符合条件的线路</text>
-    </view>
-    <view class="db-more" v-if="filtered.length > shown" @click="loadMore">
-      加载更多（剩余 {{ filtered.length - shown }} 条）
-    </view>
-  </view>
-
-  <!-- 结果列表：汉奇公交（第三方实时接口，直连；点击直接进实时地图） -->
-  <view class="db-mod db-list" :class="{ plain: plain }" v-else>
-    <view class="db-row db-lhead">
-      <text class="db-lh-t">汉奇公交 · 匹配 {{ hanqiFiltered.length }} 条</text>
-      <text class="db-lh-s" v-if="hanqiLoading">重新扫描中…</text>
-      <text class="db-lh-s" v-else-if="HQ_UPDATED" title="数据由 scripts/scan-hanqi.mjs 生成，随包内置不再每次现扫">本地 {{ hqUpdatedText }}</text>
-      <text class="db-go" @click="loadHanqi" title="重新扫描汉奇线路（仅此处联网）">↻</text>
-    </view>
-    <view class="db-div"></view>
-
-    <view class="db-item" v-for="l in hanqiVisible" :key="l.lineId" @click="openHanqi(l)">
-      <text class="db-no hanqi">{{ l.lineName || l.lineNo }}</text>
-      <view class="db-item-body">
-        <text class="db-route">{{ l.start && l.end ? l.start + ' → ' + l.end : (l.first && l.last ? l.first + ' – ' + l.last : '运营中') }}</text>
-        <text class="db-meta">{{ l.stops ? l.stops + ' 站 · ' : '' }}{{ (l.dirs && l.dirs.length > 1) ? '双向' : '单向' }} · {{ l.price || '票价未知' }}</text>
+      <view class="db-item" v-for="l in visibleLines" :key="l.no" @click="openDetail(l)">
+        <text class="db-no">{{ l.no }}</text>
+        <view class="db-item-body">
+          <text class="db-route">{{ l.start || '起点未知' }} → {{ l.end || '终点未知' }}</text>
+          <text class="db-meta">{{ l.stops ? l.stops + ' 站' : '站数未知' }} · {{ l.dirs.length > 1 ? '双向' : '单向' }} · {{ l.price ? '¥' + l.price : '票价未知' }}</text>
+        </view>
+        <text class="db-badge" :class="'db-badge-' + statusOf(l).key">{{ statusOf(l).label }}</text>
+        <text class="db-go">›</text>
       </view>
-      <text class="db-go">›</text>
+
+      <view class="db-none" v-if="!filtered.length">
+        <text class="db-none-t">没有符合条件的线路</text>
+      </view>
+      <view class="db-more" v-if="filtered.length > shown" @click="loadMore">
+        加载更多（剩余 {{ filtered.length - shown }} 条）
+      </view>
     </view>
 
-    <view class="db-none" v-if="!hanqiLoading && !hanqiFiltered.length">
-      <text class="db-none-t">{{ hanqiErr || '暂无汉奇公交线路（或扫描失败）' }}</text>
-    </view>
-    <view class="db-more" v-if="hanqiFiltered.length > shown" @click="loadMore">
-      加载更多（剩余 {{ hanqiFiltered.length - shown }} 条）
-    </view>
-  </view>
-
-  <!-- 详情弹层（只展示本地已有摘要） -->
-  <view class="db-mask" v-if="detail" @click="closeDetail"></view>
-  <view class="db-pop" v-if="detail">
-    <view class="db-pop-head">
-      <text class="db-pop-no">{{ detail.no }}</text>
-      <text class="db-badge" :class="'db-badge-' + statusOf(detail).key">{{ statusOf(detail).label }}</text>
-      <text class="db-pop-close" @click="closeDetail">✕</text>
-    </view>
-    <view class="db-pop-route">{{ detail.start || '起点未知' }} ⇄ {{ detail.end || '终点未知' }}</view>
-    <view class="db-pop-grid">
-      <view class="db-cell"><text class="db-k">首班</text><text class="db-v">{{ detail.early || '未知' }}</text></view>
-      <view class="db-cell"><text class="db-k">末班</text><text class="db-v">{{ detail.last || '未知' }}</text></view>
-      <view class="db-cell"><text class="db-k">票价</text><text class="db-v">{{ detail.price ? '¥' + detail.price : '未知' }}</text></view>
-      <view class="db-cell"><text class="db-k">站数</text><text class="db-v">{{ detail.stops ? detail.stops + ' 站' : '未知' }}</text></view>
-      <view class="db-cell"><text class="db-k">方向</text><text class="db-v">{{ detail.dirs.length > 1 ? '双向' : '单向' }}</text></view>
-      <view class="db-cell"><text class="db-k">名称</text><text class="db-v">{{ detail.name || detail.no }}</text></view>
-      <view class="db-cell"><text class="db-k">营运公司</text><text class="db-v">{{ detail.org || '未知' }}</text></view>
-    </view>
-    <view class="db-pop-note" v-if="statusOf(detail).key === 'off'">
-      该线路已无站点数据（已停运 / 历史线），后端不提供逐站明细，仅保留以上摘要信息。
-    </view>
-    <view class="db-pop-btns">
-      <view class="db-pbtn" @click="closeDetail">关闭</view>
-      <view class="db-pbtn primary" v-if="detail.status !== '停运'" @click="openLive">在实时查询中打开 ›</view>
+    <!-- 详情弹层（只展示本地已有摘要） -->
+    <view class="db-mask" v-if="detail" @click="closeDetail"></view>
+    <view class="db-pop" v-if="detail">
+      <view class="db-pop-head">
+        <text class="db-pop-no">{{ detail.no }}</text>
+        <text class="db-badge" :class="'db-badge-' + statusOf(detail).key">{{ statusOf(detail).label }}</text>
+        <text class="db-pop-close" @click="closeDetail">✕</text>
+      </view>
+      <view class="db-pop-route">{{ detail.start || '起点未知' }} ⇄ {{ detail.end || '终点未知' }}</view>
+      <view class="db-pop-grid">
+        <view class="db-cell"><text class="db-k">首班</text><text class="db-v">{{ detail.early || '未知' }}</text></view>
+        <view class="db-cell"><text class="db-k">末班</text><text class="db-v">{{ detail.last || '未知' }}</text></view>
+        <view class="db-cell"><text class="db-k">票价</text><text class="db-v">{{ detail.price ? '¥' + detail.price : '未知' }}</text></view>
+        <view class="db-cell"><text class="db-k">站数</text><text class="db-v">{{ detail.stops ? detail.stops + ' 站' : '未知' }}</text></view>
+        <view class="db-cell"><text class="db-k">方向</text><text class="db-v">{{ detail.dirs.length > 1 ? '双向' : '单向' }}</text></view>
+        <view class="db-cell"><text class="db-k">名称</text><text class="db-v">{{ detail.name || detail.no }}</text></view>
+        <view class="db-cell"><text class="db-k">营运公司</text><text class="db-v">{{ detail.org || '未知' }}</text></view>
+      </view>
+      <view class="db-pop-note" v-if="statusOf(detail).key === 'off'">
+        该线路已无站点数据（已停运 / 历史线），后端不提供逐站明细，仅保留以上摘要信息。
+      </view>
+      <view class="db-pop-btns">
+        <view class="db-pbtn" @click="closeDetail">关闭</view>
+        <view class="db-pbtn primary" v-if="detail.status !== '停运'" @click="openLive">在实时查询中打开 ›</view>
+      </view>
     </view>
   </view>
 </template>
 
 <script>
-import { allLines, linePrefix, lineStatus, HQ_LINES, HQ_UPDATED, orgOf } from '../utils/lineIndex.js'
+import { allLines, linePrefix, lineStatus, orgOf } from '../utils/lineIndex.js'
 import { buildLineCode } from '../config.js'
-import { fetchHanqiLines } from '../utils/hanqi.js'
 
 // 窗口化渲染：一次只挂 80 条，避免 1137 行全量 DOM 拖慢 H5 滚动
 const PAGE = 80
@@ -196,55 +156,24 @@ export default {
       ],
       shown: PAGE,
       detail: null,
-      // 数据源：all（武汉公交+汉奇合并，默认）/ whbus（仅武汉）/ hanqi（仅汉奇）。
-      // 汉奇列表直读 lines.json 的持久化块（scan-hanqi.mjs 生成），不再每次切页签现扫
-      source: 'all',
-      hanqiLines: HQ_LINES.slice(),
-      HQ_UPDATED,
-      hanqiLoading: false,
-      hanqiErr: '',
     }
   },
   computed: {
-    // 实际展示的数据源：全部=武汉公交+汉奇合并；武汉公交=仅武汉；汉奇=仅汉奇。
-    // 汉奇项归一为与武汉项同形（source:'hanqi' 标记），统一进入搜索/筛选/复制与列表渲染
-    baseList() {
-      const wuhan = this.all
-      const hanqi = this.hanqiLines.map((l) => ({
-        source: 'hanqi',
-        lineId: l.lineId,
-        no: l.lineName || l.lineNo || '',
-        name: l.lineName || l.lineNo || '',
-        start: l.start || '',
-        end: l.end || '',
-        stops: l.stops || 0,
-        dirs: l.dirs && l.dirs.length ? l.dirs : [0],
-        price: l.price || '',
-        status: '营运',
-        early: l.first || '',
-        last: l.last || '',
-        org: l.org || '',
-        code: '',
-      }))
-      if (this.source === 'hanqi') return hanqi
-      if (this.source === 'whbus') return wuhan
-      return wuhan.concat(hanqi)
-    },
     total() {
-      return this.baseList.length
+      return this.all.length
     },
-    // 三态统计：对当前展示集跑一次 lineStatus（当前时刻），供头部展示
+    // 三态统计：对全库跑一次 lineStatus（当前时刻），供头部展示
     stats() {
       const s = { live: 0, ended: 0, off: 0 }
-      for (const l of this.baseList) s[lineStatus(l).key]++
+      for (const l of this.all) s[lineStatus(l).key]++
       return s
     },
-    // 公司筛选项：按当前展示集实际收录动态生成（一…九公司按序 + 其他 + 未收录），无数据时只剩「全部」
+    // 公司筛选项：按全库实际收录动态生成（一…九公司按序 + 其他 + 未收录），无数据时只剩「全部」
     orgOpts() {
       const CN = ['一', '二', '三', '四', '五', '六', '七', '八', '九']
       const cnt = {}
       let none = 0
-      for (const l of this.baseList) {
+      for (const l of this.all) {
         const o = orgOf(l)
         if (!o) { none++; continue }
         cnt[o.key] = (cnt[o.key] || 0) + 1
@@ -260,7 +189,7 @@ export default {
     },
     filtered() {
       const q = this.kw.trim().toUpperCase()
-      return this.baseList.filter((l) => {
+      return this.all.filter((l) => {
         if (this.prefix !== '全部' && linePrefix(l.no) !== this.prefix) return false
         if (this.status !== '全部' && lineStatus(l).key !== this.status) return false
         if (this.org !== '全部') {
@@ -276,19 +205,6 @@ export default {
     },
     visibleLines() {
       return this.filtered.slice(0, this.shown)
-    },
-    hanqiFiltered() {
-      const q = this.kw.trim().toUpperCase()
-      return this.hanqiLines.filter((l) =>
-        !q || String(l.lineName || '').toUpperCase().includes(q)
-      )
-    },
-    hanqiVisible() {
-      return this.hanqiFiltered.slice(0, this.shown)
-    },
-    // 持久化数据生成日（只显月-日，完整时间看 title）
-    hqUpdatedText() {
-      return HQ_UPDATED ? HQ_UPDATED.slice(5, 10) : ''
     },
   },
   watch: {
@@ -340,39 +256,6 @@ export default {
     },
     loadMore() {
       this.shown += PAGE
-    },
-    // 切换数据源：武汉公交 / 汉奇公交。汉奇列表已随包内置，切换零请求；
-    // 仅旧版数据块缺失时才补扫一次（↻ 随时可手动重扫）
-    setSource(s) {
-      if (s === this.source) return
-      this.source = s
-      this.shown = PAGE
-      if (s === 'hanqi' && !this.hanqiLines.length && !this.hanqiLoading) this.loadHanqi()
-    },
-    // 手动重扫汉奇线路：用武汉锚点散点覆盖全市，合并去重（仅 7 个轻量请求）
-    async loadHanqi() {
-      this.hanqiLoading = true
-      this.hanqiErr = ''
-      try {
-        const list = await fetchHanqiLines()
-        list.sort((a, b) => String(a.lineName).localeCompare(String(b.lineName), 'zh'))
-        this.hanqiLines = list
-      } catch (e) {
-        this.hanqiErr = '汉奇接口扫描失败，点 ↻ 重试'
-      } finally {
-        this.hanqiLoading = false
-      }
-    },
-    // 汉奇线路：直接进实时地图（数据源标志由宿主透传给 LineMap）
-    openHanqi(l) {
-      this.$emit('pick', {
-        source: 'hanqi',
-        lineId: l.lineId,
-        lineName: l.lineName,
-        direction: 0,
-        startStop: '',
-        endStop: '',
-      })
     },
     openDetail(l) {
       this.detail = l
@@ -614,19 +497,6 @@ export default {
   color: #062a33;
   background: linear-gradient(135deg, #67e8f9, #06b6d4);
   font-variant-numeric: tabular-nums;
-}
-/* 汉奇线路名（文本，非数字编号）：放宽宽度、缩小字号，沿用同款青色渐变 */
-.db-no.hanqi {
-  min-width: 0;
-  font-size: 20rpx;
-  white-space: nowrap;
-  color: #062a33;
-}
-/* 合并列表中汉奇项的「汉奇」来源标记 */
-.db-hq-tag {
-  font-size: 20rpx;
-  font-weight: 700;
-  color: #67e8f9;
 }
 .db-item-body {
   flex: 1;
