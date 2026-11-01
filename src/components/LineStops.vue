@@ -144,6 +144,7 @@
 import { fetchLine, fetchRealTime, decryptBusId, onBusIdReady } from '../utils/api.js'
 import { matchBusesToStops } from '../utils/geo.js'
 import { buildLineCode } from '../config.js'
+import { getRefreshDefault } from '../utils/settings.js'
 
 // 自动刷新间隔（秒）：0 = 手动。与地图页各存一份（地图页是 whbis:map-refresh-sec），
 // 两个视图的使用节奏不同，共用反而互相干扰；线路带默认 15 秒（旧详情页行为）。
@@ -283,18 +284,29 @@ export default {
       await this.loadLive()
       uni.showToast({ title: '实时数据已刷新', icon: 'none' })
     },
-    // 读上次选择的间隔：未设过或值非法时回落到 15 秒（保持旧有行为）
+    // 读上次选择的间隔：用户手动选过就用选的；没选过回落到「全局默认刷新间隔」（设置面板可调）
     // ⚠ uni.getStorageSync 在键不存在时返回空字符串，Number('') === 0，
     // 直接 Number 后再 includes 会把“从没设过”误判成“手动”（0 是合法值），必须先排除空值
     readRefreshSec() {
       try {
         const raw = uni.getStorageSync(LINE_REFRESH_KEY)
-        if (raw === '' || raw == null) return 15
+        if (raw === '' || raw == null) return getRefreshDefault()
         const v = Number(raw)
-        return REFRESH_OPTS.includes(v) ? v : 15
+        return REFRESH_OPTS.includes(v) ? v : getRefreshDefault()
       } catch (e) {
-        return 15
+        return getRefreshDefault()
       }
+    },
+    // 全局默认刷新变更（设置面板）即时跟随：用户在本视图手动选过的间隔仍然优先
+    onGlobalRefresh(sec) {
+      try {
+        const raw = uni.getStorageSync(LINE_REFRESH_KEY)
+        if (raw !== '' && raw != null) return
+      } catch (e) { /* 读不到视为没选过 */ }
+      if (sec === this.refreshSec) return
+      this.refreshSec = sec
+      this.restartAutoRefresh()
+      if (sec > 0) this.loadLive(true)
     },
     // 选择间隔：0 = 手动，其余按秒数轮询（立即生效并持久化）
     setRefreshSec(sec) {

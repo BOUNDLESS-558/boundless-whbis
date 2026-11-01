@@ -15,7 +15,11 @@
 import { md5 } from './md5.js'
 
 const SESSION_KEY = 'whbis:session'
-const SESSION_TTL = 30 * 24 * 3600 * 1000 // 30 天免登录
+// 登录有效期档位（天）：0 = 永不过期。可在「账号与设置」面板里随时调整（立即生效，从当下重算）
+const SESSION_DAYS_KEY = 'whbis:session-days'
+export const SESSION_DAY_OPTS = [7, 15, 30, 0]
+// 旧会话兼容：历史版本没有 expiresAt 字段，统一按登录后 30 天算
+const LEGACY_TTL = 30 * 24 * 3600 * 1000
 
 // 预置可用账号（管理员分发列表，按需求内嵌；注册功能已移除）。
 // 展示名保留原始大小写；存储 / 比对统一走 normAccount（小写）主键。
@@ -80,13 +84,54 @@ function writeStore(key, val) {
   }
 }
 
+/** 会话到期时间戳：显式 0 = 永不过期；缺失（旧会话）= loginAt + 30 天 */
+function expiryOf(ses) {
+  if (!ses) return 0
+  if (ses.expiresAt === 0) return 0
+  if (ses.expiresAt) return ses.expiresAt
+  return (ses.loginAt || 0) + LEGACY_TTL
+}
+
 /** 当前会话对应的账号名；未登录 / 会话过期 / 非预置账号 → null */
 export function currentAccount() {
   const ses = readStore(SESSION_KEY)
   if (!ses || !ses.account) return null
-  if (!ses.loginAt || Date.now() - ses.loginAt > SESSION_TTL) return null
+  if (!ses.loginAt) return null
+  const exp = expiryOf(ses)
+  if (exp && Date.now() > exp) return null
   if (!EMBEDDED_MAP.has(normAccount(ses.account))) return null
   return ses.account
+}
+
+/** 会话详情（面板展示用）：null = 未登录/已过期；expiresAt 为 0 表示永不过期 */
+export function getSessionInfo() {
+  const ses = readStore(SESSION_KEY)
+  if (!ses || !ses.account || !ses.loginAt) return null
+  if (!EMBEDDED_MAP.has(normAccount(ses.account))) return null
+  const exp = expiryOf(ses)
+  if (exp && Date.now() > exp) return null
+  return { account: ses.account, loginAt: ses.loginAt, expiresAt: exp }
+}
+
+/** 登录有效期档位（天，0 = 永不过期）；未设置过默认 30 天 */
+export function getSessionDays() {
+  try {
+    const v = Number(uni.getStorageSync(SESSION_DAYS_KEY))
+    if (SESSION_DAY_OPTS.includes(v)) return v
+  } catch (e) { /* 存储不可用走默认 */ }
+  return 30
+}
+
+/** 调整登录有效期：立即生效——已登录时从当下重算当前会话的到期时间 */
+export function setSessionDays(days) {
+  const d = SESSION_DAY_OPTS.includes(Number(days)) ? Number(days) : 30
+  writeStore(SESSION_DAYS_KEY, d)
+  const ses = readStore(SESSION_KEY)
+  if (ses && ses.account && EMBEDDED_MAP.has(normAccount(ses.account)) && ses.loginAt) {
+    ses.expiresAt = d > 0 ? Date.now() + d * 86400000 : 0
+    writeStore(SESSION_KEY, ses)
+  }
+  return d
 }
 
 export function isLoggedIn() {
@@ -103,7 +148,13 @@ export function login(account, password) {
     if (!acc || !password) return resolve({ ok: false, error: '请输入账号和密码' })
     if (!EMBEDDED_MAP.has(acc)) return resolve({ ok: false, error: '账号不存在' })
     if (String(password) !== genPass(account)) return resolve({ ok: false, error: '密码错误' })
-    writeStore(SESSION_KEY, { account: EMBEDDED_MAP.get(acc), loginAt: Date.now() })
+    const days = getSessionDays()
+    writeStore(SESSION_KEY, {
+      account: EMBEDDED_MAP.get(acc),
+      loginAt: Date.now(),
+      // expiresAt：0 = 永不过期；其余为到期时间戳
+      expiresAt: days > 0 ? Date.now() + days * 86400000 : 0,
+    })
     resolve({ ok: true })
   })
 }

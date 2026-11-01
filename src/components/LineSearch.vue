@@ -28,7 +28,8 @@
       <text class="vr-meta" v-if="meta && !plain">{{ meta }}</text>
       <!-- 账号胶囊：点开账号窗（内含注销入口）；未登录/会话失效时点击引导重新登录 -->
       <view class="vr-acct" :title="account ? '登录账号：' + account + '，点按查看/注销' : '未登录，点击去登录'" @click="$emit('account')">
-        <text class="vr-acct-ico">👤</text>
+        <image v-if="avatar" class="vr-acct-avatar" :src="avatar" mode="aspectFill" />
+        <text v-else class="vr-acct-ico">👤</text>
         <text class="vr-acct-t">{{ account || '未登录' }}</text>
       </view>
     </view>
@@ -109,6 +110,8 @@ export default {
     plain: { type: Boolean, default: false },
     // 当前登录账号（顶栏右侧胶囊展示，点按上抛 account 事件由宿主开账号窗/引导登录）
     account: { type: String, default: '' },
+    // 该账号的自定义头像 DataURL（宿主从 avatar.js 取）；空则回退默认人形图标
+    avatar: { type: String, default: '' },
     // 当前线路号：顶栏实例与地图态实例是两个不同的组件，冷启动选完线整块换挂载，
     // 若不把宿主的线路号灌进来，搜索框会在切视图那一刻被清空（用户视角是「刚输的没了」）
     lineNoProp: { type: String, default: '' },
@@ -424,6 +427,15 @@ export default {
   flex: 0 0 auto;
   font-size: 20rpx;
   opacity: 0.75;
+}
+/* 自定义头像：小圆脸嵌在胶囊里 */
+.vr-acct-avatar {
+  flex: 0 0 auto;
+  width: 30rpx;
+  height: 30rpx;
+  border-radius: 50%;
+  overflow: hidden;
+  background: rgba(255, 255, 255, 0.1);
 }
 .vr-acct-t {
   min-width: 0;

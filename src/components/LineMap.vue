@@ -488,6 +488,7 @@ import {
   cityWarned, markCityWarned, loadCityNet, netSearchLines, bboxIntersects,
 } from '../utils/cityBus.js'
 import LinePlan from './LinePlan.vue'
+import { getRefreshDefault } from '../utils/settings.js'
 
 // —— 方向配色（全站统一）：上行 = 青蓝，下行 = 玫红 ——
 // 色相相隔约 150°，在浅色高德底图与深色自绘画布上都清晰；不依赖红绿对比，色盲用户也能分辨。
@@ -1461,12 +1462,27 @@ export default {
       return out
     },
     // —— 刷新间隔：手动 / 15s / 20s / 30s ——
-    // 读回上次选择（存储不可用或值非法时保持手动刷新）
+    // 读回上次选择：用户手动选过就用选的；没选过（或值非法）回落到「全局默认刷新间隔」（设置面板可调）
     loadRefreshPref() {
       try {
         const v = Number(uni.getStorageSync(REFRESH_KEY))
-        if (REFRESH_OPTS.includes(v)) this.refreshSec = v
+        if (REFRESH_OPTS.includes(v)) {
+          this.refreshSec = v
+          return
+        }
       } catch (e) { /* 忽略 */ }
+      this.refreshSec = getRefreshDefault()
+    },
+    // 全局默认刷新变更（设置面板）即时跟随：用户在本视图手动选过的间隔仍然优先
+    onGlobalRefresh(sec) {
+      try {
+        const raw = uni.getStorageSync(REFRESH_KEY)
+        if (raw !== '' && raw != null && REFRESH_OPTS.includes(Number(raw))) return
+      } catch (e) { /* 读不到视为没选过 */ }
+      if (sec === this.refreshSec) return
+      this.refreshSec = sec
+      this.restartAutoRefresh()
+      if (sec > 0 && !this.loading) this.loadLive(true)
     },
     // 单击 ↻：立即拉一次（自动刷新模式下也用于手动补一次）
     refreshNow() {

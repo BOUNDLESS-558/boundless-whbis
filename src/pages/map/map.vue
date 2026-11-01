@@ -7,7 +7,8 @@
         :active-view="view"
         :meta="metaText"
         :line-no-prop="lineName || lineNo"
-        :account="account"
+        :account="dispName || account"
+        :avatar="avatar"
         :city-mode="view === 'city'"
         @pick="onPickLine"
         @view-change="switchView"
@@ -36,7 +37,8 @@
             :views="views"
             :active-view="view"
             :line-no-prop="lineName || lineNo"
-            :account="account"
+            :account="dispName || account"
+            :avatar="avatar"
             :city-mode="view === 'city'"
             @pick="onPickLine"
             @view-change="switchView"
@@ -78,30 +80,98 @@
         <LineDb plain @pick="onPickLine" />
       </FloatWin>
 
-      <!-- 账号窗：登录身份 + 注销入口（非地图态也能开，所以不挂在 stage 里）。
+      <!-- 账号与设置窗：登录身份（头像/用户名）+ 登录有效期 + 全局默认刷新 + 皮肤 + 注销入口。
            注销二次确认在窗内切态完成，不用 uni.showModal（白底系统框与全局玻璃风不符，同激活弹窗的否决理由） -->
       <FloatWin
         v-if="accountShow"
-        title="登录账号"
+        title="账号与设置"
         sub="本地账号 · 仅存本机"
-        :width-rpx="640"
-        max-height="60vh"
+        :width-rpx="720"
+        max-height="72vh"
         @close="accountShow = false"
       >
         <view class="acct" v-if="!acctConfirm">
-          <view class="acct-row">
-            <text class="acct-label">当前账号</text>
-            <text class="acct-value">{{ account || '—' }}</text>
+          <!-- 身份区：头像（可换）+ 用户名（可改）+ 账号名（只读） -->
+          <view class="acct-id">
+            <view class="acct-avatar" :title="avatar ? '点头像更换头像' : '点设置头像'" @click="onChangeAvatar">
+              <image v-if="avatar" class="acct-avatar-img" :src="avatar" mode="aspectFill" />
+              <text v-else class="acct-avatar-txt">{{ avatarLetter }}</text>
+              <view class="acct-avatar-cam">📷</view>
+            </view>
+            <view class="acct-id-main">
+              <view class="acct-name-row">
+                <input
+                  class="acct-name-input"
+                  v-model="setName"
+                  type="text"
+                  maxlength="16"
+                  placeholder="设置用户名"
+                  placeholder-class="acct-name-ph"
+                  @confirm="saveName"
+                />
+                <view class="acct-name-save" @click="saveName">保存</view>
+              </view>
+              <view class="acct-id-sub">账号 {{ account }} · 不可修改</view>
+            </view>
+          </view>
+          <view class="acct-avatar-ops">
+            <view class="acct-mini" @click="onChangeAvatar">更换头像</view>
+            <view class="acct-mini" v-if="avatar" @click="onResetAvatar">恢复默认</view>
+            <text class="acct-mini-hint">PNG / JPG / JPEG，自动压缩，可多次更换</text>
+          </view>
+
+          <view class="acct-div"></view>
+
+          <!-- 登录有效期 -->
+          <view class="acct-sec-title">登录有效期</view>
+          <view class="acct-seg">
+            <view
+              class="acct-seg-item"
+              v-for="o in sessionOpts"
+              :key="o.days"
+              :class="{ on: sessionDays === o.days }"
+              @click="onSessionDays(o.days)"
+            >{{ o.label }}</view>
           </view>
           <view class="acct-row">
             <text class="acct-label">登录状态</text>
-            <text class="acct-value ok">{{ account ? '已登录（30 天免登录）' : '会话已失效' }}</text>
+            <text class="acct-value ok">{{ sessionExpText }}</text>
           </view>
+
+          <view class="acct-div"></view>
+
+          <!-- 全局默认刷新间隔 -->
+          <view class="acct-sec-title">全局默认刷新间隔</view>
+          <view class="acct-seg">
+            <view
+              class="acct-seg-item"
+              v-for="s in refreshOpts"
+              :key="s"
+              :class="{ on: refreshDefault === s }"
+              @click="onRefreshDefault(s)"
+            >{{ s === 0 ? '手动' : s + ' 秒' }}</view>
+          </view>
+          <view class="acct-tip">实时线路 / 实时车辆未手动选过间隔时采用该默认值，改完即时生效</view>
+
+          <view class="acct-div"></view>
+
+          <!-- 皮肤 -->
+          <view class="acct-sec-title">皮肤</view>
+          <view class="acct-seg">
+            <view
+              class="acct-seg-item"
+              v-for="o in skinOpts"
+              :key="o.key"
+              :class="{ on: skin === o.key }"
+              @click="onSkin(o.key)"
+            >{{ o.label }}</view>
+          </view>
+
           <view class="acct-tip">注销后回到登录页，本机账号保留，下次可直接登录</view>
           <view class="acct-logout" @click="acctConfirm = true">注销登录</view>
         </view>
         <view class="acct" v-else>
-          <view class="acct-q">确定退出账号「{{ account }}」吗？</view>
+          <view class="acct-q">确定退出账号「{{ dispName || account }}」吗？</view>
           <view class="acct-btns">
             <view class="acct-btn ghost" @click="acctConfirm = false">取消</view>
             <view class="acct-btn main" @click="onLogout">注销</view>
@@ -150,7 +220,20 @@ import LineStops from '../../components/LineStops.vue'
 import LineDb from '../../components/LineDb.vue'
 import FloatWin from '../../components/FloatWin.vue'
 import { buildLineCode } from '../../config.js'
-import { requireLogin, currentAccount, logout } from '../../utils/auth.js'
+import { requireLogin, currentAccount, logout, getSessionInfo } from '../../utils/auth.js'
+import {
+  SKIN_OPTS,
+  REFRESH_DEFAULT_OPTS,
+  getSkin,
+  setSkin,
+  getRefreshDefault,
+  setRefreshDefault,
+  getDisplayName,
+  setDisplayName,
+  getSessionDays,
+  setSessionDays,
+} from '../../utils/settings.js'
+import { getAvatar, removeAvatar, pickAvatar } from '../../utils/avatar.js'
 
 // 上次查过的线路：下次进来直接落在地图上，省掉「每次都要搜一遍」
 const HOME_LINE_KEY = 'whbis:home-line'
@@ -172,6 +255,23 @@ export default {
       account: '',
       accountShow: false,
       acctConfirm: false,
+      // 用户名（展示名，可改）与头像（DataURL，'' = 用默认）；setName 是窗内输入缓冲
+      dispName: '',
+      avatar: '',
+      setName: '',
+      // 设置面板：皮肤 / 全局默认刷新 / 登录有效期 / 会话到期文案
+      skin: 'dark',
+      refreshDefault: 15,
+      sessionDays: 30,
+      sessionExpText: '',
+      skinOpts: SKIN_OPTS,
+      refreshOpts: REFRESH_DEFAULT_OPTS,
+      sessionOpts: [
+        { days: 7, label: '7 天' },
+        { days: 15, label: '15 天' },
+        { days: 30, label: '30 天' },
+        { days: 0, label: '永不过期' },
+      ],
       // 全市公交激活弹窗
       actShow: false,
       actCode: '',
@@ -202,6 +302,10 @@ export default {
     metaText() {
       if (!this.lineNo) return ''
       return `${this.lineName || this.lineNo} 路 · ${this.direction === 1 ? '下行' : '上行'}`
+    },
+    // 默认头像：用户名 / 账号名的首字母色块
+    avatarLetter() {
+      return (this.dispName || this.account || '·').trim().charAt(0).toUpperCase()
     },
   },
   onLoad(query) {
@@ -238,6 +342,8 @@ export default {
     this.fire(['onShow', 'restartAutoRefresh'])
     // 从登录页回来（守卫重定向后 reLaunch 回本页可能不触发 onLoad）时补账号
     if (!this.account) this.account = currentAccount()
+    // 胶囊上的用户名 / 头像要常驻，不止开面板时才加载
+    if (this.account) this.syncIdentity()
   },
   onHide() {
     this.fire(['onHide', 'stopAutoRefresh'])
@@ -365,7 +471,7 @@ export default {
         uni.showToast({ title: '激活码错误', icon: 'none' })
       }
     },
-    // 顶栏账号胶囊：开账号窗；会话已失效时胶囊会引导重新登录
+    // 顶栏账号胶囊：开「账号与设置」窗；会话已失效时胶囊会引导重新登录
     onAccount() {
       this.acctConfirm = false
       this.account = currentAccount()
@@ -373,7 +479,72 @@ export default {
         uni.redirectTo({ url: '/pages/login/login' })
         return
       }
+      this.syncIdentity()
+      this.skin = getSkin()
+      this.refreshDefault = getRefreshDefault()
+      this.sessionDays = getSessionDays()
+      this.refreshSessionText()
       this.accountShow = true
+    },
+    // 用户名 + 头像（胶囊常驻显示，面板打开时也用它回填输入缓冲）
+    syncIdentity() {
+      this.dispName = getDisplayName(this.account)
+      this.avatar = getAvatar(this.account)
+      this.setName = this.dispName
+    },
+    // 更换头像：选图 → 校验/压缩 → 落本地存储 → 胶囊即时换脸（可反复更换，每次覆盖）
+    onChangeAvatar() {
+      pickAvatar(this.account).then((url) => {
+        if (!url) return
+        this.avatar = url
+        uni.showToast({ title: '头像已更新', icon: 'none' })
+      })
+    },
+    // 恢复默认头像：清掉自定义图
+    onResetAvatar() {
+      removeAvatar(this.account)
+      this.avatar = ''
+      uni.showToast({ title: '已恢复默认头像', icon: 'none' })
+    },
+    // 保存用户名（账号名只读不改）；清空即回退显示账号名
+    saveName() {
+      const n = setDisplayName(this.account, this.setName)
+      this.dispName = n
+      this.setName = n
+      uni.showToast({ title: n ? '用户名已保存' : '用户名已清空，显示账号名', icon: 'none' })
+    },
+    // 皮肤：黑 / 白 / 跟随系统（写 <html data-skin>，全局 CSS 换肤）
+    onSkin(key) {
+      this.skin = setSkin(key)
+    },
+    // 全局默认刷新：实时线路 / 实时车辆未手动选过间隔时采用；已打开的视图即时跟随
+    onRefreshDefault(sec) {
+      this.refreshDefault = setRefreshDefault(sec)
+      ;['mapC', 'stopsC'].forEach((key) => {
+        const c = this.$refs[key]
+        if (c && typeof c.onGlobalRefresh === 'function') c.onGlobalRefresh(this.refreshDefault)
+      })
+      uni.showToast({ title: sec > 0 ? `全局默认刷新：每 ${sec} 秒` : '全局默认刷新：手动', icon: 'none' })
+    },
+    // 登录有效期：立即生效（从当下重算当前会话到期时间）
+    onSessionDays(days) {
+      this.sessionDays = setSessionDays(days)
+      this.refreshSessionText()
+      uni.showToast({ title: days > 0 ? `登录有效期：${days} 天` : '登录有效期：永不过期', icon: 'none' })
+    },
+    refreshSessionText() {
+      const info = getSessionInfo()
+      if (!info) {
+        this.sessionExpText = '会话已失效'
+        return
+      }
+      if (!info.expiresAt) {
+        this.sessionExpText = '已登录 · 永不过期'
+        return
+      }
+      const d = new Date(info.expiresAt)
+      const pad = (x) => String(x).padStart(2, '0')
+      this.sessionExpText = `已登录 · ${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} 到期`
     },
     // 账号窗内确认注销：清会话回登录页
     onLogout() {
@@ -604,6 +775,181 @@ export default {
 }
 .acct-logout:active {
   transform: scale(0.97);
+}
+/* ── 身份区：头像（点击更换）+ 用户名输入 + 只读账号名 ── */
+.acct-id {
+  display: flex;
+  align-items: center;
+  gap: 24rpx;
+  padding: 6rpx 0 18rpx;
+}
+.acct-avatar {
+  position: relative;
+  flex: 0 0 auto;
+  width: 120rpx;
+  height: 120rpx;
+  border-radius: 50%;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, rgba(99, 102, 241, 0.35), rgba(6, 182, 212, 0.3));
+  border: 3rpx solid rgba(129, 140, 248, 0.5);
+  cursor: pointer;
+  transition: filter 0.18s;
+}
+.acct-avatar:hover {
+  filter: brightness(1.15);
+}
+.acct-avatar-img {
+  width: 100%;
+  height: 100%;
+}
+.acct-avatar-txt {
+  font-size: 52rpx;
+  font-weight: 800;
+  color: #eef1ff;
+}
+/* 悬浮相机角标：暗示「可点更换」 */
+.acct-avatar-cam {
+  position: absolute;
+  right: -2rpx;
+  bottom: -2rpx;
+  width: 44rpx;
+  height: 44rpx;
+  line-height: 44rpx;
+  text-align: center;
+  font-size: 22rpx;
+  border-radius: 50%;
+  color: #fff;
+  background: rgba(99, 102, 241, 0.92);
+  border: 3rpx solid rgba(11, 16, 32, 0.9);
+}
+.acct-id-main {
+  flex: 1;
+  min-width: 0;
+}
+.acct-name-row {
+  display: flex;
+  align-items: center;
+  gap: 14rpx;
+}
+.acct-name-input {
+  flex: 1;
+  min-width: 0;
+  height: 64rpx;
+  padding: 0 20rpx;
+  box-sizing: border-box;
+  font-size: 27rpx;
+  font-weight: 700;
+  color: #eef1ff;
+  background: rgba(255, 255, 255, 0.06);
+  border: 2rpx solid rgba(255, 255, 255, 0.14);
+  border-radius: 14rpx;
+}
+.acct-name-ph {
+  color: rgba(255, 255, 255, 0.32);
+  font-weight: 400;
+}
+.acct-name-save {
+  flex: 0 0 auto;
+  height: 64rpx;
+  line-height: 64rpx;
+  padding: 0 26rpx;
+  border-radius: 14rpx;
+  font-size: 24rpx;
+  font-weight: 600;
+  color: #fff;
+  background: linear-gradient(135deg, #6366f1, #818cf8);
+  cursor: pointer;
+  transition: filter 0.18s, transform 0.15s;
+}
+.acct-name-save:hover {
+  filter: brightness(1.1);
+}
+.acct-name-save:active {
+  transform: scale(0.95);
+}
+.acct-id-sub {
+  margin-top: 12rpx;
+  font-size: 22rpx;
+  color: rgba(255, 255, 255, 0.42);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+/* 头像操作行：更换 / 恢复默认 + 格式提示 */
+.acct-avatar-ops {
+  display: flex;
+  align-items: center;
+  gap: 14rpx;
+  padding: 0 0 6rpx;
+}
+.acct-mini {
+  height: 52rpx;
+  line-height: 52rpx;
+  padding: 0 22rpx;
+  border-radius: 12rpx;
+  font-size: 22rpx;
+  color: rgba(255, 255, 255, 0.78);
+  background: rgba(255, 255, 255, 0.08);
+  border: 2rpx solid rgba(255, 255, 255, 0.14);
+  cursor: pointer;
+  transition: background 0.18s;
+}
+.acct-mini:hover {
+  background: rgba(99, 102, 241, 0.18);
+}
+.acct-mini-hint {
+  flex: 1;
+  min-width: 0;
+  font-size: 20rpx;
+  color: rgba(255, 255, 255, 0.36);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+/* 分节分隔线与小节标题 */
+.acct-div {
+  height: 2rpx;
+  margin: 22rpx 0;
+  background: rgba(255, 255, 255, 0.08);
+}
+.acct-sec-title {
+  font-size: 24rpx;
+  font-weight: 700;
+  color: rgba(255, 255, 255, 0.62);
+  margin-bottom: 14rpx;
+}
+/* 分段选择器（有效期 / 刷新 / 皮肤共用）：凹槽底 + 选中靛蓝胶囊 */
+.acct-seg {
+  display: flex;
+  gap: 8rpx;
+  padding: 6rpx;
+  border-radius: 14rpx;
+  background: rgba(255, 255, 255, 0.05);
+  border: 2rpx solid rgba(255, 255, 255, 0.08);
+}
+.acct-seg-item {
+  flex: 1;
+  height: 56rpx;
+  line-height: 56rpx;
+  text-align: center;
+  border-radius: 10rpx;
+  font-size: 23rpx;
+  color: rgba(255, 255, 255, 0.6);
+  cursor: pointer;
+  transition: background 0.18s, color 0.18s;
+  white-space: nowrap;
+}
+.acct-seg-item:hover {
+  color: rgba(255, 255, 255, 0.85);
+}
+.acct-seg-item.on {
+  color: #fff;
+  font-weight: 700;
+  background: linear-gradient(135deg, #6366f1, #818cf8);
+  box-shadow: 0 6rpx 16rpx rgba(99, 102, 241, 0.35);
 }
 /* 窗内二次确认态 */
 .acct-q {

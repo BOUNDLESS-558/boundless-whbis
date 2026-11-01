@@ -1,5 +1,6 @@
 <script>
 import { warmUp } from './utils/api.js'
+import { applySkin, watchSystemSkin } from './utils/settings.js'
 // #ifdef H5
 import { assetUrl } from './utils/asset.js'
 // #endif
@@ -8,6 +9,9 @@ export default {
   onLaunch: function () {
     // 启动时后台构建车辆编号字典（分片执行，不阻塞界面）
     warmUp()
+    // 皮肤：按设置（黑 / 白 / 跟随系统）应用到 <html data-skin>，并监听系统深浅色切换
+    applySkin()
+    watchSystemSkin()
     // #ifdef H5
     // 子路径部署（如 GitHub Pages /repo/）时，将基址感知的背景图写入 CSS 变量
     document.documentElement.style.setProperty('--app-bg-image', `url("${assetUrl('/static/background.jpg')}")`)
@@ -48,5 +52,26 @@ page {
 ::selection {
   background: rgba(129, 140, 248, 0.45);
   color: #ffffff;
+}
+
+/* ── 白色皮肤（html[data-skin='light']）──
+   根节点反色滤镜方案：深色 UI 一键反转成浅色，图片 / 地图瓦片 / 画布 / 视频再
+   反转一次还原本色（两次反转互相抵消）。CSS 规范对「根元素上的 filter」有豁免——
+   不会改变 position:fixed 后代的包含块，悬浮窗 / 遮罩 / toast 定位不受影响；
+   反转+色相旋转近似保留各强调色的色相（靛蓝仍靛蓝、玫红仍玫红），只翻明暗。 */
+html[data-skin='light'] {
+  filter: invert(1) hue-rotate(180deg);
+  background: #e8edf6;
+}
+html[data-skin='light'] img,
+html[data-skin='light'] uni-image,
+html[data-skin='light'] canvas,
+html[data-skin='light'] video,
+/* 高德地图容器整体还原（瓦片 / 标记 / 覆盖物都是它的后代） */
+html[data-skin='light'] #amap,
+html[data-skin='light'] #amap *,
+html[data-skin='light'] .amap-container,
+html[data-skin='light'] .amap-container * {
+  filter: invert(1) hue-rotate(180deg);
 }
 </style>

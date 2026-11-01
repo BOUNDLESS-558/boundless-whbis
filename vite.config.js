@@ -7,6 +7,10 @@ export default defineConfig({
   ],
   // H5 本地开发跨域代理：将 /api 代理到武汉公交接口服务
   server: {
+    // 绑定所有网卡（IPv4 + IPv6）：避免只绑 ::1 时，localhost 被解析到 127.0.0.1
+    // 或局域网/手机访问时连不上（表现为 ERR_CONNECTION_TIMED_OUT）
+    host: true,
+    port: 5173,
     proxy: {
       '/api': {
         target: 'https://customized.wuhanbus.com',
