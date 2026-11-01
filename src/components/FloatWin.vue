@@ -304,13 +304,27 @@ export default {
   background: rgba(99, 102, 241, 0.3);
   border-color: rgba(129, 140, 248, 0.65);
 }
-/* 内容区自己滚：标题行常驻，窗口高度由根节点的 max-height 卡住 */
+/* 内容区自己滚：标题行常驻，窗口高度由根节点的 max-height 卡住。
+   滚动条与 .bus-list / .plan-body 同族细轨，避免各悬浮窗出现原生白条 */
 .fw-body {
   flex: 1 1 auto;
   min-height: 0;
   overflow-y: auto;
   -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
   padding: 20rpx 12rpx 24rpx;
   box-sizing: border-box;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.26) transparent;
+}
+.fw-body::-webkit-scrollbar {
+  width: 8rpx;
+}
+.fw-body::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.26);
+  border-radius: 999rpx;
+}
+.fw-body::-webkit-scrollbar-track {
+  background: transparent;
 }
 </style>

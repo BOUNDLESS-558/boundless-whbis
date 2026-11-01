@@ -7,6 +7,7 @@
     <view class="plan-head">
       <text class="ph-title">🕐 发车时刻</text>
       <text class="ph-count">共 {{ totalCount }} 班</text>
+      <view class="ph-copy" v-if="totalCount" @click="copyPlans" title="一键复制全部班次时刻（TSV，可直接粘贴进表格）">⧉ 复制</view>
       <view class="ph-fold" :class="{ folded: collapsed }" @click="collapsed = !collapsed" :title="collapsed ? '展开' : '折叠'">▾</view>
     </view>
 
@@ -106,6 +107,23 @@ export default {
       uni.showToast({ title: `${dir === 0 ? '上行' : '下行'}时刻表加载失败：${e.message}`, icon: 'none' })
       return []
     },
+    // 一键复制全部班次时刻（TSV：方向/班次/发车时间/车辆），交互与车辆面板的复制一致
+    copyPlans() {
+      const rows = ['方向\t班次\t发车时间\t车辆']
+      let total = 0
+      DIRS.forEach((d) => {
+        const name = d === 0 ? '上行' : '下行'
+        this.sortedByDir[d].forEach((p, i) => {
+          rows.push(`${name}\t第 ${i + 1} 班\t${p.planStartTime || '--'}\t${p.bus || '--'}`)
+          total++
+        })
+      })
+      uni.setClipboardData({
+        data: rows.join('\n'),
+        success: () => uni.showToast({ title: `已复制 ${total} 班时刻`, icon: 'none' }),
+        fail: () => uni.showToast({ title: '复制失败', icon: 'none' }),
+      })
+    },
   },
 }
 </script>
@@ -145,6 +163,26 @@ export default {
   color: rgba(255, 255, 255, 0.42);
   text-align: right;
   white-space: nowrap;
+}
+/* 复制按钮：与车辆面板的 .copy-btn 同族幽灵小圆角，hover 提到靛蓝 */
+.ph-copy {
+  flex: 0 0 auto;
+  font-size: 22rpx;
+  color: rgba(255, 255, 255, 0.66);
+  background: rgba(255, 255, 255, 0.08);
+  border: 2rpx solid rgba(255, 255, 255, 0.14);
+  border-radius: 999rpx;
+  padding: 6rpx 18rpx;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: transform 0.15s, background 0.2s, color 0.2s;
+}
+.ph-copy:hover {
+  color: #c7d2fe;
+  background: rgba(99, 102, 241, 0.3);
+}
+.ph-copy:active {
+  transform: scale(0.94);
 }
 /* 折叠键：与车辆面板的 .collapse-btn 同一枚圆键 */
 .ph-fold {

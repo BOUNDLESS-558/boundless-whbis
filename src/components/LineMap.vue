@@ -580,18 +580,33 @@ function offsetPolyline(points, meters) {
     }
   })
 }
-// 平滑路径：用相邻点中点做二次贝塞尔，避免站点直连的折角
-function smoothPath(pts) {
+// 走向路径构造：
+// - snapped（已贴路、轨迹点密集）：点够密，直接用直线段连接最自然顺滑，
+//   任何曲线插值反而会在每段外鼓、产生波浪式弯折（旧实现的症结）。
+// - 非 snapped（站间直连回退、点稀疏）：用 Catmull‑Rom 转贝塞尔的样条，
+//   曲线严格经过每个站点、切线连续，把折角圆滑成自然转弯，且不甩头越界。
+function smoothPath(pts, snapped) {
   if (!pts.length) return ''
   if (pts.length === 1) return `M ${pts[0].x.toFixed(1)} ${pts[0].y.toFixed(1)}`
-  let d = `M ${pts[0].x.toFixed(1)} ${pts[0].y.toFixed(1)}`
-  for (let i = 1; i < pts.length - 1; i++) {
-    const mxp = (pts[i].x + pts[i + 1].x) / 2
-    const myp = (pts[i].y + pts[i + 1].y) / 2
-    d += ` Q ${pts[i].x.toFixed(1)} ${pts[i].y.toFixed(1)} ${mxp.toFixed(1)} ${myp.toFixed(1)}`
+  const f = (n) => n.toFixed(1)
+  if (snapped || pts.length < 3) {
+    let d = `M ${f(pts[0].x)} ${f(pts[0].y)}`
+    for (let i = 1; i < pts.length; i++) d += ` L ${f(pts[i].x)} ${f(pts[i].y)}`
+    return d
   }
-  const last = pts[pts.length - 1]
-  d += ` L ${last.x.toFixed(1)} ${last.y.toFixed(1)}`
+  // Catmull‑Rom：对每段 P[i]→P[i+1] 取控制点 c1/c2（端点钳位），转成三次贝塞尔
+  let d = `M ${f(pts[0].x)} ${f(pts[0].y)}`
+  for (let i = 0; i < pts.length - 1; i++) {
+    const p0 = pts[i - 1] || pts[i]
+    const p1 = pts[i]
+    const p2 = pts[i + 1]
+    const p3 = pts[i + 2] || p2
+    const c1x = p1.x + (p2.x - p0.x) / 6
+    const c1y = p1.y + (p2.y - p0.y) / 6
+    const c2x = p2.x - (p3.x - p1.x) / 6
+    const c2y = p2.y - (p3.y - p1.y) / 6
+    d += ` C ${f(c1x)} ${f(c1y)} ${f(c2x)} ${f(c2y)} ${f(p2.x)} ${f(p2.y)}`
+  }
   return d
 }
 
@@ -2474,11 +2489,11 @@ export default {
         const snapped = !!(this.routeByDir[d] && this.routeByDir[d].length > 1)
         routes.push({
           dir: d,
-          d: smoothPath(sampled),
           color: DIR_STYLE[d].svgStroke,
           dash: snapped ? 'none' : '3 6',
           w: snapped ? 4.5 : 3,
           op: snapped ? 1 : 0.55,
+          d: smoothPath(sampled, snapped),
         })
         ;[0.34, 0.67].forEach((f) => {
           const i = Math.min(pts.length - 2, Math.max(0, Math.round(f * (pts.length - 1))))
