@@ -106,9 +106,12 @@ export default {
       }))
     },
     async loadPlan() {
+      // 换线时在途请求不会自动作废：每次加载发一个令牌，回来时已有更新的加载在跑就丢弃结果，
+      // 否则上一条线路的慢响应会盖掉新线路的班次（时刻表残留旧线路的根因）
+      const token = (this._planToken = (this._planToken || 0) + 1)
       // 汉奇数据源：走汉奇 scheduleTimes（双向各一份，上行=原始方向，下行=反转）
       if (this.dataSource === 'hanqi' && this.hqLineId) {
-        return this.loadHanqiPlan()
+        return this.loadHanqiPlan(token)
       }
       if (!this.lineNo) {
         this.plansByDir = { 0: [], 1: [] }
@@ -117,17 +120,19 @@ export default {
       this.loading = true
       // 两个方向独立成败：一边报错不拖累另一边（空数组是后端常态，不算错误）
       const [up, down] = await Promise.all(
-        DIRS.map((d) => this.fetchDir(this.lineNo, d).catch((e) => this.warn(d, e)))
+        DIRS.map((d) => this.fetchDir(this.lineNo, d).catch((e) => (token !== this._planToken ? [] : this.warn(d, e))))
       )
+      if (token !== this._planToken) return // 已切线路，丢弃过期响应
       this.plansByDir = { 0: up, 1: down }
       this.loading = false
     },
     // 汉奇班次：拉 realtime 的 scheduleTimes（纯时间字符串数组，如 ["06:30","07:15",...]）
     // 上行 = 原始顺序；下行 = 反转（末班变首班），车辆编号未知，显示 '--'
-    async loadHanqiPlan() {
+    async loadHanqiPlan(token) {
       this.loading = true
       try {
         const data = await hqFetchLine(this.hqLineId)
+        if (token !== this._planToken) return // 已换线，旧汉奇线路的响应不再上屏
         const fwd = data.scheduleTimes || []
         const rev = fwd.slice().reverse()
         const toRow = (t, dir) => ({ dir, planStartTime: t, bus: '', busId: '' })
@@ -136,9 +141,9 @@ export default {
           1: rev.map((t) => toRow(t, 1)),
         }
       } catch (e) {
-        this.plansByDir = { 0: [], 1: [] }
+        if (token === this._planToken) this.plansByDir = { 0: [], 1: [] }
       } finally {
-        this.loading = false
+        if (token === this._planToken) this.loading = false
       }
     },
     // 拉取失败：该方向置空（走空态文案），只提示一次
