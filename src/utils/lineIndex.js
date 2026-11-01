@@ -50,6 +50,35 @@ const INDEX = DB.lines.map((l) => ({
   order: /^\d+$/.test(l.no) ? Number(l.no) : Number((l.no.match(/\d+$/) || [0])[0]) + 100000,
 }))
 
+// 汉奇线路检索索引（并入地图/首页联想；allLines() 仍只交武汉公交，线路库武汉页签不受影响）：
+// 汉奇线路号即 routeName（如「汉奇2」「光谷二高汉奇通学2号线」），没有数字 lineCode，
+// 选中后按 lineId 走汉奇接口。alt 故意留空——汉奇起讫站常含「地铁」等字，
+// 若拿来匹配会让「电」这类关键词误命中、污染联想排序。
+const HQ_INDEX = HQ_LINES.map((l, i) => {
+  const nm = l.lineName || l.lineNo || ''
+  return {
+    no: nm,
+    code: '',
+    name: nm,
+    key: normNo(nm),
+    alt: '',
+    start: l.start || '',
+    end: l.end || '',
+    stops: l.stops || 0,
+    dirs: l.dirs && l.dirs.length ? l.dirs : [0],
+    price: l.price || '',
+    status: '营运',
+    early: l.first || '',
+    last: l.last || '',
+    source: 'hanqi',
+    lineId: l.lineId,
+    order: 200000 + i, // 同分时排在武汉公交之后
+  }
+})
+
+// 联想检索池 = 武汉公交 + 汉奇（只喂 suggestLines / countMatches；allLines 仍只回武汉公交）
+const SEARCH_INDEX = INDEX.concat(HQ_INDEX)
+
 const toMin = (t) => {
   const m = /^(\d{1,2}):(\d{2})/.exec(String(t == null ? '' : t).trim())
   return m ? Number(m[1]) * 60 + Number(m[2]) : NaN
@@ -89,7 +118,7 @@ export function suggestLines(kw, limit = 8) {
   const q = normNo(kw)
   if (!q) return []
   const hits = []
-  for (const l of INDEX) {
+  for (const l of SEARCH_INDEX) {
     let score = 0
     if (l.key === q) score = 1000
     else if (l.key.startsWith(q)) score = 800 - Math.min(60, l.key.length - q.length)
@@ -107,16 +136,23 @@ export function countMatches(kw) {
   const q = normNo(kw)
   if (!q) return 0
   let n = 0
-  for (const l of INDEX) if (l.key.includes(q) || (l.alt && l.alt.includes(q))) n++
+  for (const l of SEARCH_INDEX) if (l.key.includes(q) || (l.alt && l.alt.includes(q))) n++
   return n
 }
 
-/** 精确查一条（用于校验用户输入是否在库内） */
+/** 精确查一条武汉公交（用于校验用户输入是否在库内） */
 export function findLine(no) {
   const q = normNo(no)
   if (!q) return null
   const hit = INDEX.find((l) => l.key === q)
   return hit || null
+}
+
+/** 精确查一条汉奇线路（线路号完全相等）；命中项含 source:'hanqi' 与 lineId，供选线上抛 */
+export function findHanqiLine(no) {
+  const q = normNo(no)
+  if (!q) return null
+  return HQ_INDEX.find((l) => l.key === q) || null
 }
 
 /**

@@ -101,6 +101,7 @@ await pool(ANCHORS, async ([la, ln]) => {
       seen.set(b.lineId, {
         lineId: b.lineId,
         lineName: b.routeName,
+        lineNo: b.routeName, // 展示用线路号（与运行时 fetchNearby 口径一致：汉奇线路号即 routeName）
         first: b.firstTime || '',
         last: b.lastTime || '',
         price: b.price || '',

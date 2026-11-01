@@ -107,7 +107,7 @@
     <view class="db-div"></view>
 
     <view class="db-item" v-for="l in hanqiVisible" :key="l.lineId" @click="openHanqi(l)">
-      <text class="db-no hanqi">{{ l.lineNo }}</text>
+      <text class="db-no hanqi">{{ l.lineName || l.lineNo }}</text>
       <view class="db-item-body">
         <text class="db-route">{{ l.start && l.end ? l.start + ' → ' + l.end : (l.first && l.last ? l.first + ' – ' + l.last : '运营中') }}</text>
         <text class="db-meta">{{ l.stops ? l.stops + ' 站 · ' : '' }}{{ (l.dirs && l.dirs.length > 1) ? '双向' : '单向' }} · {{ l.price || '票价未知' }}</text>
