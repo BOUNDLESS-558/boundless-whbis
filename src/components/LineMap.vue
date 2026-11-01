@@ -1010,20 +1010,13 @@ export default {
       const d = Number(v || 0)
       if (d !== 2 && d !== this.dirFilter) this.setDirView(d)
     },
-    // 线路号 prop 变化（如线路详情页切换线路）时，重载该线路双方向数据
-    lineCodeProp(v) {
-      if (v && v !== this.lineCode) {
-        const no = v.split('-')[1] || ''
-        if (no) this.loadByLine(no, this.direction)
-      }
-    },
-    // 数据源或汉奇线路 ID 任一变化：重新加载对应线路
-    dataSource(v) {
-      this.reloadForSource()
-    },
-    hqLineId(v) {
-      this.reloadForSource()
-    },
+    // 宿主页换线：四个 prop 任一变化都原子同步（线码/数据源/汉奇 ID/线路名）。
+    // 不能拆成多个 watch：子组件 watch 先于父组件刷新自身 lineName 那批回调，
+    // 单独触发时会读到滞后的 prop（汉奇换线曾把线路名停在上一条）
+    lineCodeProp() { this.applyHostLine() },
+    dataSourceProp() { this.applyHostLine() },
+    hqLineIdProp() { this.applyHostLine() },
+    lineNameProp() { this.applyHostLine() },
     // 全市公交视图：宿主顶部分段是唯一入口，本组件不再自带开关
     cityMode(v) {
       if (v) { if (!this.cityOn) this.enterCity() }
@@ -1093,15 +1086,24 @@ export default {
       this.stopAutoRefresh()
     },
     // 组件化入口：从 props 读取线路并首次加载（页面形态下由 mounted 调用）
-    // 宿主的数据源或汉奇线路 ID 变化时重载（两个 watch 都走这里，用 prop 值保证一致性）
-    reloadForSource() {
-      if (!this.lineName && !this.lineNo) return
+    // 宿主换线：四个线相关 prop 收敛到这一个同步点，全部以 prop 现值为准重建线路上下文
+    applyHostLine() {
       const src = this.dataSourceProp || 'whbus'
       const hqId = this.hqLineIdProp || ''
-      if (src === this.dataSource && hqId === this.hqLineId) return
+      const code = this.lineCodeProp || ''
+      const name = this.lineNameProp || ''
+      const lineNo = src === 'hanqi'
+        ? (name || hqId) // 汉奇：显示名就是 routeName，查询键另走 hqLineId
+        : (String(code).split('-')[1] || name || '')
+      const nextCode = src === 'hanqi' ? 'hanqi-' + hqId : code
+      if (src === this.dataSource && hqId === this.hqLineId && nextCode === this.lineCode && lineNo === this.lineNo) return
       this.dataSource = src
       this.hqLineId = hqId
-      this.lineCode = src === 'hanqi' ? 'hanqi-' + hqId : buildLineCode(this.lineNo, this.direction)
+      this.lineName = name || lineNo
+      this.lineNo = lineNo
+      this.lineCode = nextCode
+      this.searchNo = this.lineName
+      if (!this.lineName && !this.lineNo) return
       // 清空旧线路缓存，避免叠加
       this.stopsByDir = { 0: [], 1: [] }
       this.routeByDir = { 0: [], 1: [] }
@@ -1121,8 +1123,14 @@ export default {
       this.lineCode = this.lineCodeProp || ''
       this.direction = Number(this.initDirection || 0)
       this.lineName = this.lineNameProp || ''
-      this.lineNo = this.lineCode.split('-')[1] || this.lineName || ''
-      if (this.dataSource === 'hanqi') this.lineCode = 'hanqi-' + this.hqLineId
+      // 汉奇模式：lineCodeProp 是 'hanqi-xxx'，split 取到的是汉奇 lineId 数字串，不适合做 lineNo
+      // 汉奇的 lineNo 直接取线路名（用于显示）；whbus 模式从 lineCode 取数字编号
+      if (this.dataSource === 'hanqi') {
+        this.lineNo = this.lineName || ''
+        this.lineCode = 'hanqi-' + this.hqLineId
+      } else {
+        this.lineNo = this.lineCode.split('-')[1] || this.lineName || ''
+      }
       this.searchNo = this.lineName || this.lineNo
       this._userMoved = false
       // 先量出画布尺寸与 UI 占位，再拉数据（自绘走向图依赖这些尺寸做自适应）
@@ -1185,11 +1193,19 @@ export default {
     },
     // 在当前页加载指定线路（重建双方向站点/轨迹/实时车辆）
     loadByLine(no, dir) {
+      // 汉奇模式下不接数字编号查询：线路名保持为汉奇 routeName，重载仍按当前 hqLineId。
+      // 若把 no 写进 lineName/lineNo，控制卡会把汉奇数字 ID 当线路号显示
+      if (this.dataSource === 'hanqi') {
+        this.direction = dir
+        this.lineCode = 'hanqi-' + this.hqLineId
+        this.loadHanqiLine()
+        this.loadLive()
+        return
+      }
       this.lineName = no
       this.lineNo = no
       this.direction = dir
       this.lineCode = buildLineCode(no, dir)
-      if (this.dataSource === 'hanqi') this.lineCode = 'hanqi-' + this.hqLineId
       // 清空上一条线路的全部缓存，避免叠加
       this.stopsByDir = { 0: [], 1: [] }
       this.routeByDir = { 0: [], 1: [] }

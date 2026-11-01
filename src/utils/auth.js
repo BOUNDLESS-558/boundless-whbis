@@ -23,7 +23,8 @@ const LEGACY_TTL = 30 * 24 * 3600 * 1000
 
 // 预置可用账号（管理员分发列表，按需求内嵌；注册功能已移除）。
 // 展示名保留原始大小写；存储 / 比对统一走 normAccount（小写）主键。
-const EMBEDDED_ACCOUNTS = [
+// （导出仅供探针复用名单，应用代码不应再各处复制账号名）
+export const EMBEDDED_ACCOUNTS = [
   'Jay11011910',
   'wxid_7buto3i56z2122',
   'tomboyfreak',
