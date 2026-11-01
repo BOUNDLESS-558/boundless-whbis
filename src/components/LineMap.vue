@@ -367,7 +367,7 @@
       <!-- 发车时刻表面板（原独立整屏视图移到这里）：上行与下行同屏各一组，不随控制卡视角二选一；
            自带折叠键（与车辆面板同一枚圆键），两张卡各自成块、各折各的 -->
       <view class="plan-side" v-if="lineNo">
-        <LinePlan :line-no="lineNo" />
+        <LinePlan :line-no="lineNo" :hq-line-id="hqLineId" :data-source="dataSource" />
       </view>
     </view>
 
@@ -477,6 +477,7 @@
 
 <script>
 import { fetchRealTime, fetchLine, decryptBusId, onBusIdReady } from '../utils/api.js'
+import { fetchLine as hqFetchLine, fetchRealtime as hqFetchRealtime } from '../utils/hanqi.js'
 import { fetchRoadRoute } from '../utils/osrm.js'
 import { APP_CONFIG, buildLineCode, useNativeMap } from '../config.js'
 import { assetUrl } from '../utils/asset.js'
@@ -621,6 +622,12 @@ export default {
     fsEnabled: { type: Boolean, default: true },
     // 全市公交视图由宿主顶部分段驱动（判据只留在宿主一处，组件不再自带开关）
     cityMode: { type: Boolean, default: false },
+    // 数据源：whbus（武汉公交，默认）/ hanqi（汉奇智慧出行）
+    dataSource: { type: String, default: 'whbus' },
+    // 汉奇线路 ID（dataSource === 'hanqi' 时作查询键）
+    hqLineId: { type: String, default: '' },
+    dataSourceProp: { type: String, default: 'whbus' },
+    hqLineIdProp: { type: String, default: '' },
   },
   data() {
     return {
@@ -629,6 +636,10 @@ export default {
       lineNo: '',
       direction: 0,
       lineName: '',
+      // 数据源：whbus（武汉公交，默认）/ hanqi（汉奇智慧出行，第三方实时接口直连）
+      dataSource: 'whbus',
+      // 汉奇线路 ID（source === 'hanqi' 时使用，代替 lineNo 作查询键）
+      hqLineId: '',
       // 搜索框输入的线路号
       searchNo: '',
       // 车辆视角方向：0 上行 / 1 下行 / 2 全部（默认双方向同屏）
@@ -1006,6 +1017,13 @@ export default {
         if (no) this.loadByLine(no, this.direction)
       }
     },
+    // 数据源或汉奇线路 ID 任一变化：重新加载对应线路
+    dataSource(v) {
+      this.reloadForSource()
+    },
+    hqLineId(v) {
+      this.reloadForSource()
+    },
     // 全市公交视图：宿主顶部分段是唯一入口，本组件不再自带开关
     cityMode(v) {
       if (v) { if (!this.cityOn) this.enterCity() }
@@ -1075,11 +1093,36 @@ export default {
       this.stopAutoRefresh()
     },
     // 组件化入口：从 props 读取线路并首次加载（页面形态下由 mounted 调用）
+    // 宿主的数据源或汉奇线路 ID 变化时重载（两个 watch 都走这里，用 prop 值保证一致性）
+    reloadForSource() {
+      if (!this.lineName && !this.lineNo) return
+      const src = this.dataSourceProp || 'whbus'
+      const hqId = this.hqLineIdProp || ''
+      if (src === this.dataSource && hqId === this.hqLineId) return
+      this.dataSource = src
+      this.hqLineId = hqId
+      this.lineCode = src === 'hanqi' ? 'hanqi-' + hqId : buildLineCode(this.lineNo, this.direction)
+      // 清空旧线路缓存，避免叠加
+      this.stopsByDir = { 0: [], 1: [] }
+      this.routeByDir = { 0: [], 1: [] }
+      this.routeState = { 0: 'idle', 1: 'idle' }
+      this.busesByDir = { 0: [], 1: [] }
+      this.selectedBus = null
+      this.camInited = false
+      this._userMoved = false
+      this._view = null
+      if (this.useMap) this.mapKey++
+      this.loadAllStops()
+      this.loadLive()
+    },
     initFromProps() {
+      this.dataSource = this.dataSourceProp || 'whbus'
+      this.hqLineId = this.hqLineIdProp || ''
       this.lineCode = this.lineCodeProp || ''
       this.direction = Number(this.initDirection || 0)
       this.lineName = this.lineNameProp || ''
       this.lineNo = this.lineCode.split('-')[1] || this.lineName || ''
+      if (this.dataSource === 'hanqi') this.lineCode = 'hanqi-' + this.hqLineId
       this.searchNo = this.lineName || this.lineNo
       this._userMoved = false
       // 先量出画布尺寸与 UI 占位，再拉数据（自绘走向图依赖这些尺寸做自适应）
@@ -1146,6 +1189,7 @@ export default {
       this.lineNo = no
       this.direction = dir
       this.lineCode = buildLineCode(no, dir)
+      if (this.dataSource === 'hanqi') this.lineCode = 'hanqi-' + this.hqLineId
       // 清空上一条线路的全部缓存，避免叠加
       this.stopsByDir = { 0: [], 1: [] }
       this.routeByDir = { 0: [], 1: [] }
@@ -1161,8 +1205,73 @@ export default {
       this.loadAllStops()
       this.loadLive()
     },
+    // 汉奇线路加载：取一次 realtime（含 stations + polyline + 实时 buses），双方向直接归一化
+    // 上行 = API 原始方向（start→end），下行 = 反转；车辆按 floatIndex 归并到方向（>1 视为已越站，按对向重定位）
+    async loadHanqiLine() {
+      if (!this.hqLineId) { this.loading = false; return }
+      try {
+        const data = await hqFetchRealtime(this.hqLineId)
+        const fwdStops = (data.stations || []).map((s) => ({
+          name: s.name, latitude: s.lat, longitude: s.lng, order: s.order,
+        }))
+        const fwdPoly = (data.polyline || []).map((p) => ({ latitude: p.lat, longitude: p.lng }))
+        const revStops = fwdStops.slice().reverse()
+        const revPoly = fwdPoly.slice().reverse()
+        this.stopsByDir = { 0: fwdStops, 1: revStops }
+        this.routeByDir = { 0: fwdPoly, 1: revPoly }
+        this.routeState = { 0: 'ok', 1: 'ok' }
+        // 地图中心移到基准线路中段
+        const mid = fwdStops[Math.floor(fwdStops.length / 2)]
+        if (mid && !isNaN(parseFloat(mid.latitude))) {
+          this.mapCenter = { lat: parseFloat(mid.latitude), lng: parseFloat(mid.longitude) }
+        }
+        // 方向判断：汉奇一次只回单方向 stations/polyline，buses 的 floatIndex 是相对原始方向的下标
+        // floatIndex <= total/2 → 上行(0)，> total/2 → 已越过半程，按对向(下行1)重定位
+        const total = (data.stations || []).length
+        const dirOf = (b) => {
+          const idx = Math.round(b.floatIndex || 0)
+          return total > 1 ? (idx > total / 2 ? 1 : 0) : 0
+        }
+        this.busesByDir = {
+          0: data.buses.filter((b) => dirOf(b) === 0),
+          1: data.buses.filter((b) => dirOf(b) === 1),
+        }
+        this.loading = false
+        if (!this.camInited) this.fitRoute()
+        else this.renderSchematic()
+      } catch (e) {
+        this.loading = false
+      }
+    },
+    // 汉奇车辆归一化：API 一次回单方向 stations/polyline，buses 的 floatIndex 相对原始方向
+    // 本视图里 0 = 原始方向，1 = 反转方向；floatIndex > stations.length/2 时视为已越站，按对向重新归并
+    fetchHanqiLive() {
+      return hqFetchRealtime(this.hqLineId).then((data) => {
+        const total = (data.stations || []).length
+        return (data.buses || []).map((b) => {
+          const idx = Math.round(b.floatIndex || 0)
+          const dir = total > 1 ? (idx > total / 2 ? 1 : 0) : 0
+          return {
+            dir,
+            busId: b.busId,
+            busNo: b.busId,
+            orgId: b.busId, // 汉奇 busId 即明文自编号（车型+流水号，如 460C32D0）
+            no: this.lineName, // 线路名（详情窗「所属线路」行用）
+            lat: b.lat,
+            lng: b.lng,
+            gpsSpeed: 0,
+            arrived: b.stationName ? '1' : '',
+            stationIndex: b.stationIndex,
+            stationName: b.stationName,
+            time: b.terminalTip || '',
+          }
+        }).filter((b) => !isNaN(b.lat) && !isNaN(b.lng))
+      }).catch(() => [])
+    },
     // 加载双方向站点（全部模式与一次性轨迹规划都需要）
     async loadAllStops() {
+      // 汉奇数据源走独立分支：直接喂 polyline + 归一化 buses，跳过 OSRM / 驾车吸附
+      if (this.dataSource === 'hanqi') return this.loadHanqiLine()
       const dirs = [0, 1].filter((d) => !(this.stopsByDir[d] && this.stopsByDir[d].length))
       for (const d of dirs) {
         try {
@@ -1217,6 +1326,7 @@ export default {
     // 生成双方向线路轨迹：优先高德官方公交线路真实轨迹（一次搜索匹配两个方向），取不到再逐段驾车吸附兜底
     async planRouteAlongRoads() {
       if (!this.useMap) return
+      if (this.dataSource === 'hanqi') return
       try {
         const AMap = await this.waitForAMap()
         const official = await this.fetchOfficialLines(AMap)
@@ -1245,6 +1355,7 @@ export default {
     // 无 Key 模式走向吸附：OSRM 免 Key 公共路由，按线路-方向缓存 7 天；失败保持站点连线
     async planRouteViaOsrm() {
       if (this.useMap) return
+      if (this.dataSource === 'hanqi') return
       const DIRS = [0, 1]
       const todo = DIRS.filter((dir) =>
         (this.stopsByDir[dir] || []).filter((s) => !isNaN(parseFloat(s.latitude)) && !isNaN(parseFloat(s.longitude))).length > 1
@@ -1429,6 +1540,19 @@ export default {
     async loadLive(silent) {
       if (!this.lineNo) return
       this.loading = true
+      // 汉奇数据源走独立分支：buses 直接给经纬度与沿线下标，按 floatIndex 归并到方向
+      if (this.dataSource === 'hanqi') {
+        const list = await this.fetchHanqiLive()
+        this.busesByDir = {
+          0: list.filter((b) => b.dir === 0),
+          1: list.filter((b) => b.dir === 1),
+        }
+        if (!silent) this.selectedBus = null
+        if (!this.camInited) this.fitRoute()
+        else this.$nextTick(() => this.measureUi())
+        this.loading = false
+        return
+      }
       // 先清空上一批车辆，让地图移除旧标记，避免旧位置气泡残留叠加
       this.busesByDir = { 0: [], 1: [] }
       if (!silent) this.selectedBus = null
@@ -1462,6 +1586,7 @@ export default {
     },
     // 拉取并解析某方向在线车辆
     async fetchDirLive(dir) {
+      if (this.dataSource === 'hanqi') return [] // 汉奇在 loadLive 分支里已走 fetchHanqiLive，这里不再拉武汉公交接口
       const data = await fetchRealTime(buildLineCode(this.lineNo, dir))
       const list = (data && data.lineBusDtoList) || []
       const out = []

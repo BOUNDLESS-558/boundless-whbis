@@ -6,9 +6,19 @@
         <view class="db-title">线路数据库</view>
         <view class="db-sub">集团全量线路 · 本地摘要 · 含已停运历史线</view>
       </view>
-      <text class="db-count">共 {{ total }} 条</text>
+      <text class="db-count">共 {{ source === 'hanqi' ? hanqiLines.length : total }} 条</text>
     </view>
 
+    <!-- 数据源：武汉公交（自有） / 汉奇智慧出行（第三方实时接口，直连） -->
+    <view class="db-row db-src">
+      <text class="db-fl">数据源</text>
+      <view class="db-chips">
+        <view class="db-chip" :class="{ on: source === 'whbus' }" @click="setSource('whbus')">武汉公交</view>
+        <view class="db-chip" :class="{ on: source === 'hanqi' }" @click="setSource('hanqi')">汉奇公交</view>
+      </view>
+    </view>
+
+    <template v-if="source === 'whbus'">
     <view class="db-div"></view>
 
     <view class="db-row db-stat">
@@ -56,10 +66,11 @@
         >{{ s.label }}</view>
       </view>
     </view>
+    </view>
   </view>
 
-  <!-- 结果列表 -->
-  <view class="db-mod db-list" :class="{ plain: plain }">
+  <!-- 结果列表：武汉公交 -->
+  <view class="db-mod db-list" :class="{ plain: plain }" v-if="source === 'whbus'">
     <view class="db-row db-lhead">
       <text class="db-lh-t">匹配 {{ filtered.length }} 条</text>
       <view class="db-copy" v-if="filtered.length" @click.stop="copyFiltered" title="一键复制当前筛选命中的全部线路信息（TSV，可直接粘贴进表格）">⧉ 复制</view>
@@ -82,6 +93,32 @@
     </view>
     <view class="db-more" v-if="filtered.length > shown" @click="loadMore">
       加载更多（剩余 {{ filtered.length - shown }} 条）
+    </view>
+  </view>
+
+  <!-- 结果列表：汉奇公交（第三方实时接口，直连；点击直接进实时地图） -->
+  <view class="db-mod db-list" :class="{ plain: plain }" v-else>
+    <view class="db-row db-lhead">
+      <text class="db-lh-t">汉奇公交 · 匹配 {{ hanqiFiltered.length }} 条</text>
+      <text class="db-lh-s" v-if="hanqiLoading">加载中…</text>
+      <text class="db-go" v-else @click="loadHanqi" title="重新扫描汉奇线路">↻</text>
+    </view>
+    <view class="db-div"></view>
+
+    <view class="db-item" v-for="l in hanqiVisible" :key="l.lineId" @click="openHanqi(l)">
+      <text class="db-no hanqi">{{ l.lineNo }}</text>
+      <view class="db-item-body">
+        <text class="db-route">{{ l.first && l.last ? l.first + ' – ' + l.last : '运营中' }} · {{ l.price || '票价未知' }}</text>
+        <text class="db-meta">{{ (l.dirs && l.dirs.length > 1) ? '双向' : '单向' }}</text>
+      </view>
+      <text class="db-go">›</text>
+    </view>
+
+    <view class="db-none" v-if="!hanqiLoading && !hanqiFiltered.length">
+      <text class="db-none-t">{{ hanqiErr || '暂无汉奇公交线路（或扫描失败）' }}</text>
+    </view>
+    <view class="db-more" v-if="hanqiFiltered.length > shown" @click="loadMore">
+      加载更多（剩余 {{ hanqiFiltered.length - shown }} 条）
     </view>
   </view>
 
@@ -116,6 +153,7 @@
 <script>
 import { allLines, linePrefix, lineStatus, LINE_COUNT } from '../utils/lineIndex.js'
 import { buildLineCode } from '../config.js'
+import { fetchHanqiLines } from '../utils/hanqi.js'
 
 // 窗口化渲染：一次只挂 80 条，避免 1137 行全量 DOM 拖慢 H5 滚动
 const PAGE = 80
@@ -141,6 +179,11 @@ export default {
       ],
       shown: PAGE,
       detail: null,
+      // 数据源：whbus（武汉公交，自有）/ hanqi（汉奇智慧出行，第三方实时接口）
+      source: 'whbus',
+      hanqiLines: [],
+      hanqiLoading: false,
+      hanqiErr: '',
     }
   },
   computed: {
@@ -167,6 +210,15 @@ export default {
     },
     visibleLines() {
       return this.filtered.slice(0, this.shown)
+    },
+    hanqiFiltered() {
+      const q = this.kw.trim().toUpperCase()
+      return this.hanqiLines.filter((l) =>
+        !q || String(l.lineName || '').toUpperCase().includes(q)
+      )
+    },
+    hanqiVisible() {
+      return this.hanqiFiltered.slice(0, this.shown)
     },
   },
   watch: {
@@ -216,6 +268,38 @@ export default {
     },
     loadMore() {
       this.shown += PAGE
+    },
+    // 切换数据源：武汉公交 / 汉奇公交（首次切到汉奇时懒加载扫描一遍）
+    setSource(s) {
+      if (s === this.source) return
+      this.source = s
+      this.shown = PAGE
+      if (s === 'hanqi' && !this.hanqiLines.length && !this.hanqiLoading) this.loadHanqi()
+    },
+    // 扫描汉奇线路：用武汉锚点散点覆盖全市，合并去重（仅 7 个轻量请求）
+    async loadHanqi() {
+      this.hanqiLoading = true
+      this.hanqiErr = ''
+      try {
+        const list = await fetchHanqiLines()
+        list.sort((a, b) => String(a.lineName).localeCompare(String(b.lineName), 'zh'))
+        this.hanqiLines = list
+      } catch (e) {
+        this.hanqiErr = '汉奇接口扫描失败，点 ↻ 重试'
+      } finally {
+        this.hanqiLoading = false
+      }
+    },
+    // 汉奇线路：直接进实时地图（数据源标志由宿主透传给 LineMap）
+    openHanqi(l) {
+      this.$emit('pick', {
+        source: 'hanqi',
+        lineId: l.lineId,
+        lineName: l.lineName,
+        direction: 0,
+        startStop: '',
+        endStop: '',
+      })
     },
     openDetail(l) {
       this.detail = l
@@ -457,6 +541,13 @@ export default {
   color: #062a33;
   background: linear-gradient(135deg, #67e8f9, #06b6d4);
   font-variant-numeric: tabular-nums;
+}
+/* 汉奇线路名（文本，非数字编号）：放宽宽度、缩小字号，沿用同款青色渐变 */
+.db-no.hanqi {
+  min-width: 0;
+  font-size: 20rpx;
+  white-space: nowrap;
+  color: #062a33;
 }
 .db-item-body {
   flex: 1;

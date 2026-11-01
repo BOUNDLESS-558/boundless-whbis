@@ -27,6 +27,8 @@
         :city-mode="view === 'city'"
         :embedded="true"
         :fs-enabled="false"
+        :data-source-prop="lineSource"
+        :hq-line-id-prop="hqLineId"
         @pick-line="onPickLine"
         @exit-city="onExitCity"
       >
@@ -302,6 +304,10 @@ export default {
       direction: 0,
       startStop: '',
       endStop: '',
+      // 数据源：whbus（武汉公交，默认）/ hanqi（汉奇智慧出行）
+      lineSource: 'whbus',
+      // 汉奇线路 ID（lineSource === 'hanqi' 时透传给 LineMap）
+      hqLineId: '',
       // 分段四档一律用全名（悬浮窗时代，「线路 / 线路库」这种短名反而看不懂）
       views: [
         { key: 'map', label: '实时地图' },
@@ -388,11 +394,22 @@ export default {
     },
     // 选线：lineCode 形如 {cityCode}-{线路号}-{方向}，线路号由它反解
     applyPick(p) {
-      const code = p.lineCode || buildLineCode(p.lineName || p.lineNo || '', p.direction || 0)
-      const no = String(code).split('-')[1] || p.lineName || ''
-      this.lineCode = code
-      this.lineNo = no
-      this.lineName = p.lineName || no
+      const src = p.source || 'whbus'
+      this.lineSource = src
+      if (src === 'hanqi') {
+        // 汉奇线路：用 lineId 作查询键，lineName 用于展示
+        this.hqLineId = p.lineId || ''
+        this.lineCode = 'hanqi-' + this.hqLineId
+        this.lineNo = p.lineName || ''
+        this.lineName = p.lineName || ''
+      } else {
+        this.hqLineId = ''
+        const code = p.lineCode || buildLineCode(p.lineName || p.lineNo || '', p.direction || 0)
+        const no = String(code).split('-')[1] || p.lineName || ''
+        this.lineCode = code
+        this.lineNo = no
+        this.lineName = p.lineName || no
+      }
       this.direction = Number(p.direction || 0)
       this.startStop = p.startStop || ''
       this.endStop = p.endStop || ''
@@ -415,8 +432,21 @@ export default {
       this.writeHomeLine()
       if (sameLine) {
         const c = this.$refs.mapC
-        if (c) c.loadByLine(this.lineNo, this.direction)
+        if (c) {
+          // 汉奇模式：lineNo 是线路名而非数字，loadByLine 会生成错误的 buildLineCode；
+          // 改用 loadHanqiLine 直接按 hqLineId 拉数据
+          if (this.lineSource === 'hanqi') {
+            c.loadHanqiLine()
+          } else {
+            c.loadByLine(this.lineNo, this.direction)
+          }
+        }
       }
+    },
+    // 切数据源（汉奇 → 武汉公交，或反之）：LineMap 会重拉对应线路；这里清掉失效的线路记忆
+    setLineSource(src) {
+      this.lineSource = src
+      if (src === 'whbus') this.hqLineId = ''
     },
     // 分段切换：有线路时是「开窗 / 收窗」，没线路时单条线路类档位不可达（全市公交始终可达）
     switchView(key) {
@@ -450,6 +480,9 @@ export default {
           direction: this.direction,
           startStop: this.startStop,
           endStop: this.endStop,
+          // 数据源（汉奇/武汉公交）与汉奇线路 ID，恢复时一并还原
+          source: this.lineSource,
+          lineId: this.hqLineId,
         })
       } catch (e) {
         /* 存储不可用就只影响下次记忆的恢复，不打扰用户 */
