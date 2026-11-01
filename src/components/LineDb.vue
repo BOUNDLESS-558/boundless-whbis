@@ -6,19 +6,20 @@
         <view class="db-title">线路数据库</view>
         <view class="db-sub">集团全量线路 · 本地摘要 · 含已停运历史线</view>
       </view>
-      <text class="db-count">共 {{ source === 'hanqi' ? hanqiLines.length : total }} 条</text>
+      <text class="db-count">共 {{ total }} 条</text>
     </view>
 
     <!-- 数据源：武汉公交（自有） / 汉奇智慧出行（第三方实时接口，直连） -->
     <view class="db-row db-src">
       <text class="db-fl">数据源</text>
       <view class="db-chips">
+        <view class="db-chip" :class="{ on: source === 'all' }" @click="setSource('all')">全部</view>
         <view class="db-chip" :class="{ on: source === 'whbus' }" @click="setSource('whbus')">武汉公交</view>
         <view class="db-chip" :class="{ on: source === 'hanqi' }" @click="setSource('hanqi')">汉奇公交</view>
       </view>
     </view>
 
-    <template v-if="source === 'whbus'">
+    <template v-if="source !== 'hanqi'">
     <view class="db-div"></view>
 
     <view class="db-row db-stat">
@@ -83,8 +84,8 @@
     </template>
   </view>
 
-  <!-- 结果列表：武汉公交 -->
-  <view class="db-mod db-list" :class="{ plain: plain }" v-if="source === 'whbus'">
+  <!-- 结果列表：全部（武汉+汉奇合并）/ 武汉公交 -->
+  <view class="db-mod db-list" :class="{ plain: plain }" v-if="source !== 'hanqi'">
     <view class="db-row db-lhead">
       <text class="db-lh-t">匹配 {{ filtered.length }} 条</text>
       <view class="db-copy" v-if="filtered.length" @click.stop="copyFiltered" title="一键复制当前筛选命中的全部线路信息（TSV，可直接粘贴进表格）">⧉ 复制</view>
@@ -92,10 +93,10 @@
     </view>
     <view class="db-div"></view>
 
-    <view class="db-item" v-for="l in visibleLines" :key="l.no" @click="openDetail(l)">
-      <text class="db-no">{{ l.no }}</text>
+    <view class="db-item" v-for="l in visibleLines" :key="l.source === 'hanqi' ? 'hq-' + l.lineId : l.no" @click="l.source === 'hanqi' ? openHanqi(l) : openDetail(l)">
+      <text class="db-no" :class="{ hanqi: l.source === 'hanqi' }">{{ l.source === 'hanqi' ? l.lineName : l.no }}</text>
       <view class="db-item-body">
-        <text class="db-route">{{ l.start || '起点未知' }} → {{ l.end || '终点未知' }}</text>
+        <text class="db-route">{{ l.start || '起点未知' }} → {{ l.end || '终点未知' }}<text class="db-hq-tag" v-if="l.source === 'hanqi'"> · 汉奇</text></text>
         <text class="db-meta">{{ l.stops ? l.stops + ' 站' : '站数未知' }} · {{ l.dirs.length > 1 ? '双向' : '单向' }} · {{ l.price ? '¥' + l.price : '票价未知' }}</text>
       </view>
       <text class="db-badge" :class="'db-badge-' + statusOf(l).key">{{ statusOf(l).label }}</text>
@@ -166,7 +167,7 @@
 </template>
 
 <script>
-import { allLines, linePrefix, lineStatus, LINE_COUNT, HQ_LINES, HQ_UPDATED, orgOf } from '../utils/lineIndex.js'
+import { allLines, linePrefix, lineStatus, HQ_LINES, HQ_UPDATED, orgOf } from '../utils/lineIndex.js'
 import { buildLineCode } from '../config.js'
 import { fetchHanqiLines } from '../utils/hanqi.js'
 
@@ -195,9 +196,9 @@ export default {
       ],
       shown: PAGE,
       detail: null,
-      // 数据源：whbus（武汉公交，自有）/ hanqi（汉奇智慧出行，第三方实时接口）。
+      // 数据源：all（武汉公交+汉奇合并，默认）/ whbus（仅武汉）/ hanqi（仅汉奇）。
       // 汉奇列表直读 lines.json 的持久化块（scan-hanqi.mjs 生成），不再每次切页签现扫
-      source: 'whbus',
+      source: 'all',
       hanqiLines: HQ_LINES.slice(),
       HQ_UPDATED,
       hanqiLoading: false,
@@ -205,21 +206,45 @@ export default {
     }
   },
   computed: {
-    total() {
-      return this.all.length || LINE_COUNT
+    // 实际展示的数据源：全部=武汉公交+汉奇合并；武汉公交=仅武汉；汉奇=仅汉奇。
+    // 汉奇项归一为与武汉项同形（source:'hanqi' 标记），统一进入搜索/筛选/复制与列表渲染
+    baseList() {
+      const wuhan = this.all
+      const hanqi = this.hanqiLines.map((l) => ({
+        source: 'hanqi',
+        lineId: l.lineId,
+        no: l.lineName || l.lineNo || '',
+        name: l.lineName || l.lineNo || '',
+        start: l.start || '',
+        end: l.end || '',
+        stops: l.stops || 0,
+        dirs: l.dirs && l.dirs.length ? l.dirs : [0],
+        price: l.price || '',
+        status: '营运',
+        early: l.first || '',
+        last: l.last || '',
+        org: l.org || '',
+        code: '',
+      }))
+      if (this.source === 'hanqi') return hanqi
+      if (this.source === 'whbus') return wuhan
+      return wuhan.concat(hanqi)
     },
-    // 三态统计：对全库跑一次 lineStatus（当前时刻），供头部展示
+    total() {
+      return this.baseList.length
+    },
+    // 三态统计：对当前展示集跑一次 lineStatus（当前时刻），供头部展示
     stats() {
       const s = { live: 0, ended: 0, off: 0 }
-      for (const l of this.all) s[lineStatus(l).key]++
+      for (const l of this.baseList) s[lineStatus(l).key]++
       return s
     },
-    // 公司筛选项：按全库实际收录动态生成（一…九公司按序 + 其他 + 未收录），无数据时只剩「全部」
+    // 公司筛选项：按当前展示集实际收录动态生成（一…九公司按序 + 其他 + 未收录），无数据时只剩「全部」
     orgOpts() {
       const CN = ['一', '二', '三', '四', '五', '六', '七', '八', '九']
       const cnt = {}
       let none = 0
-      for (const l of this.all) {
+      for (const l of this.baseList) {
         const o = orgOf(l)
         if (!o) { none++; continue }
         cnt[o.key] = (cnt[o.key] || 0) + 1
@@ -235,7 +260,7 @@ export default {
     },
     filtered() {
       const q = this.kw.trim().toUpperCase()
-      return this.all.filter((l) => {
+      return this.baseList.filter((l) => {
         if (this.prefix !== '全部' && linePrefix(l.no) !== this.prefix) return false
         if (this.status !== '全部' && lineStatus(l).key !== this.status) return false
         if (this.org !== '全部') {
@@ -596,6 +621,12 @@ export default {
   font-size: 20rpx;
   white-space: nowrap;
   color: #062a33;
+}
+/* 合并列表中汉奇项的「汉奇」来源标记 */
+.db-hq-tag {
+  font-size: 20rpx;
+  font-weight: 700;
+  color: #67e8f9;
 }
 .db-item-body {
   flex: 1;
