@@ -230,7 +230,7 @@
           <text class="dc-unit">路</text>
         </view>
         <view class="dir-cur none" v-else>未选择线路</view>
-        <!-- 所属营运公司（由在线车辆自编号首位推断）：紧跟在“337 路”后面同一行，不换行 -->
+        <!-- 所属营运公司（武汉公交由在线车辆自编号首位推断；汉奇用线路库静态归属，未收录不显示）：紧跟在“337 路”后面同一行，不换行 -->
         <view class="ctrl-org" v-if="operatorCompanies.length">
           <view class="org-tag" v-for="c in operatorCompanies" :key="c.no" :title="c.label">
             <text class="org-no">{{ c.no }}</text>
@@ -482,7 +482,7 @@ import { fetchRoadRoute } from '../utils/osrm.js'
 import { APP_CONFIG, buildLineCode, useNativeMap } from '../config.js'
 import { assetUrl } from '../utils/asset.js'
 import { distance } from '../utils/geo.js'
-import { allLines } from '../utils/lineIndex.js'
+import { allLines, hanqiRouteOrg } from '../utils/lineIndex.js'
 import { createResizable } from '../utils/panelResize.js'
 import {
   citySweepCost, sweepCity, loadSnapshot, loadLastSnapshot, snapshotAge,
@@ -968,9 +968,19 @@ export default {
       }
       return out
     },
-    // 所属营运公司：由当前视角在线车辆自编号（orgId）首位推断，1 → 武汉公交集团第一营运公司，依次类推
-    //（汉奇线的车同为武汉公交集团各营运公司车辆，自编号同一口径，因此一并按首位推断）
+    // 所属营运公司：
+    // - 武汉公交：由在线车辆自编号（orgId，纯数字）首位推断，1 → 第一营运公司，依次类推；
+    // - 汉奇线路：车辆 busId 是车型编号（如 460C32D0），首位不代表公司（景景有约实为二公司线路，
+    //   按首位会被误判成四公司），一律以线路库静态归属（scan-org.mjs 自 buspedia 采集）为准；
+    //   未收录的汉奇线宁可不显示徽标，也不能拿车型码首位猜一个错的公司。
     operatorCompanies() {
+      if (this.dataSource === 'hanqi') {
+        const full = hanqiRouteOrg(this.hqLineId)
+        const m = full && /第([一二三四五六七八九])营运公司/.exec(full)
+        if (!m) return []
+        const no = '一二三四五六七八九'.indexOf(m[1]) + 1
+        return [{ no, short: `${CN_ORG[no]}公司`, label: full }]
+      }
       const set = new Set()
       this.shownBuses.forEach((b) => {
         const d = String(b.orgId || '').charAt(0)
@@ -3281,6 +3291,8 @@ export default {
       this.onHoverLeave()
     },
     busCompanyText(bus) {
+      // 汉奇车辆编号是车型码、首位不代表公司；线路归属已知时用静态 org，未知判“营运公司未知”
+      if (this.dataSource === 'hanqi') return hanqiRouteOrg(this.hqLineId) || '营运公司未知'
       return orgCompanyOf(bus)
     },
     busStateText(bus) {
@@ -3291,7 +3303,10 @@ export default {
     // 所在站点 = 车辆与该方向站点序列里 haversine 最近的一站（坐标均为 GCJ-02，直接算距离）
     copyOnlineBuses() {
       const CN = ['', '第一', '第二', '第三', '第四', '第五', '第六', '第七', '第八', '第九']
+      // 汉奇线：车辆编号是车型码、首位不代表公司，统一用线路静态归属；未收录的宁缺不错
+      const hqOrg = this.dataSource === 'hanqi' ? hanqiRouteOrg(this.hqLineId) : ''
       const companyOf = (b) => {
+        if (this.dataSource === 'hanqi') return hqOrg || '营运公司未知'
         const d = String(b.orgId || '').charAt(0)
         return d >= '1' && d <= '9' ? `武汉公交集团${CN[Number(d)]}营运公司` : '营运公司未知'
       }

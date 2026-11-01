@@ -382,6 +382,9 @@ export default {
     if (v && VIEW_KEYS.includes(v)) {
       if (v === 'city' && !this.isCityActivated()) {
         if (this.hasLine) this.view = 'map'
+      } else if (v === 'stops' && this.lineSource === 'hanqi') {
+        // 汉奇线没有武汉公交时刻表/站点接口，实时线路窗拉不到数据，落在地图
+        this.view = 'map'
       } else {
         this.view = !this.hasLine && LINE_VIEWS.includes(v) ? 'db' : v
       }
@@ -481,6 +484,12 @@ export default {
       if (key === this.view) { this.view = home; return }
       // 全市公交需激活：未激活弹窗校验，已激活直接进
       if (key === 'city') { this.enterCity(); return }
+      // 实时线路窗只服务武汉公交（LineStops 按 420100-lineCode 协议拉站点/车辆），
+      // 汉奇线开了只会空窗，还会把车型码首位当公司号误挂徽标 → 直接拦在此处
+      if (key === 'stops' && this.lineSource === 'hanqi') {
+        uni.showToast({ title: '汉奇线路暂不支持实时线路视图', icon: 'none' })
+        return
+      }
       if (!this.hasLine && LINE_VIEWS.includes(key)) {
         uni.showToast({ title: '请先选择一条线路', icon: 'none' })
         return

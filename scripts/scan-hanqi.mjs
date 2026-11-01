@@ -149,6 +149,12 @@ const oldBlock = (() => {
     return j && j.hanqi && Array.isArray(j.hanqi.lines) ? j.hanqi : null
   } catch (e) { return null }
 })()
+// org 是外部采集的静态归属（scan-org.mjs 自 buspedia），汉奇接口不返回它：
+// 无论是否 --merge，重扫都要按 lineId 携带旧 org，否则手工修正的公司归属会丢
+if (oldBlock) {
+  const prevOrg = new Map(oldBlock.lines.filter((l) => l.org).map((l) => [l.lineId, l.org]))
+  for (const l of fresh) if (!l.org && prevOrg.has(l.lineId)) l.org = prevOrg.get(l.lineId)
+}
 if (MERGE && oldBlock) {
   const map = new Map(oldBlock.lines.map((l) => [l.lineId, l]))
   for (const l of fresh) {

@@ -176,6 +176,16 @@ for (const l of lines) {
   }
 }
 
+// 汉奇块也要静态归属：汉奇车辆编号是车型码、首位不表征收营运公司，
+// 线路级徽标只能靠这里写入的 org（buspedia 线路名与 lineName 同口径，直接整名匹配）。
+let hqHit = 0
+const hqLines = (db.hanqi && db.hanqi.lines) || []
+for (const l of hqLines) {
+  if (l.org && !FORCE) continue
+  const company = mapping.get(String(l.lineName || '').toUpperCase())
+  if (company) { l.org = company; hqHit++ }
+}
+
 // —— 统计 ——
 const CN = { 一: 1, 二: 2, 三: 3, 四: 4, 五: 5, 六: 6, 七: 7, 八: 8, 九: 9 }
 const dist = {}
@@ -186,15 +196,15 @@ for (const l of lines) {
   dist[key] = (dist[key] || 0) + 1
 }
 console.log('\n==== 采集结果 ====')
-console.log(`本轮：命中 ${hit} / 跳过(已有) ${skip} / 未命中 ${miss}`)
+console.log(`本轮：命中 ${hit} / 跳过(已有) ${skip} / 未命中 ${miss}；汉奇块补写 ${hqHit} 条（共 ${hqLines.length} 条）`)
 console.log('全库 org 分布：', JSON.stringify(dist), '（空 ' + lines.filter((l) => !l.org).length + ' 条）')
 
 if (DRY) {
   console.log('--dry：未写文件')
-} else if (hit > 0) {
+} else if (hit + hqHit > 0) {
   db.updated = new Date().toISOString()
   fs.writeFileSync(FILE, JSON.stringify(db, null, 2) + '\n', 'utf8')
-  console.log(`√ 已写回 ${path.relative(process.cwd(), FILE)}（新增/更新 ${hit} 条 org）`)
+  console.log(`√ 已写回 ${path.relative(process.cwd(), FILE)}（新增/更新 ${hit + hqHit} 条 org）`)
 } else {
   console.log('无新增命中，不写文件')
 }

@@ -56,7 +56,7 @@ npm run deploy:pages # 构建 + 强推 origin/pages（GitHub Pages）
 - **前缀白名单只有 `电 / BRT / K / D`**（用户确认）：`--prefix` 传其它字母会直接报错退出，别再扫 26 个字母；落盘前还会剔除名字带 H/J 前缀及「测试/内部线路」的条目。
 - 分批扫描一律带 `--merge`（只补强不降级：`dirs` 取并集，站数/起讫站/首末班仅在空值时回填，`status:'停运'` 人工标记不会被后端缓存数据覆盖）。**改完后处理逻辑不想联网**时用 `node scripts/scan-lines.mjs --normalize-only --merge`。
 - 已知数据缺口：73 条无站数、10 条无起讫站（后端两个方向都空），UI 显示「站数未知 / 起点未知」兜底，不是 bug。
-- **`org` 字段（营运公司）**：由 `scripts/scan-org.mjs` 从 buspedia.top（巴士派迪）采集写入 lines.json（全名如「武汉市公共交通集团有限责任公司第五营运公司」）。一次性拉取 `https://buspedia.top/comp/zek3io/lines` 的 Nuxt SSR 内嵌数据，解析线路→公司映射后按 `no` 匹配写回。覆盖 562/1137 条（含 85 条 D 线，旧 8684 源不收录 D），剩余 575 条主要是 buspedia 也未收录的小众 D/K 线。只补强不降级（已有 org 默认跳过，`--force` 才覆盖）；支持 `--dry`。站点偶尔响应慢，脚本内置 3 次重试 + 180s 超时。
+- **`org` 字段（营运公司）**：由 `scripts/scan-org.mjs` 从 buspedia.top（巴士派迪）采集写入 lines.json（全名如「武汉市公共交通集团有限责任公司第五营运公司」）。一次性拉取 `https://buspedia.top/comp/zek3io/lines` 的 Nuxt SSR 内嵌数据，解析线路→公司映射后按 `no` 匹配写回。覆盖 562/1137 条（含 85 条 D 线，旧 8684 源不收录 D），剩余 575 条主要是 buspedia 也未收录的小众 D/K 线。**汉奇块（`hanqi.lines`）也会被补 org**（按 `lineName` 整名匹配 buspedia，当前仅景景有约巴士系命中）：汉奇车辆的 busId 是车型码、首位不代表公司，线路级徽标只能靠这个静态归属（详见「方向配色」后的营运公司约定）。只补强不降级（已有 org 默认跳过，`--force` 才覆盖）；支持 `--dry`。站点偶尔响应慢，脚本内置 3 次重试 + 180s 超时。`scan-hanqi.mjs` 重扫时按 lineId 携带旧 org（无论是否 `--merge`），不会冲掉采集到的归属。
 - **`orgOf(line)`**（`lineIndex.js` 导出）：把 org 全名归类为 `{ key:'第X公司', label:'X公司', full }` 或 `{ key:'其他', … }`；空值返回 null。`LineDb.vue` 的公司筛选行依赖它——动态生成档位（数据中存在的公司才出现），未入库线路归「未收录」。筛选行只在 `orgOpts.length > 1` 时渲染，数据全空时整行隐藏不是 bug。
 - **地图/首页联想同时覆盖汉奇线**：`lineIndex.js` 里 `suggestLines`/`countMatches` 走 `SEARCH_INDEX = INDEX.concat(HQ_INDEX)`（汉奇项带 `source:'hanqi'` + `lineId`），而 **`allLines()` 仍只回武汉公交**（`LineDb` 武汉页签、`LineMap` 全市线网 lib 都靠它，别把汉奇混进去污染）。`LineSearch` 点选/查询命中汉奇时上抛 `{ source:'hanqi', lineId, lineName }`（与 `LineDb.openHanqi` 同口径），宿主 `applyPick` 据此切 `lineSource='hanqi'`。汉奇 `HQ_INDEX.alt` 故意留空——起讫站常含「地铁」，拿来匹配会让「电」这类关键词误命中、打乱联想排序（`probe-line-suggest.mjs` 的「电=5 条」断言依赖这一点）。
 
@@ -158,7 +158,8 @@ CDP 驱动 Edge headless 做真实浏览器实测，`node scripts/probe-xxx.mjs`
 ## 其他约定
 
 - 详情页刷新控件与地图页同款（`↻ | 间隔 ▾` 双层胶囊 + 下拉 0/15/20/30 秒）：**默认 15 秒**（旧行为），持久化在 `whbis:line-refresh-sec`，与地图页的 `whbis:map-refresh-sec` **各自独立**（两页使用节奏不同）。定时器统一由 `restartAutoRefresh()` 重建，`onShow` 拉起、`onHide` + `onUnload` 停止；切到自动模式时立刻补拉一次。新增异步任务/定时器同样要在 `onUnload` 收尾（地图页还有 `_autoTimer`/`_locTimer`/手势监听）。
-- 营运公司徽标由自编号首位推断（1 → 第一营运公司），`index` 优先用时刻表 `orgBusId` 明文，缺失才回退实时车辆（需 MD5 还原）。**汉奇线同口径**：其车辆同为武汉公交集团各营运公司车辆，自编号首位一样代表营运公司，所以 `operatorCompanies` / `busCompanyText` / 复制的 `companyOf` 不分数据源、一律按首位推断（不要给汉奇特例返回空或改标「汉奇智慧出行」）。但 `.dir-cur` 必须 `flex: 0 1 auto + min-width: 0`（`.dc-no` 配 `overflow:hidden; text-overflow:ellipsis`）：汉奇中文全名长，徽标回到方后若胶囊不可收缩会把徽标顶出定宽控制卡、造成错位。
+- 营运公司徽标：武汉公交给**由在线车辆自编号（orgId，纯数字）首位推断**（1 → 第一营运公司），`index` 优先用时刻表 `orgBusId` 明文，缺失才回退实时车辆（需 MD5 还原）。**汉奇线不同一口径（旧结论已推翻）**：汉奇 `busId` 是车型编号（如 `460C32D0`），首位不代表公司（景景有约实为二公司线路，按首位会被误判成四公司）；所以汉奇的 `operatorCompanies` / `busCompanyText` / 复制的 `companyOf` **一律走线路库静态归属**（`lineIndex.js` 的 `hanqiRouteOrg(lineId)`，由 `scan-org.mjs` 自 buspedia 采集写入 `lines.json` 的 `hanqi.lines[].org`）；未收录的汉奇线宁可不显示徽标（返回空 / 「营运公司未知」），也不能拿车型码首位猜一个错的公司。但 `.dir-cur` 必须 `flex: 0 1 auto + min-width: 0`（`.dc-no` 配 `overflow:hidden; text-overflow:ellipsis`）：汉奇中文全名长，徽标回到方后若胶囊不可收缩会把徽标顶出定宽控制卡、造成错位。
 - 方向徽标文字写全「上行 / 下行」，不要缩成「上 / 下」。
+- **汉奇线不开「实时线路」视图**（LineStops 浮窗）：`map.vue` 的 `switchView('stops')` 与 `onLoad` 的 `q.view==='stops'` 都要在 `lineSource === 'hanqi'` 时拦回落回地图（toast「汉奇线路暂不支持实时线路视图」）。LineStops 整套拉数 / 徽标 / 复制都按武汉公交 `420100-lineCode` 协议与自编号首位口径，汉奇线进来既拉不到站点，又会把车型码首位当公司号误挂——别为了「视图统一」放开这个口子。
 - 中文源文件均为 UTF-8；PowerShell `Get-Content`/`Select-String` 输出到控制台会乱码，读文件用编辑器工具，别把乱码当文件损坏。
 - `README.md` 已与实际同步；若仍有出入，**以代码为准**。

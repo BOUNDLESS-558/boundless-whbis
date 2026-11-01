@@ -158,6 +158,18 @@ export function findHanqiLine(no) {
 }
 
 /**
+ * 汉奇线路的所属营运公司全名（按 lineId 查线路库静态 org，buspedia 采集）。
+ * 汉奇车辆的 busId 是车型编号（如 460C32D0），首位并非公司号，
+ * 按自编号首位推断会得到错误公司；线路级徽标必须用这个静态归属。
+ * 无匹配或该线路未收录 org 时返回空字符串。
+ */
+export function hanqiRouteOrg(lineId) {
+  if (!lineId) return ''
+  const l = HQ_LINES.find((x) => x.lineId === lineId)
+  return (l && l.org) || ''
+}
+
+/**
  * 全量线路（供「线路数据库」页浏览）：直接返回预计算索引数组（只读，勿修改）。
  * 每项含 no/code/name/start/end/stops/dirs/status/early/last，足够展示本地摘要。
  */
