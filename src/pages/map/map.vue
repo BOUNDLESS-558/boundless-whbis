@@ -148,11 +148,18 @@
           <!-- 登录密码：预置口令可改为本机自定义密码（只存哈希；改密 / 恢复均需验当前密码） -->
           <view class="acct-sec-title">登录密码</view>
           <view class="acct-tip">{{ pwdCustom ? '已设置自定义密码，下次登录用新密码；也可恢复为预置口令' : '当前用预置口令登录，可修改为自己的密码（仅存本机哈希）' }}</view>
-          <input class="acct-name-input acct-pwd-input" v-model="pwdOld" :password="!pwdShow" type="text" placeholder="当前密码" placeholder-class="acct-name-ph" />
-          <input class="acct-name-input acct-pwd-input" v-model="pwdNew" :password="!pwdShow" type="text" placeholder="新密码（6~32 位）" placeholder-class="acct-name-ph" />
-          <input class="acct-name-input acct-pwd-input" v-model="pwdConfirm" :password="!pwdShow" type="text" placeholder="确认新密码" placeholder-class="acct-name-ph" @confirm="onChangePwd" />
-          <view class="acct-pwd-ops">
-            <view class="acct-mini" @click="pwdShow = !pwdShow">{{ pwdShow ? '隐藏' : '显示' }}密码</view>
+          <!-- 眼睛按钮内嵌输入框右侧：当前密码独立开关；新密码与确认密码共用一个关联开关 -->
+          <view class="acct-pwd-field">
+            <input class="acct-name-input acct-pwd-input" v-model="pwdOld" :password="!pwdShowOld" type="text" placeholder="当前密码" placeholder-class="acct-name-ph" />
+            <view class="acct-eye" :class="{ on: pwdShowOld }" @click="pwdShowOld = !pwdShowOld" v-html="pwdShowOld ? svgEyeOn : svgEyeOff" />
+          </view>
+          <view class="acct-pwd-field">
+            <input class="acct-name-input acct-pwd-input" v-model="pwdNew" :password="!pwdShowNew" type="text" placeholder="新密码（6~32 位）" placeholder-class="acct-name-ph" />
+            <view class="acct-eye" :class="{ on: pwdShowNew }" @click="pwdShowNew = !pwdShowNew" v-html="pwdShowNew ? svgEyeOn : svgEyeOff" />
+          </view>
+          <view class="acct-pwd-field">
+            <input class="acct-name-input acct-pwd-input" v-model="pwdConfirm" :password="!pwdShowNew" type="text" placeholder="确认新密码" placeholder-class="acct-name-ph" @confirm="onChangePwd" />
+            <view class="acct-eye" :class="{ on: pwdShowNew }" @click="pwdShowNew = !pwdShowNew" v-html="pwdShowNew ? svgEyeOn : svgEyeOff" />
           </view>
           <view class="acct-btns">
             <view class="acct-btn ghost" v-if="pwdCustom" @click="onResetPwd">恢复默认口令</view>
@@ -303,11 +310,15 @@ export default {
       refreshDefault: 15,
       sessionDays: 30,
       sessionExpText: '',
-      // 登录密码修改：窗内输入缓冲 + 是否已自定义 + 明文可见开关
+      // 登录密码修改：窗内输入缓冲 + 是否已自定义 + 明文可见开关（当前密码独立；新密码/确认密码关联）
       pwdOld: '',
       pwdNew: '',
       pwdConfirm: '',
-      pwdShow: false,
+      pwdShowOld: false,
+      pwdShowNew: false,
+      // 眼睛图标：单色描边 SVG，跟随文字色（currentColor）、1em 尺寸，避免彩色 emoji 在暗色面板上突兀
+      svgEyeOn: '<svg viewBox="0 0 24 24" width="1em" height="1em" style="display:block" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3.5-6.2 10-6.2S22 12 22 12s-3.5 6.2-10 6.2S2 12 2 12Z"/><circle cx="12" cy="12" r="2.7"/></svg>',
+      svgEyeOff: '<svg viewBox="0 0 24 24" width="1em" height="1em" style="display:block" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="m4 4 16 16"/><path d="M9.9 5.1A10.8 10.8 0 0 1 12 5c6.5 0 10 7 10 7a17.8 17.8 0 0 1-2.7 3.5M6.3 6.5A16.4 16.4 0 0 0 2 12s3.5 7 10 7a10.6 10.6 0 0 0 4.4-.9"/><path d="M9.9 9.9a2.9 2.9 0 0 0 4.2 4.2"/></svg>',
       pwdCustom: false,
       skinOpts: SKIN_OPTS,
       refreshOpts: REFRESH_DEFAULT_OPTS,
@@ -577,7 +588,8 @@ export default {
       this.pwdOld = ''
       this.pwdNew = ''
       this.pwdConfirm = ''
-      this.pwdShow = false
+      this.pwdShowOld = false
+      this.pwdShowNew = false
       this.pwdCustom = hasCustomPass(this.account)
       this.accountShow = true
     },
@@ -1013,6 +1025,10 @@ export default {
 .acct-id-sub {
   margin-top: 12rpx;
   font-size: 22rpx;
+  /* 行高放宽 + 底部余量：账号里的下划线（BOUNDLESS_558）画在基线之下，
+     默认 normal 行高下会被 overflow: hidden 连同 descender 一起裁掉，看起来像空格 */
+  line-height: 1.6;
+  padding-bottom: 2rpx;
   color: rgba(255, 255, 255, 0.42);
   white-space: nowrap;
   overflow: hidden;
@@ -1131,15 +1147,31 @@ export default {
   transform: scale(0.96);
 }
 /* 密码修改：输入行整宽、常规字重；保存用靛蓝（非注销的玫红） */
-.acct-pwd-input {
-  width: 100%;
-  margin-top: 14rpx;
-  font-weight: 400;
-}
-.acct-pwd-ops {
+.acct-pwd-field {
   display: flex;
   align-items: center;
-  margin-top: 16rpx;
+  gap: 10rpx;
+  margin-top: 14rpx;
+}
+.acct-pwd-input {
+  flex: 1;
+  min-width: 0;
+  font-weight: 400;
+}
+/* 眼睛按钮内嵌输入行右侧：单色描边 SVG，半透明常态，点亮表示明文可见 */
+.acct-eye {
+  flex: 0 0 auto;
+  font-size: 32rpx;
+  color: #fff;
+  opacity: 0.55;
+  cursor: pointer;
+  transition: opacity 0.15s;
+}
+.acct-eye.on {
+  opacity: 1;
+}
+.acct-eye:active {
+  transform: scale(0.9);
 }
 .acct-btn.save {
   color: #fff;

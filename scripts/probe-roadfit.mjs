@@ -5,55 +5,13 @@
  * 用法：node scripts/probe-roadfit.mjs .openchamber/geom-337.json [加密间距米]
  */
 import fs from 'node:fs'
+import { wgs84ToGcj02, gcj02ToWgs84, haversine } from './_geo.mjs'
 
 const FILE = process.argv[2] || '.openchamber/geom-337.json'
 const STEP_M = Number(process.argv[3] || 80)
 const BASE = 'https://router.project-osrm.org/match/v1/driving'
 const RADIUS = 30
 
-function wgs84ToGcj02(lat, lng) {
-  const a = 6378245.0, ee = 0.00669342162296594323, pi = Math.PI
-  const outOfChina = (lon, la) => lon < 72.004 || lon > 137.8347 || la < 0.8293 || la > 55.8271
-  const tLat = (x, y) => {
-    let ret = -100.0 + 2.0 * x + 3.0 * y + 0.2 * y * y + 0.1 * x * y + 0.2 * Math.sqrt(Math.abs(x))
-    ret += ((20.0 * Math.sin(6.0 * x * pi) + 20.0 * Math.sin(2.0 * x * pi)) * 2.0) / 3.0
-    ret += ((20.0 * Math.sin(y * pi) + 40.0 * Math.sin((y / 3.0) * pi)) * 2.0) / 3.0
-    ret += ((160.0 * Math.sin((y / 12.0) * pi) + 320 * Math.sin((y * pi) / 30.0)) * 2.0) / 3.0
-    return ret
-  }
-  const tLng = (x, y) => {
-    let ret = 300.0 + x + 2.0 * y + 0.1 * x * x + 0.1 * x * y + 0.1 * Math.sqrt(Math.abs(x))
-    ret += ((20.0 * Math.sin(6.0 * x * pi) + 20.0 * Math.sin(2.0 * x * pi)) * 2.0) / 3.0
-    ret += ((20.0 * Math.sin(x * pi) + 40.0 * Math.sin((x / 3.0) * pi)) * 2.0) / 3.0
-    ret += ((150.0 * Math.sin((x / 12.0) * pi) + 300.0 * Math.sin((x / 30.0) * pi)) * 2.0) / 3.0
-    return ret
-  }
-  if (outOfChina(lng, lat)) return { lat, lng }
-  let dLat = tLat(lng - 105.0, lat - 35.0)
-  let dLng = tLng(lng - 105.0, lat - 35.0)
-  const radLat = (lat / 180.0) * pi
-  let magic = Math.sin(radLat)
-  magic = 1 - ee * magic * magic
-  const sqrtMagic = Math.sqrt(magic)
-  dLat = (dLat * 180.0) / (((a * (1 - ee)) / (magic * sqrtMagic)) * pi)
-  dLng = (dLng * 180.0) / ((a / sqrtMagic) * Math.cos(radLat) * pi)
-  return { lat: lat + dLat, lng: lng + dLng }
-}
-function gcj02ToWgs84(lat, lng) {
-  let wLat = lat, wLng = lng
-  for (let i = 0; i < 3; i++) {
-    const g = wgs84ToGcj02(wLat, wLng)
-    wLat += lat - g.lat
-    wLng += lng - g.lng
-  }
-  return { lat: wLat, lng: wLng }
-}
-function haversine(a, b) {
-  const R = 6371000, tr = (d) => (d * Math.PI) / 180
-  const dLat = tr(b.lat - a.lat), dLng = tr(b.lng - a.lng)
-  const h = Math.sin(dLat / 2) ** 2 + Math.cos(tr(a.lat)) * Math.cos(tr(b.lat)) * Math.sin(dLng / 2) ** 2
-  return R * 2 * Math.atan2(Math.sqrt(h), Math.sqrt(1 - h))
-}
 // 按固定间距线性加密（经纬度线性插值在几公里尺度足够）
 function densify(pts, step) {
   const out = []

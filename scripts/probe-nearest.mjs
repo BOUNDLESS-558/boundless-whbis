@@ -4,71 +4,11 @@
  * 看是否存在「地面-地面」组合能把 9.51km 的荒唐绕行压回 600m。
  * 用法：node scripts/probe-nearest.mjs [线路号] [方向]
  */
+import { wgs84ToGcj02, gcj02ToWgs84, haversine, toMeters, maxExcursion } from './_geo.mjs'
+
 const LINE_NO = process.argv[2] || '337'
 const DIR = Number(process.argv[3] || 0)
 const BASE = 'https://router.project-osrm.org'
-
-function wgs84ToGcj02(lat, lng) {
-  const a = 6378245.0, ee = 0.00669342162296594323, pi = Math.PI
-  const outOfChina = (lon, la) => lon < 72.004 || lon > 137.8347 || la < 0.8293 || la > 55.8271
-  const tLat = (x, y) => {
-    let ret = -100.0 + 2.0 * x + 3.0 * y + 0.2 * y * y + 0.1 * x * y + 0.2 * Math.sqrt(Math.abs(x))
-    ret += ((20.0 * Math.sin(6.0 * x * pi) + 20.0 * Math.sin(2.0 * x * pi)) * 2.0) / 3.0
-    ret += ((20.0 * Math.sin(y * pi) + 40.0 * Math.sin((y / 3.0) * pi)) * 2.0) / 3.0
-    ret += ((160.0 * Math.sin((y / 12.0) * pi) + 320 * Math.sin((y * pi) / 30.0)) * 2.0) / 3.0
-    return ret
-  }
-  const tLng = (x, y) => {
-    let ret = 300.0 + x + 2.0 * y + 0.1 * x * x + 0.1 * x * y + 0.1 * Math.sqrt(Math.abs(x))
-    ret += ((20.0 * Math.sin(6.0 * x * pi) + 20.0 * Math.sin(2.0 * x * pi)) * 2.0) / 3.0
-    ret += ((20.0 * Math.sin(x * pi) + 40.0 * Math.sin((x / 3.0) * pi)) * 2.0) / 3.0
-    ret += ((150.0 * Math.sin((x / 12.0) * pi) + 300.0 * Math.sin((x / 30.0) * pi)) * 2.0) / 3.0
-    return ret
-  }
-  if (outOfChina(lng, lat)) return { lat, lng }
-  let dLat = tLat(lng - 105.0, lat - 35.0)
-  let dLng = tLng(lng - 105.0, lat - 35.0)
-  const radLat = (lat / 180.0) * pi
-  let magic = Math.sin(radLat)
-  magic = 1 - ee * magic * magic
-  const sqrtMagic = Math.sqrt(magic)
-  dLat = (dLat * 180.0) / (((a * (1 - ee)) / (magic * sqrtMagic)) * pi)
-  dLng = (dLng * 180.0) / ((a / sqrtMagic) * Math.cos(radLat) * pi)
-  return { lat: lat + dLat, lng: lng + dLng }
-}
-function gcj02ToWgs84(lat, lng) {
-  let wLat = lat, wLng = lng
-  for (let i = 0; i < 3; i++) {
-    const g = wgs84ToGcj02(wLat, wLng)
-    wLat += lat - g.lat
-    wLng += lng - g.lng
-  }
-  return { lat: wLat, lng: wLng }
-}
-function haversine(lat1, lng1, lat2, lng2) {
-  const R = 6371000, toRad = (d) => (d * Math.PI) / 180
-  const dLat = toRad(lat2 - lat1), dLng = toRad(lng2 - lng1)
-  const h = Math.sin(dLat / 2) ** 2 + Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLng / 2) ** 2
-  return R * 2 * Math.atan2(Math.sqrt(h), Math.sqrt(1 - h))
-}
-function toMeters(p, lat0, lng0) {
-  return { x: (p.lng - lng0) * 111320 * Math.cos((lat0 * Math.PI) / 180), y: (p.lat - lat0) * 110540 }
-}
-function maxExcursion(pts, a, b) {
-  if (!pts || pts.length < 2) return Infinity
-  const lat0 = (a.lat + b.lat) / 2, lng0 = (a.lng + b.lng) / 2
-  const A = toMeters(a, lat0, lng0), B = toMeters(b, lat0, lng0)
-  const dx = B.x - A.x, dy = B.y - A.y, len2 = dx * dx + dy * dy
-  let max = 0
-  for (const p of pts) {
-    const P = toMeters(p, lat0, lng0)
-    let t = len2 ? ((P.x - A.x) * dx + (P.y - A.y) * dy) / len2 : 0
-    t = Math.max(0, Math.min(1, t))
-    const d = Math.hypot(P.x - (A.x + t * dx), P.y - (A.y + t * dy))
-    if (d > max) max = d
-  }
-  return max
-}
 
 async function stops() {
   const r = await fetch('https://customized.wuhanbus.com/gps-resapi/wechat/bus/line', {
@@ -111,7 +51,7 @@ const wgs = st.map((s) => gcj02ToWgs84(s.lat, s.lng))
 
 for (const i of BAD) {
   const a = wgs[i], b = wgs[i + 1]
-  const straight = haversine(a.lat, a.lng, b.lat, b.lng)
+  const straight = haversine(a, b)
   const allow = Math.max(straight * 0.5, 260)
   console.log(`\n=== 段${i} 直线 ${Math.round(straight)}m 走廊 ${Math.round(allow)}m  ${st[i].name} → ${st[i + 1].name}`)
   const na = await nearest(a)

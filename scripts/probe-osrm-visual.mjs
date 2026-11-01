@@ -219,37 +219,6 @@ ws.onopen = async () => {
     await sleep(2200)
     await shot(`osrm-focus${i + 1}-${TAG}.jpg`)
   }
-  // 原生地图（用户填了高德 Key 时走的那条路）的折线数据：无 Key 时 <map> 不渲染，
-  // 但 polylines 这个 computed 依然可求值，用来核对颜色 / 线宽 / 虚线 / 双轨偏移是否生效
-  const poly = await send('Runtime.evaluate', {
-    expression: `(() => {
-      try {
-        let cur = document.querySelector('.schematic') && document.querySelector('.schematic').__vueParentComponent;
-        let vm = null;
-        for (let hop = 0; cur && hop < 40; hop++) {
-          const p = cur.proxy || cur.ctx;
-          if (p && p.stopsByDir && typeof p.renderSchematic === 'function') { vm = p; break }
-          cur = cur.parent;
-        }
-        if (!vm) return 'no-page-vm';
-        const R = 6371000, toRad = (d) => d * Math.PI / 180;
-        const hav = (a, b) => { const dLat = toRad(b.latitude - a.latitude), dLng = toRad(b.longitude - a.longitude);
-          const h = Math.sin(dLat/2)**2 + Math.cos(toRad(a.latitude)) * Math.cos(toRad(b.latitude)) * Math.sin(dLng/2)**2;
-          return R * 2 * Math.atan2(Math.sqrt(h), Math.sqrt(1-h)) };
-        const ps = vm.polylines;
-        return {
-          count: ps.length,
-          layers: ps.map((x) => ({ color: x.color, width: x.width, dashed: !!x.dottedLine, arrow: !!x.arrowLine, pts: x.points.length })),
-          // 主线首点与其未偏移原点的距离：双方向同屏时应≈ 14m（沿行进右侧各偏半个路宽），为 0 说明偏移没生效
-          gapUp: ps.length >= 4 && vm.routeByDir[0][0] ? Math.round(hav(ps[2].points[0], vm.routeByDir[0][0])) : null,
-          gapDown: ps.length >= 4 && vm.routeByDir[1][0] ? Math.round(hav(ps[3].points[0], vm.routeByDir[1][0])) : null,
-        };
-      } catch (e) { return 'ERR: ' + (e && e.message) }
-    })()`,
-    returnByValue: true,
-  })
-  console.log('\n--- 原生地图折线 polylines')
-  console.log(JSON.stringify(poly.result && poly.result.value, null, 1))
   ws.close()
   child.kill()
   process.exit(0)

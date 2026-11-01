@@ -31,7 +31,7 @@
           confirm-type="done"
           @confirm="submit"
         />
-        <view class="lc-eye" @click="showPass = !showPass">{{ showPass ? '🙈' : '👁' }}</view>
+        <view class="lc-eye" :class="{ on: showPass }" @click="showPass = !showPass" v-html="showPass ? svgEyeOn : svgEyeOff" />
       </view>
 
       <view class="lc-btn" :class="{ busy }" @click="submit">
@@ -57,6 +57,9 @@ export default {
       account: '',
       password: '',
       showPass: false,
+      // 眼睛图标：单色描边 SVG，跟随文字色（currentColor）、1em 尺寸，避免彩色 emoji 突兀
+      svgEyeOn: '<svg viewBox="0 0 24 24" width="1em" height="1em" style="display:block" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3.5-6.2 10-6.2S22 12 22 12s-3.5 6.2-10 6.2S2 12 2 12Z"/><circle cx="12" cy="12" r="2.7"/></svg>',
+      svgEyeOff: '<svg viewBox="0 0 24 24" width="1em" height="1em" style="display:block" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="m4 4 16 16"/><path d="M9.9 5.1A10.8 10.8 0 0 1 12 5c6.5 0 10 7 10 7a17.8 17.8 0 0 1-2.7 3.5M6.3 6.5A16.4 16.4 0 0 0 2 12s3.5 7 10 7a10.6 10.6 0 0 0 4.4-.9"/><path d="M9.9 9.9a2.9 2.9 0 0 0 4.2 4.2"/></svg>',
       busy: false,
     }
   },
@@ -204,9 +207,14 @@ export default {
 .lc-eye {
   flex: 0 0 auto;
   padding: 0 6rpx;
-  font-size: 28rpx;
-  opacity: 0.7;
+  font-size: 32rpx;
+  color: #fff;
+  opacity: 0.6;
   cursor: pointer;
+  transition: opacity 0.15s;
+}
+.lc-eye.on {
+  opacity: 1;
 }
 /* ---- 主按钮（.search-btn 同款渐变） ---- */
 .lc-btn {

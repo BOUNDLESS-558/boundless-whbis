@@ -307,7 +307,7 @@
          全市态整栏隐藏：这里的内容属于「当前这一条线」，与全市分布不是一个作用域，且要把画面让给车点 -->
     <view class="side-col" v-if="!cityOn">
       <!-- 实时车辆面板（可折叠，列表随视角方向过滤） -->
-      <view class="panel" :class="{ collapsed: panelCollapsed }">
+      <view class="panel" :class="{ collapsed: panelCollapsed, 'menu-open': refreshMenu }">
         <view class="panel-header">
           <view class="panel-title">实时车辆（{{ shownBuses.length }}辆 · {{ dirFilterLabel }}）</view>
           <view class="collapse-btn" :class="{ folded: panelCollapsed }" @click="panelCollapsed = !panelCollapsed" :title="panelCollapsed ? '展开' : '折叠'">▾</view>
@@ -1375,7 +1375,7 @@ export default {
       } catch (e) {
         // 保持直线回退，不打扰用户
       } finally {
-        // BYOK 模式也走同一套状态标记：几何在就是 ok，不在就是 fail（画细虚线并提示）
+        // 原生地图模式（useMap）也走同一套状态标记：几何在就是 ok，不在就是 fail（画细虚线并提示）
         for (const dir of [0, 1]) {
           this.routeState[dir] = this.routeByDir[dir] && this.routeByDir[dir].length > 1 ? 'ok' : 'fail'
         }
@@ -3938,14 +3938,17 @@ export default {
   justify-content: space-between;
   margin-bottom: 18rpx;
 }
-/* 复制按钮：与 fw-pin 同族的幽灵小圆角，hover 提到靛蓝 */
+/* 复制按钮：与刷新胶囊同高（56rpx）同字号（24rpx）的幽灵小圆角，hover 提到靛蓝 */
 .copy-btn {
-  font-size: 22rpx;
+  height: 56rpx;
+  box-sizing: border-box;
+  line-height: 52rpx;
+  font-size: 24rpx;
   color: rgba(255, 255, 255, 0.66);
   background: rgba(255, 255, 255, 0.08);
   border: 2rpx solid rgba(255, 255, 255, 0.14);
   border-radius: 999rpx;
-  padding: 6rpx 18rpx;
+  padding: 0 20rpx;
   cursor: pointer;
   white-space: nowrap;
   flex-shrink: 0;
@@ -4047,6 +4050,9 @@ export default {
 .refresh-pill {
   display: flex;
   align-items: stretch;
+  /* 固定高度与复制按钮（.copy-btn）对齐：同一行两个控件大小统一 */
+  height: 56rpx;
+  box-sizing: border-box;
   border-radius: 999rpx;
   overflow: hidden;
   background: linear-gradient(135deg, #6366f1, #06b6d4);
@@ -4062,7 +4068,7 @@ export default {
 .rp-refresh {
   display: flex;
   align-items: center;
-  padding: 10rpx 16rpx 10rpx 22rpx;
+  padding: 0 16rpx 0 22rpx;
   cursor: pointer;
 }
 .rp-ico {
@@ -4087,7 +4093,7 @@ export default {
   display: flex;
   align-items: center;
   gap: 6rpx;
-  padding: 10rpx 20rpx 10rpx 16rpx;
+  padding: 0 20rpx 0 16rpx;
   cursor: pointer;
 }
 .rp-txt {
@@ -4104,6 +4110,13 @@ export default {
 }
 .rp-caret.open {
   transform: rotate(180deg);
+}
+/* 间隔下拉展开时把整卡提到发车时刻卡之上：
+   .panel 带 backdrop-filter 会形成层叠上下文，内部下拉的 z-index 出不了卡，
+   而 .plan-side 是 DOM 靠后的兄弟（也各自成层叠上下文），同层按序绘制会盖住下拉；
+   故展开期间给 .panel 显式 z-index，收回后移除、不影响原层级 */
+.panel.menu-open {
+  z-index: 1;
 }
 /* 间隔下拉：从按钮左缘向下展开（按钮右侧还有提示文字，右对齐会溢出到面板外） */
 .refresh-menu {

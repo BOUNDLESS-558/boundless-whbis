@@ -33,15 +33,14 @@ npm run deploy:pages # 构建 + 强推 origin/pages（GitHub Pages）
 
 | 命令 | 作用 |
 | --- | --- |
-| `probe-osrm-visual.mjs 337 40 [--mobile]` | 清缓存→等吸附→导出走向几何与多张截图；末尾还校验原生折线层序与双轨偏移 `gapUp/gapDown ≈ 14`。`FOCUS="站A\|站B"` 指定拉近段 |
+| `probe-osrm-visual.mjs 337 40 [--mobile]` | 清缓存→等吸附→导出走向几何与多张截图。`FOCUS="站A\|站B"` 指定拉近段 |
 | `probe-roadfit.mjs .openchamber/geom-337.json 80` | **贴路体检**。判据：中位数 0~2m、P90 ≤5m、unmatched 0 点 |
 | `probe-nearest.mjs 337 0` | 坏段诊断：每端点最近 3 条路 + 两两规划，识别「吸到高架/对向车道」 |
 | `probe-label-overlap.mjs "<url>" 30 [--mobile]` | 站名/车号/圆点两两重叠，四类全空才算过 |
 | `probe-line-colors.mjs 337` | 详情页方向配色，读回 `.seg`/圆点/页签的计算样式 |
 | `probe-hover-focus.mjs` | 悬停浮标 + 「在地图上定位」落点；**改布局后必跑** |
 | `probe-ctrl-row.mjs 337` | 左上控制卡版式：整卡包裹 / 四块左缘对齐 / 不溢出 / 方向行单行 / tab 文字居中 / 徽标紧邻线路号，跑 1440·390·360·320 四个视口。**改 `.ctrl` 内任何版式后必跑** |
-| `probe-line-refresh.mjs 337` | 详情页刷新胶囊（↻ + 间隔下拉）：结构、四项、选中态、菜单不溢出、存储与真实请求节奏。`PROBE_MOBILE=1 PROBE_QUICK=1` 只验窄屏渲染 |
-| `probe-refresh.mjs 337` | 地图页同款刷新控件（面板内），含 24s 真实请求时间线 |
+| `probe-refresh.mjs 337 [PROBE_VIEW=stops]` | 刷新控件体检：地图页（默认）或实时线路视图（`PROBE_VIEW=stops`）的 ↻+间隔下拉胶囊，含结构/四项/选中态/菜单不溢出/存储与真实请求节奏。`PROBE_MOBILE=1 PROBE_QUICK=1` 只验窄屏渲染 |
 | `probe-osrm-legs.mjs 337 0` | 逐段垂距明细，调 OSRM 阈值时用 |
 | `probe-line-suggest.mjs` | 首页线路号联想：面板定位/排序/命中总数/白名单（J1、G73 必须“未收录”）/点选后关面板出结果。**改 `lineIndex.js` 或 `index.vue` 搜索区后必跑** |
 
