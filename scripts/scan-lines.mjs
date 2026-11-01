@@ -313,6 +313,8 @@ if (MERGE && oldDoc) {
         if (!f.end) f.end = o.end || ''
         if (!f.early) f.early = o.early || ''
         if (!f.last) f.last = o.last || ''
+        // 已标记停运的线路，即使后端缓存仍返回站点数据也不恢复（人工确认已停运）
+        if (o.status === '停运') f.status = '停运'
       }
       map.set(f.no, f)
     })
@@ -369,7 +371,7 @@ merged = [...byReal.values()].sort(byNo)
 //    有站点数据 = 仍在营运线网。至于「营运中 / 已收班」随一天时间变化，不在静态数据里写死，
 //    由前端 utils/lineIndex.js 的 lineStatus() 结合首末班时间实时判定，这里只落一个稳定的基座字段。
 for (const l of merged) {
-  l.status = l.stops ? '营运' : '停运'
+  if (!l.status) l.status = l.stops ? '营运' : '停运'
 }
 const offCount = merged.filter((l) => l.status === '停运').length
 console.log(`运行状态：营运 ${merged.length - offCount} 条 / 停运（无站点数据）${offCount} 条`)

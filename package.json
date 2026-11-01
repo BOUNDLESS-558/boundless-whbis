@@ -6,6 +6,7 @@
     "test:busid": "node scripts/test-busid.mjs",
     "scan:lines": "node scripts/scan-lines.mjs --merge",
     "scan:hanqi": "node scripts/scan-hanqi.mjs --merge",
+    "scan:org": "node scripts/scan-org.mjs",
     "scan:net": "node scripts/scan-lines.mjs --net --concurrency 8 --delay 40",
     "probe:suggest": "node scripts/probe-line-suggest.mjs",
     "dev:custom": "uni -p",

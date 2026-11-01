@@ -14,6 +14,7 @@ npm run test:md5     # MD5 单测（RFC 1321 向量 + 实测对照）
 npm run test:busid   # 车辆编号还原（全量建字典约 400ms，30s 超时保护）
 npm run scan:lines   # 枚举探测线路网，合并写入 src/data/lines.json（数据生成器，会写文件）
 npm run scan:hanqi   # 汉奇线路锚点扫描 + /realtime 富化，写进 lines.json 的 hanqi 块（同会写文件）
+npm run scan:org     # 从 buspedia.top 采集营运公司填充 lines.json 的 org 字段（会写文件）
 npm run deploy:pages # 构建 + 强推 origin/pages（GitHub Pages）
 ```
 
@@ -26,7 +27,7 @@ npm run deploy:pages # 构建 + 强推 origin/pages（GitHub Pages）
 
 端口不确定时用 `PROBE_BASE` 传真实地址。⚠️ 默认 base 是 `http://localhost:5173/boundless-whbis/`——**必须带子路径**（`manifest.json` 的 `h5.router.base`），写成 `/` 会 404。
 
-**探针不产出任何文件**：不调 `captureScreenshot`、不写日志。视觉核对靠控制台里的量测值（矩形坐标、文案、类名、计算样式、存储值），跑完即完，不落盘。**所有探针脚本的 `shot()` 已统一改为空实现**（调用点保留，临时排查时自行恢复）；仅存的合法写文件例外：`probe-osrm-visual.mjs` 导出 `.openchamber/geom-*.json` 给 `probe-roadfit.mjs` 做几何交接、两个数据生成器（`scan-lines.mjs` / `scan-hanqi.mjs`）落盘线路库数据资产。
+**探针不产出任何文件**：不调 `captureScreenshot`、不写日志。视觉核对靠控制台里的量测值（矩形坐标、文案、类名、计算样式、存储值），跑完即完，不落盘。**所有探针脚本的 `shot()` 已统一改为空实现**（调用点保留，临时排查时自行恢复）；仅存的合法写文件例外：`probe-osrm-visual.mjs` 导出 `.openchamber/geom-*.json` 给 `probe-roadfit.mjs` 做几何交接、数据生成器（`scan-lines.mjs` / `scan-hanqi.mjs` / `scan-org.mjs`）落盘线路库数据资产。
 
 **完成功能后自动清理临时生成文件**：`.openchamber/` 里的几何交接文件用完即删；`%TEMP%` 下 `edge-*` 探针 profile 目录（每次运行前会自删重建，但异常中断会残留）定期清掉；任何截图、日志、中间产物都不许留在仓库里。
 
@@ -48,13 +49,15 @@ npm run deploy:pages # 构建 + 强推 origin/pages（GitHub Pages）
 
 后端只有「按 lineCode 查单条」的 `/line`，**没有线路列表接口**，所以线路库靠枚举探测生成：
 
-- `scripts/scan-lines.mjs` → `src/data/lines.json`（当前 1137 条：数字 529 / D 546 / K 56 / 电 5 / BRT 1）。它是**唯一允许主动写文件的 script**（产物就是数据资产）。`utils/lineIndex.js` 直接 `import` 该 JSON，构建期进 bundle，联想时 0 请求。
+- `scripts/scan-lines.mjs` → `src/data/lines.json`（当前 1137 条：数字 529 / D 546 / K 56 / 电 5 / BRT 1）。它是**允许主动写文件的生成器之一**（产物就是数据资产）。`utils/lineIndex.js` 直接 `import` 该 JSON，构建期进 bundle，联想时 0 请求。
 - **汉奇公交持久化在同一份 lines.json 的 `hanqi` 块**（`npm run scan:hanqi` → `scripts/scan-hanqi.mjs`：7 锚点 `/nearby` 去重 + 逐条 `/realtime` 富化起讫站/站数）。`lineIndex.js` 导出 `HQ_LINES/HQ_UPDATED`，`LineDb.vue` 汉奇页签**直读本地数据（切页签 0 请求）**，↻ 才是手动重扫；两个生成器各管各的块，`scan-lines.mjs` 重写时会原样带走 `hanqi` 块，别改成整文件覆盖。汉奇线展示名用 `lineName`（routeName，如「汉奇K6」），查询键是 17 位数字 `lineId`（`lineCode` 编码为 `hanqi-{lineId}`），**严禁把数字 ID 当线路号显示**（曾有 BUG，见 `applyHostLine()`/`probe-hanqi-name.mjs`）。接口协议见文档第七章。
 - **判据是「`lineName` 有值」**，不是「站点非空」：2/3/5/11/19 路都是 `20000` + 有 `lineName` + `stopDetailList` 为空，按站点判会漏 14 条。反向复核顺便用另一方向补站数/起讫站（反向起点 = 正向终点）。
 - **`lineCode` ≠ 线路号**：后端 lineCode 是内部编码，`1001` 实际是「电1」、`2001` 是「J1」、`81` 是「H81」。JSON 里 `no` = 按 `lineName` 归一后的真实线路号（展示/联想用），`code` = lineCode（查询用）。别把两者混用，否则 J/H 线会以数字编号混进库里。
 - **前缀白名单只有 `电 / BRT / K / D`**（用户确认）：`--prefix` 传其它字母会直接报错退出，别再扫 26 个字母；落盘前还会剔除名字带 H/J 前缀及「测试/内部线路」的条目。
-- 分批扫描一律带 `--merge`（只补强不降级：`dirs` 取并集，站数/起讫站/首末班仅在空值时回填）。**改完后处理逻辑不想联网**时用 `node scripts/scan-lines.mjs --normalize-only --merge`。
+- 分批扫描一律带 `--merge`（只补强不降级：`dirs` 取并集，站数/起讫站/首末班仅在空值时回填，`status:'停运'` 人工标记不会被后端缓存数据覆盖）。**改完后处理逻辑不想联网**时用 `node scripts/scan-lines.mjs --normalize-only --merge`。
 - 已知数据缺口：73 条无站数、10 条无起讫站（后端两个方向都空），UI 显示「站数未知 / 起点未知」兜底，不是 bug。
+- **`org` 字段（营运公司）**：由 `scripts/scan-org.mjs` 从 buspedia.top（巴士派迪）采集写入 lines.json（全名如「武汉市公共交通集团有限责任公司第五营运公司」）。一次性拉取 `https://buspedia.top/comp/zek3io/lines` 的 Nuxt SSR 内嵌数据，解析线路→公司映射后按 `no` 匹配写回。覆盖 562/1137 条（含 85 条 D 线，旧 8684 源不收录 D），剩余 575 条主要是 buspedia 也未收录的小众 D/K 线。只补强不降级（已有 org 默认跳过，`--force` 才覆盖）；支持 `--dry`。站点偶尔响应慢，脚本内置 3 次重试 + 180s 超时。
+- **`orgOf(line)`**（`lineIndex.js` 导出）：把 org 全名归类为 `{ key:'第X公司', label:'X公司', full }` 或 `{ key:'其他', … }`；空值返回 null。`LineDb.vue` 的公司筛选行依赖它——动态生成档位（数据中存在的公司才出现），未入库线路归「未收录」。筛选行只在 `orgOpts.length > 1` 时渲染，数据全空时整行隐藏不是 bug。
 - **地图/首页联想同时覆盖汉奇线**：`lineIndex.js` 里 `suggestLines`/`countMatches` 走 `SEARCH_INDEX = INDEX.concat(HQ_INDEX)`（汉奇项带 `source:'hanqi'` + `lineId`），而 **`allLines()` 仍只回武汉公交**（`LineDb` 武汉页签、`LineMap` 全市线网 lib 都靠它，别把汉奇混进去污染）。`LineSearch` 点选/查询命中汉奇时上抛 `{ source:'hanqi', lineId, lineName }`（与 `LineDb.openHanqi` 同口径），宿主 `applyPick` 据此切 `lineSource='hanqi'`。汉奇 `HQ_INDEX.alt` 故意留空——起讫站常含「地铁」，拿来匹配会让「电」这类关键词误命中、打乱联想排序（`probe-line-suggest.mjs` 的「电=5 条」断言依赖这一点）。
 
 ## 接口协议（三条铁律）

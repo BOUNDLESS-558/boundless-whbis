@@ -47,6 +47,8 @@ const INDEX = DB.lines.map((l) => ({
   status: l.status || (l.stops ? '营运' : '停运'),
   early: l.early || '',
   last: l.last || '',
+  // 所属营运公司全名（scan-org.mjs 自 8684 采集；D 线等未收录为空）
+  org: l.org || '',
   order: /^\d+$/.test(l.no) ? Number(l.no) : Number((l.no.match(/\d+$/) || [0])[0]) + 100000,
 }))
 
@@ -167,4 +169,15 @@ export function allLines() {
 export function linePrefix(no) {
   const m = /^(电|BRT|K|D)/.exec(String(no == null ? '' : no))
   return m ? m[1] : '数字'
+}
+
+/**
+ * 营运公司归类（仅武汉公交）：org 全名 → 筛选键/短标签；无 org（D 线、未收录）返回 null。
+ * 集团线归为「第一公司」…「第九公司」，其余公司归「其他」，供线路库按公司筛选。
+ */
+export function orgOf(line) {
+  const full = String((line && line.org) || '').trim()
+  if (!full) return null
+  const m = full.match(/第([一二三四五六七八九])营运公司/)
+  return m ? { key: '第' + m[1] + '公司', label: m[1] + '公司', full } : { key: '其他', label: '其他公司', full }
 }

@@ -66,6 +66,20 @@
         >{{ s.label }}</view>
       </view>
     </view>
+
+    <!-- 营运公司（org 由 scan-org.mjs 自 8684 采集）：数据未入库时只剩「全部」一档，整行隐藏 -->
+    <view class="db-filter" v-if="orgOpts.length > 1">
+      <text class="db-fl">公司</text>
+      <view class="db-chips">
+        <view
+          v-for="o in orgOpts"
+          :key="o.key"
+          class="db-chip"
+          :class="{ on: org === o.key }"
+          @click="org = o.key"
+        >{{ o.label }}</view>
+      </view>
+    </view>
     </template>
   </view>
 
@@ -139,8 +153,8 @@
       <view class="db-cell"><text class="db-k">站数</text><text class="db-v">{{ detail.stops ? detail.stops + ' 站' : '未知' }}</text></view>
       <view class="db-cell"><text class="db-k">方向</text><text class="db-v">{{ detail.dirs.length > 1 ? '双向' : '单向' }}</text></view>
       <view class="db-cell"><text class="db-k">名称</text><text class="db-v">{{ detail.name || detail.no }}</text></view>
+      <view class="db-cell"><text class="db-k">营运公司</text><text class="db-v">{{ detail.org || '未知' }}</text></view>
     </view>
-    <view class="db-pop-code">查询编码 lineCode：{{ detail.code }}</view>
     <view class="db-pop-note" v-if="statusOf(detail).key === 'off'">
       该线路已无站点数据（已停运 / 历史线），后端不提供逐站明细，仅保留以上摘要信息。
     </view>
@@ -152,7 +166,7 @@
 </template>
 
 <script>
-import { allLines, linePrefix, lineStatus, LINE_COUNT, HQ_LINES, HQ_UPDATED } from '../utils/lineIndex.js'
+import { allLines, linePrefix, lineStatus, LINE_COUNT, HQ_LINES, HQ_UPDATED, orgOf } from '../utils/lineIndex.js'
 import { buildLineCode } from '../config.js'
 import { fetchHanqiLines } from '../utils/hanqi.js'
 
@@ -171,6 +185,7 @@ export default {
       kw: '',
       prefix: '全部',
       status: '全部',
+      org: '全部',
       prefixes: ['全部', '数字', '电', 'BRT', 'K', 'D'],
       statusOpts: [
         { key: '全部', label: '全部' },
@@ -199,11 +214,34 @@ export default {
       for (const l of this.all) s[lineStatus(l).key]++
       return s
     },
+    // 公司筛选项：按全库实际收录动态生成（一…九公司按序 + 其他 + 未收录），无数据时只剩「全部」
+    orgOpts() {
+      const CN = ['一', '二', '三', '四', '五', '六', '七', '八', '九']
+      const cnt = {}
+      let none = 0
+      for (const l of this.all) {
+        const o = orgOf(l)
+        if (!o) { none++; continue }
+        cnt[o.key] = (cnt[o.key] || 0) + 1
+      }
+      const opts = [{ key: '全部', label: '全部' }]
+      for (const c of CN) {
+        const k = '第' + c + '公司'
+        if (cnt[k]) opts.push({ key: k, label: c + '公司' })
+      }
+      if (cnt['其他']) opts.push({ key: '其他', label: '其他公司' })
+      if (none) opts.push({ key: '未收录', label: '未收录' })
+      return opts
+    },
     filtered() {
       const q = this.kw.trim().toUpperCase()
       return this.all.filter((l) => {
         if (this.prefix !== '全部' && linePrefix(l.no) !== this.prefix) return false
         if (this.status !== '全部' && lineStatus(l).key !== this.status) return false
+        if (this.org !== '全部') {
+          const o = orgOf(l)
+          if ((o ? o.key : '未收录') !== this.org) return false
+        }
         if (q) {
           const hay = `${l.no} ${l.name || ''} ${l.start || ''} ${l.end || ''}`.toUpperCase()
           if (!hay.includes(q)) return false
@@ -232,6 +270,7 @@ export default {
     kw() { this.shown = PAGE },
     prefix() { this.shown = PAGE },
     status() { this.shown = PAGE },
+    org() { this.shown = PAGE },
   },
   // ⚠ 组件不触发页面生命周期：原来写成 onLoad 会永远不执行，列表恒空
   created() {
@@ -261,11 +300,12 @@ export default {
           l.last || '未知',
           this.statusOf(l).label,
           l.code || l.no,
+          l.org || '未知',
         ].join('\t')
       )
       const data =
         `线路库匹配 ${list.length} 条\n` +
-        '编号\t起点\t终点\t站数\t方向\t票价\t首班\t末班\t状态\tlineCode\n' +
+        '编号\t起点\t终点\t站数\t方向\t票价\t首班\t末班\t状态\tlineCode\t营运公司\n' +
         rows.join('\n')
       uni.setClipboardData({
         data,
@@ -716,14 +756,8 @@ export default {
   color: #fff;
   word-break: break-all;
 }
-.db-pop-code {
-  margin-top: 22rpx;
-  font-size: 20rpx;
-  color: rgba(255, 255, 255, 0.34);
-  font-variant-numeric: tabular-nums;
-}
 .db-pop-note {
-  margin-top: 16rpx;
+  margin-top: 22rpx;
   padding: 16rpx 18rpx;
   border-radius: 16rpx;
   font-size: 22rpx;
