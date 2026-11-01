@@ -7,6 +7,8 @@
  *   间隔时采用该默认值（各视图里手动选过的间隔仍然优先，互不覆盖）。
  * - 用户名（展示名）：按账号本地保存，仅改显示不改登录身份；账号名不可修改。
  * - 登录有效期：会话本体在 auth.js，这里原样转出 get/setSessionDays。
+ * - 地图来源：自绘走向图底图瓦片源（高德 / 腾讯）。两者均为 GCJ-02，与公交接口同源零纠偏；
+ *   仅影响底图，线路轨迹规划仍走高德 Web 服务。
  */
 import { normAccount, getSessionDays, setSessionDays } from './auth.js'
 
@@ -15,6 +17,7 @@ export { getSessionDays, setSessionDays }
 const SKIN_KEY = 'whbis:skin'
 const REFRESH_KEY = 'whbis:refresh-default'
 const PROFILE_KEY = 'whbis:profile'
+const MAPSRC_KEY = 'whbis:map-source'
 
 export const SKIN_OPTS = [
   { key: 'dark', label: '黑色' },
@@ -23,6 +26,11 @@ export const SKIN_OPTS = [
 ]
 // 0 = 手动刷新（不自动轮询，仅用户下拉/点刷新时拉取）
 export const REFRESH_DEFAULT_OPTS = [0, 15, 30, 45, 60]
+// 自绘走向图底图瓦片源
+export const MAP_SOURCE_OPTS = [
+  { key: 'amap', label: '高德地图' },
+  { key: 'tencent', label: '腾讯地图' },
+]
 
 function readRaw(key, fallback) {
   try {
@@ -103,6 +111,20 @@ export function setRefreshDefault(sec) {
   const v = REFRESH_DEFAULT_OPTS.includes(Number(sec)) ? Number(sec) : 15
   writeRaw(REFRESH_KEY, v)
   return v
+}
+
+// ── 地图来源（自绘走向图底图瓦片源）──
+
+export function getMapSource() {
+  const v = readRaw(MAPSRC_KEY, 'amap')
+  return MAP_SOURCE_OPTS.some((o) => o.key === v) ? v : 'amap'
+}
+
+export function setMapSource(key) {
+  if (MAP_SOURCE_OPTS.some((o) => o.key === key)) {
+    writeRaw(MAPSRC_KEY, key)
+  }
+  return getMapSource()
 }
 
 // ── 用户名（展示名）：账号名是登录主键不可改，用户名只是本地展示层 ──

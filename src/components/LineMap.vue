@@ -488,7 +488,7 @@ import {
   cityWarned, markCityWarned, loadCityNet, netSearchLines, bboxIntersects,
 } from '../utils/cityBus.js'
 import LinePlan from './LinePlan.vue'
-import { getRefreshDefault } from '../utils/settings.js'
+import { getRefreshDefault, getMapSource } from '../utils/settings.js'
 
 // —— 方向配色（全站统一）：上行 = 青蓝，下行 = 玫红 ——
 // 色相相隔约 150°，在浅色高德底图与深色自绘画布上都清晰；不依赖红绿对比，色盲用户也能分辨。
@@ -1260,7 +1260,10 @@ export default {
       this.showBaseMap = !this.showBaseMap
       this.renderSchematic()
     },
-    // 按相机算出当前视口需要的高德标准瓦片（XYZ 编号，256px/张）
+    // 按相机算出当前视口需要的底图瓦片（XYZ 编号，256px/张）
+    // 来源由设置面板切换：高德（免 Key 标准瓦片）/ 腾讯（rt*.map.gtimg.com）。
+    // 两者均为 GCJ-02 栅格，与公交接口坐标同源，覆盖层无需纠偏。
+    // ⚠ 腾讯的 y 参数是 TMS 式翻转编号（y = 2^z - 1 - slippyY，实测 400 印证），不是负数也不是 slippy。
     renderTiles() {
       if (!this.showBaseMap) {
         if (this.tiles.length) this.tiles = []
@@ -1277,6 +1280,7 @@ export default {
       const tx1 = Math.floor((this.cam.u + (w - this.projCenter.x) / s) * n)
       const ty0 = Math.floor((this.cam.v - this.projCenter.y / s) * n)
       const ty1 = Math.floor((this.cam.v + (h - this.projCenter.y) / s) * n)
+      const tencent = getMapSource() === 'tencent'
       const out = []
       for (let tx = tx0; tx <= tx1; tx++) {
         for (let ty = ty0; ty <= ty1; ty++) {
@@ -1285,9 +1289,14 @@ export default {
           const wx = ((tx % n) + n) % n
           const left = (tx / n - this.cam.u) * s + this.projCenter.x
           const top = (ty / n - this.cam.v) * s + this.projCenter.y
+          // 子域轮换分散请求；腾讯 y 用 TMS 翻转编号（自上而下），高德用标准 slippy（自下而上）
+          const sub = Math.abs(tx + ty) % 4
+          const url = tencent
+            ? `https://rt${sub}.map.gtimg.com/realtimerender?z=${zt}&x=${wx}&y=${n - 1 - ty}&type=vector&style=0`
+            : `https://webrd0${sub + 1}.is.autonavi.com/appmaptile?lang=zh_cn&size=1&scale=1&style=8&x=${wx}&y=${ty}&z=${zt}`
           out.push({
             key: `${zt}/${tx}/${ty}`,
-            url: `https://webrd0${(Math.abs(tx + ty) % 4) + 1}.is.autonavi.com/appmaptile?lang=zh_cn&size=1&scale=1&style=8&x=${wx}&y=${ty}&z=${zt}`,
+            url,
             left: Math.round(left),
             top: Math.round(top),
             size: Math.ceil(size) + 1,
@@ -1483,6 +1492,12 @@ export default {
       this.refreshSec = sec
       this.restartAutoRefresh()
       if (sec > 0 && !this.loading) this.loadLive(true)
+    },
+    // 地图来源切换（设置面板）即时跟随：只重算底图瓦片，走向/站点/车辆等覆盖层不动。
+    // 原生 <map> 模式（App 端带 Key）底图由 uni 内置，不支持换源，直接忽略。
+    onMapSourceChange() {
+      if (this.useMap) return
+      this.renderTiles()
     },
     // 单击 ↻：立即拉一次（自动刷新模式下也用于手动补一次）
     refreshNow() {

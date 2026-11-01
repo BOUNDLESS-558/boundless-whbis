@@ -167,6 +167,21 @@
             >{{ o.label }}</view>
           </view>
 
+          <view class="acct-div"></view>
+
+          <!-- 地图来源：自绘走向图底图瓦片源（高德 / 腾讯） -->
+          <view class="acct-sec-title">地图来源</view>
+          <view class="acct-seg">
+            <view
+              class="acct-seg-item"
+              v-for="o in mapSourceOpts"
+              :key="o.key"
+              :class="{ on: mapSource === o.key }"
+              @click="onMapSource(o.key)"
+            >{{ o.label }}</view>
+          </view>
+          <view class="acct-tip">底图瓦片源，线路走向 / 车辆 / 站点不受影响，改完即时生效</view>
+
           <view class="acct-tip">注销后回到登录页，本机账号保留，下次可直接登录</view>
           <view class="acct-logout" @click="acctConfirm = true">注销登录</view>
         </view>
@@ -224,10 +239,13 @@ import { requireLogin, currentAccount, logout, getSessionInfo } from '../../util
 import {
   SKIN_OPTS,
   REFRESH_DEFAULT_OPTS,
+  MAP_SOURCE_OPTS,
   getSkin,
   setSkin,
   getRefreshDefault,
   setRefreshDefault,
+  getMapSource,
+  setMapSource,
   getDisplayName,
   setDisplayName,
   getSessionDays,
@@ -266,6 +284,9 @@ export default {
       sessionExpText: '',
       skinOpts: SKIN_OPTS,
       refreshOpts: REFRESH_DEFAULT_OPTS,
+      // 地图来源：自绘走向图底图瓦片源
+      mapSource: 'amap',
+      mapSourceOpts: MAP_SOURCE_OPTS,
       sessionOpts: [
         { days: 7, label: '7 天' },
         { days: 15, label: '15 天' },
@@ -482,6 +503,7 @@ export default {
       this.syncIdentity()
       this.skin = getSkin()
       this.refreshDefault = getRefreshDefault()
+      this.mapSource = getMapSource()
       this.sessionDays = getSessionDays()
       this.refreshSessionText()
       this.accountShow = true
@@ -516,6 +538,13 @@ export default {
     // 皮肤：黑 / 白 / 跟随系统（写 <html data-skin>，全局 CSS 换肤）
     onSkin(key) {
       this.skin = setSkin(key)
+    },
+    // 地图来源：高德 / 腾讯（自绘走向图底图瓦片源，改完对打开的地图即时生效）
+    onMapSource(key) {
+      this.mapSource = setMapSource(key)
+      const c = this.$refs.mapC
+      if (c && typeof c.onMapSourceChange === 'function') c.onMapSourceChange()
+      uni.showToast({ title: `地图来源：${key === 'tencent' ? '腾讯地图' : '高德地图'}`, icon: 'none' })
     },
     // 全局默认刷新：实时线路 / 实时车辆未手动选过间隔时采用；已打开的视图即时跟随
     onRefreshDefault(sec) {
