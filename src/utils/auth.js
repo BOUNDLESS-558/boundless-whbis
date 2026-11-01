@@ -6,8 +6,9 @@
  * 所以账号体系只能落在本机 uni storage —— 仅存「会话」：
  *   - 会话 whbis:session： { account, loginAt }
  * 可用账号为代码内置的 EMBEDDED_ACCOUNTS（管理员预置，不可注册），
- * 密码不存明文也不存哈希，而是按 genPass(账号) 的确定性算法现场算：
- * 同样的账号永远得到同样的 13 位口令，便于分发又不落地任何秘密。
+ * 默认口令不落地：按 genPass(账号) 的确定性算法现场算，同样的账号永远得到同样的
+ * 13 位口令，便于分发。用户可在「账号与设置」里改成本机自定义密码——此时只在
+ * 本机存一份 md5 哈希（whbis:pass-override），仍不存明文；未改过的账号不落任何秘密。
  *
  * 诚实说明：这是「使用门槛」而非安全机制，纯前端产物反编译即可绕过，
  * 别拿它保护真正的机密。
@@ -15,6 +16,8 @@
 import { md5 } from './md5.js'
 
 const SESSION_KEY = 'whbis:session'
+// 自定义密码覆盖表（账号→口令哈希）：只存 md5 不存明文；没改过密码的账号不在表内，登录时回到 genPass 预置口令。
+const PASS_OVERRIDE_KEY = 'whbis:pass-override'
 // 登录有效期档位（天）：0 = 永不过期。可在「账号与设置」面板里随时调整（立即生效，从当下重算）
 const SESSION_DAYS_KEY = 'whbis:session-days'
 export const SESSION_DAY_OPTS = [7, 15, 30, 0]
@@ -85,6 +88,60 @@ function writeStore(key, val) {
   }
 }
 
+// —— 自定义密码（本机覆盖预置口令）——
+// 按账号加盐的 md5：同一账号同一密码永远得到同一哈希，不存明文。
+function hashPass(account, pwd) {
+  return md5(PASS_SECRET + 'u:' + normAccount(account) + ':' + String(pwd))
+}
+function readOverrides() {
+  const v = readStore(PASS_OVERRIDE_KEY)
+  return v && typeof v === 'object' ? v : {}
+}
+
+/** 该账号是否已自定义密码（改过密码）；否则用预置的确定性口令 */
+export function hasCustomPass(account) {
+  return !!readOverrides()[normAccount(account)]
+}
+
+/** 校验口令：有自定义哈希则比哈希，否则比 genPass 预置口令 */
+export function verifyPass(account, password) {
+  if (!password) return false
+  const h = readOverrides()[normAccount(account)]
+  if (h) return h === hashPass(account, password)
+  return String(password) === genPass(account)
+}
+
+/** 设置新密码（6~32 位），写哈希覆盖；限预置账号 */
+export function setPassword(account, newPass) {
+  const acc = normAccount(account)
+  if (!acc || !EMBEDDED_MAP.has(acc)) return { ok: false, error: '账号不存在' }
+  const p = String(newPass == null ? '' : newPass)
+  if (p.length < 6 || p.length > 32) return { ok: false, error: '新密码需 6~32 位' }
+  const o = readOverrides()
+  o[acc] = hashPass(account, p)
+  if (!writeStore(PASS_OVERRIDE_KEY, o)) return { ok: false, error: '存储不可用，密码未保存' }
+  return { ok: true }
+}
+
+/** 改密：先验当前密码再设新密码 */
+export function changePassword(account, oldPass, newPass) {
+  if (!verifyPass(account, oldPass)) return { ok: false, error: '当前密码不正确' }
+  if (String(oldPass) === String(newPass)) return { ok: false, error: '新密码不能与当前密码相同' }
+  return setPassword(account, newPass)
+}
+
+/** 恢复默认口令：删覆盖条目，回到 genPass 预置口令（需先验当前密码） */
+export function resetPassword(account, oldPass) {
+  if (!verifyPass(account, oldPass)) return { ok: false, error: '当前密码不正确' }
+  const acc = normAccount(account)
+  const o = readOverrides()
+  if (o[acc]) {
+    delete o[acc]
+    if (!writeStore(PASS_OVERRIDE_KEY, o)) return { ok: false, error: '存储不可用，未恢复' }
+  }
+  return { ok: true }
+}
+
 /** 会话到期时间戳：显式 0 = 永不过期；缺失（旧会话）= loginAt + 30 天 */
 function expiryOf(ses) {
   if (!ses) return 0
@@ -148,7 +205,7 @@ export function login(account, password) {
     const acc = normAccount(account)
     if (!acc || !password) return resolve({ ok: false, error: '请输入账号和密码' })
     if (!EMBEDDED_MAP.has(acc)) return resolve({ ok: false, error: '账号不存在' })
-    if (String(password) !== genPass(account)) return resolve({ ok: false, error: '密码错误' })
+    if (!verifyPass(account, password)) return resolve({ ok: false, error: '密码错误' })
     const days = getSessionDays()
     writeStore(SESSION_KEY, {
       account: EMBEDDED_MAP.get(acc),

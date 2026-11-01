@@ -56,6 +56,7 @@
         sub="站点 · 在线车辆 · 营运信息"
         :width-rpx="1120"
         max-height="76vh"
+        resize-key="stops"
         @close="view = 'map'"
       >
         <LineStops
@@ -70,13 +71,14 @@
         />
       </FloatWin>
 
-      <!-- 线路库：同样只在地图里开一扇窗，点一条直达该线路 -->
+      <!-- 线路库：同样只在地图里开一扇窗，点一条直达该线路（窗宽留足汉奇长线路名 + 起讫站） -->
       <FloatWin
         v-else-if="hasLine && view === 'db'"
         title="线路库"
         sub="本地全量摘要 · 点一条直达"
-        :width-rpx="1020"
+        :width-rpx="1200"
         max-height="78vh"
+        resize-key="db"
         @close="view = 'map'"
       >
         <LineDb plain @pick="onPickLine" />
@@ -90,6 +92,7 @@
         sub="本地账号 · 仅存本机"
         :width-rpx="720"
         max-height="72vh"
+        resize-key="account"
         @close="accountShow = false"
       >
         <view class="acct" v-if="!acctConfirm">
@@ -138,6 +141,22 @@
           <view class="acct-row">
             <text class="acct-label">登录状态</text>
             <text class="acct-value ok">{{ sessionExpText }}</text>
+          </view>
+
+          <view class="acct-div"></view>
+
+          <!-- 登录密码：预置口令可改为本机自定义密码（只存哈希；改密 / 恢复均需验当前密码） -->
+          <view class="acct-sec-title">登录密码</view>
+          <view class="acct-tip">{{ pwdCustom ? '已设置自定义密码，下次登录用新密码；也可恢复为预置口令' : '当前用预置口令登录，可修改为自己的密码（仅存本机哈希）' }}</view>
+          <input class="acct-name-input acct-pwd-input" v-model="pwdOld" :password="!pwdShow" type="text" placeholder="当前密码" placeholder-class="acct-name-ph" />
+          <input class="acct-name-input acct-pwd-input" v-model="pwdNew" :password="!pwdShow" type="text" placeholder="新密码（6~32 位）" placeholder-class="acct-name-ph" />
+          <input class="acct-name-input acct-pwd-input" v-model="pwdConfirm" :password="!pwdShow" type="text" placeholder="确认新密码" placeholder-class="acct-name-ph" @confirm="onChangePwd" />
+          <view class="acct-pwd-ops">
+            <view class="acct-mini" @click="pwdShow = !pwdShow">{{ pwdShow ? '隐藏' : '显示' }}密码</view>
+          </view>
+          <view class="acct-btns">
+            <view class="acct-btn ghost" v-if="pwdCustom" @click="onResetPwd">恢复默认口令</view>
+            <view class="acct-btn save" @click="onChangePwd">修改密码</view>
           </view>
 
           <view class="acct-div"></view>
@@ -237,7 +256,7 @@ import LineStops from '../../components/LineStops.vue'
 import LineDb from '../../components/LineDb.vue'
 import FloatWin from '../../components/FloatWin.vue'
 import { buildLineCode } from '../../config.js'
-import { requireLogin, currentAccount, logout, getSessionInfo } from '../../utils/auth.js'
+import { requireLogin, currentAccount, logout, getSessionInfo, hasCustomPass, changePassword, resetPassword } from '../../utils/auth.js'
 import {
   SKIN_OPTS,
   REFRESH_DEFAULT_OPTS,
@@ -284,6 +303,12 @@ export default {
       refreshDefault: 15,
       sessionDays: 30,
       sessionExpText: '',
+      // 登录密码修改：窗内输入缓冲 + 是否已自定义 + 明文可见开关
+      pwdOld: '',
+      pwdNew: '',
+      pwdConfirm: '',
+      pwdShow: false,
+      pwdCustom: false,
       skinOpts: SKIN_OPTS,
       refreshOpts: REFRESH_DEFAULT_OPTS,
       // 地图来源：自绘走向图底图瓦片源
@@ -539,6 +564,12 @@ export default {
       this.mapSource = getMapSource()
       this.sessionDays = getSessionDays()
       this.refreshSessionText()
+      // 密码表单每次开窗都清空，并回填「是否已自定义」
+      this.pwdOld = ''
+      this.pwdNew = ''
+      this.pwdConfirm = ''
+      this.pwdShow = false
+      this.pwdCustom = hasCustomPass(this.account)
       this.accountShow = true
     },
     // 用户名 + 头像（胶囊常驻显示，面板打开时也用它回填输入缓冲）
@@ -607,6 +638,44 @@ export default {
       const d = new Date(info.expiresAt)
       const pad = (x) => String(x).padStart(2, '0')
       this.sessionExpText = `已登录 · ${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} 到期`
+    },
+    // 修改登录密码：验当前密码 + 两次新密码一致，成功后清空输入并标记已自定义
+    onChangePwd() {
+      if (!this.pwdOld || !this.pwdNew || !this.pwdConfirm) {
+        uni.showToast({ title: '请填写当前密码与新密码', icon: 'none' })
+        return
+      }
+      if (this.pwdNew !== this.pwdConfirm) {
+        uni.showToast({ title: '两次输入的新密码不一致', icon: 'none' })
+        return
+      }
+      const r = changePassword(this.account, this.pwdOld, this.pwdNew)
+      if (!r.ok) {
+        uni.showToast({ title: r.error || '修改失败', icon: 'none' })
+        return
+      }
+      this.pwdOld = ''
+      this.pwdNew = ''
+      this.pwdConfirm = ''
+      this.pwdCustom = true
+      uni.showToast({ title: '密码已修改', icon: 'success' })
+    },
+    // 恢复默认口令：需先在「当前密码」输入验证身份，否则不受理（防误锁）
+    onResetPwd() {
+      if (!this.pwdOld) {
+        uni.showToast({ title: '请先填写当前密码以验证身份', icon: 'none' })
+        return
+      }
+      const r = resetPassword(this.account, this.pwdOld)
+      if (!r.ok) {
+        uni.showToast({ title: r.error || '恢复失败', icon: 'none' })
+        return
+      }
+      this.pwdOld = ''
+      this.pwdNew = ''
+      this.pwdConfirm = ''
+      this.pwdCustom = false
+      uni.showToast({ title: '已恢复默认口令', icon: 'success' })
     },
     // 账号窗内确认注销：清会话回登录页
     onLogout() {
@@ -1051,5 +1120,24 @@ export default {
 }
 .acct-btn:active {
   transform: scale(0.96);
+}
+/* 密码修改：输入行整宽、常规字重；保存用靛蓝（非注销的玫红） */
+.acct-pwd-input {
+  width: 100%;
+  margin-top: 14rpx;
+  font-weight: 400;
+}
+.acct-pwd-ops {
+  display: flex;
+  align-items: center;
+  margin-top: 16rpx;
+}
+.acct-btn.save {
+  color: #fff;
+  background: linear-gradient(135deg, #6366f1, #818cf8);
+  box-shadow: 0 10rpx 26rpx rgba(99, 102, 241, 0.35), inset 0 1rpx 0 rgba(255, 255, 255, 0.3);
+}
+.acct-btn.save:hover {
+  filter: brightness(1.08);
 }
 </style>
