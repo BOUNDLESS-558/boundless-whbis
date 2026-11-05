@@ -71,6 +71,16 @@ const OUT = path.resolve(argOf('out', NET ? 'src/static/network.json' : 'src/sta
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
 
+// 人工标注字段：不来自 /line 接口，由 scan-org.mjs（org）或人工核查（停运依据）写入。
+// ⚠ 第 5 步合并、第 6 步去重都是「以新探测结果为基础」，不显式透传就会被一次 --merge 抹掉。
+const MANUAL_FIELDS = ['org', 'statusSource', 'stopDate', 'statusNote']
+// 只补强不降级：dst 缺值时才从 src 回填
+const carryManual = (dst, src) => {
+  for (const k of MANUAL_FIELDS) {
+    if (src[k] != null && src[k] !== '' && (dst[k] == null || dst[k] === '')) dst[k] = src[k]
+  }
+}
+
 /** 探测一条线路的某个方向；返回 { ok, dto, stops } 或 { ok:false, reason }；withPts 时附带站点坐标串 */
 async function probe(code, dir, withPts) {
   for (let attempt = 0; attempt < 3; attempt++) {
@@ -315,6 +325,7 @@ if (MERGE && oldDoc) {
         if (!f.last) f.last = o.last || ''
         // 已标记停运的线路，即使后端缓存仍返回站点数据也不恢复（人工确认已停运）
         if (o.status === '停运') f.status = '停运'
+        carryManual(f, o)
       }
       map.set(f.no, f)
     })
@@ -362,6 +373,7 @@ for (const l of kept) {
   if (!base.end) base.end = other.end || ''
   if (!base.early) base.early = other.early || ''
   if (!base.last) base.last = other.last || ''
+  carryManual(base, other)
   byReal.set(l.no, base)
 }
 if (byReal.size !== kept.length) console.log(`合并重复编号：${kept.length} 条 → ${byReal.size} 条`)
@@ -370,6 +382,8 @@ merged = [...byReal.values()].sort(byNo)
 // 7) 运行状态（静态基座）：探测不到站点数据（stops=0）= 已从营运线网撤下 = 停运；
 //    有站点数据 = 仍在营运线网。至于「营运中 / 已收班」随一天时间变化，不在静态数据里写死，
 //    由前端 utils/lineIndex.js 的 lineStatus() 结合首末班时间实时判定，这里只落一个稳定的基座字段。
+//    停运的可信度由人工核查写入 statusSource（公告 / 人工确认 / 接口推断 / 待复核）+ stopDate + statusNote，
+//    本脚本不自动生成、只负责透传，避免把「探测不到站点」和「官方公告取消」混成一个语义。
 for (const l of merged) {
   if (!l.status) l.status = l.stops ? '营运' : '停运'
 }

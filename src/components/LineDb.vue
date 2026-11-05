@@ -129,7 +129,7 @@
         <view class="db-cell"><text class="db-k">营运公司</text><text class="db-v">{{ detail.org || '未知' }}</text></view>
       </view>
       <view class="db-pop-note" v-if="statusOf(detail).key === 'off'">
-        该线路已无站点数据（已停运 / 历史线），后端不提供逐站明细，仅保留以上摘要信息。
+        {{ offNote(detail) }}
       </view>
       <view class="db-pop-btns">
         <view class="db-pbtn" @click="closeDetail">关闭</view>
@@ -233,7 +233,29 @@ export default {
     statusOf(l) {
       return lineStatus(l)
     },
-    // 一键复制当前筛选命中的全部线路（TSV：编号/起点/终点/站数/方向/票价/首班/末班/状态/lineCode），
+    // 停运说明按依据分级：公告 / 人工确认 / 接口推断 / 待复核，别把四者说成同一件事
+    offNote(l) {
+      const base = '该线路已无站点数据，后端不提供逐站明细，仅保留以上摘要信息。'
+      if (!l.statusSource) return '该线路已无站点数据（已停运 / 历史线），后端不提供逐站明细，仅保留以上摘要信息。'
+      if (l.statusSource === '公告' || l.statusSource === '人工确认') {
+        const official = l.statusSource === '公告'
+        return [
+          official ? '公告 / 权威资料确认停运' : '人工复核确认停运',
+          l.stopDate ? '停运日期 ' + l.stopDate : '',
+          l.statusNote ? (official ? '来源：' : '依据：') + l.statusNote : '',
+          base,
+        ].filter(Boolean).join(' · ')
+      }
+      if (l.statusSource === '待复核') {
+        return [
+          '注意：停运标记待人工复核',
+          l.statusNote || '',
+          '暂不提供实时查询入口，确认后需人工修正状态',
+        ].filter(Boolean).join(' · ')
+      }
+      return ['接口推断：双方向均无站点、车辆与发车计划，暂无停运公告佐证', base].join(' · ')
+    },
+    // 一键复制当前筛选命中的全部线路（TSV：编号/起点/终点/站数/方向/票价/首班/末班/状态/lineCode/营运公司/停运依据），
     // 复制的是 filtered 全量（不是窗口化渲染的 visibleLines），粘进表格即成清单
     copyFiltered() {
       const list = this.filtered
@@ -254,11 +276,12 @@ export default {
           this.statusOf(l).label,
           l.code || l.no,
           l.org || '未知',
+          l.statusSource ? l.statusSource + (l.stopDate ? '(' + l.stopDate + ')' : '') : '',
         ].join('\t')
       )
       const data =
         `线路库匹配 ${list.length} 条\n` +
-        '编号\t起点\t终点\t站数\t方向\t票价\t首班\t末班\t状态\tlineCode\t营运公司\n' +
+        '编号\t起点\t终点\t站数\t方向\t票价\t首班\t末班\t状态\tlineCode\t营运公司\t停运依据\n' +
         rows.join('\n')
       uni.setClipboardData({
         data,

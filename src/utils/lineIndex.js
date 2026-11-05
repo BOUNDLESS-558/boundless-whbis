@@ -39,6 +39,10 @@ const INDEX = DB.lines.map((l) => ({
   dirs: l.dirs || [0],
   price: l.price || '',
   status: l.status || (l.stops ? '营运' : '停运'),
+  // 停运依据（人工核查，仅停运线有值）：公告 / 人工确认 / 接口推断 / 待复核
+  statusSource: l.statusSource || '',
+  stopDate: l.stopDate || '',
+  statusNote: l.statusNote || '',
   early: l.early || '',
   last: l.last || '',
   // 所属营运公司全名（scan-org.mjs 自 8684 采集；D 线等未收录为空）
@@ -120,7 +124,7 @@ export function findLine(no) {
 
 /**
  * 全量线路（供「线路数据库」页浏览）：直接返回预计算索引数组（只读，勿修改）。
- * 每项含 no/code/name/start/end/stops/dirs/status/early/last，足够展示本地摘要。
+ * 每项含 no/code/name/start/end/stops/dirs/status/early/last 及停运依据 statusSource/stopDate/statusNote。
  */
 export function allLines() {
   return INDEX
