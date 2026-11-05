@@ -294,3 +294,114 @@ export function setDisplayName(account, name) {
   writeRaw(PROFILE_KEY, p)
   return n
 }
+
+// ── 界面字体 ──
+// 内置多款「OFL / 免费商用」开源字体，webfont 按需分片加载：
+// CSS 用 unicode-range 把整字库切成上百个小 woff2，浏览器只下载页面实际
+// 用到的字形分片（首屏通常几十 KB），不用的字重/生僻字一分都不拉。
+// 全部走 jsDelivr CDN；加载失败时 family 栈会回退到系统字体，UI 永远可读。
+// 仅 H5 生效（App 端保持系统默认，与主题色的平台约束一致）。
+
+const FONT_KEY = 'whbis:ui-font'
+
+/** 默认档 key 与历史系统字体栈（App.vue page 的 font-family 与它逐字一致） */
+export const DEFAULT_FONT = 'system'
+export const BASE_FONT_STACK =
+  "-apple-system, BlinkMacSystemFont, 'PingFang SC', 'HarmonyOS Sans SC', " +
+  "'Source Han Sans CN', 'Microsoft YaHei UI', 'Microsoft YaHei', 'Segoe UI', Roboto, " +
+  'Helvetica, Arial, sans-serif'
+
+const FS5 = 'https://cdn.jsdelivr.net/npm/@fontsource/'
+const LGW = 'https://cdn.jsdelivr.net/npm/lxgw-wenkai-webfont@1.7.0/'
+
+/**
+ * 字体档位：css 为需要注入的 <link> 列表；family 为该字体在 CSS 里的 font-family 名。
+ * 排序按「日常可用度」：默认在前，楷体其次，展示性强的靠后。
+ */
+export const FONT_OPTS = [
+  { key: 'system', label: '系统默认', note: '跟随系统 · 零加载', family: '', css: [] },
+  {
+    key: 'wenkai', label: '霞鹜文楷', note: '楷体 · 温润易读', family: "'LXGW WenKai'",
+    css: [LGW + 'lxgwwenkai-regular.css', LGW + 'lxgwwenkai-bold.css'],
+  },
+  {
+    key: 'noto-sans', label: '思源黑体', note: '现代黑体 · 端正', family: "'Noto Sans SC'",
+    css: [FS5 + 'noto-sans-sc@5.1.0/400.css', FS5 + 'noto-sans-sc@5.1.0/500.css', FS5 + 'noto-sans-sc@5.1.0/700.css'],
+  },
+  {
+    key: 'noto-serif', label: '思源宋体', note: '衬线宋体 · 文艺', family: "'Noto Serif SC'",
+    css: [FS5 + 'noto-serif-sc@5.1.0/400.css', FS5 + 'noto-serif-sc@5.1.0/700.css'],
+  },
+  {
+    key: 'kuaile', label: '站酷快乐体', note: '圆润手写 · 活泼', family: "'ZCOOL KuaiLe'",
+    css: [FS5 + 'zcool-kuaile@5.1.0/400.css'],
+  },
+  {
+    key: 'mashan', label: '马善政楷书', note: '毛笔楷书 · 飘逸', family: "'Ma Shan Zheng'",
+    css: [FS5 + 'ma-shan-zheng@5.1.0/400.css'],
+  },
+]
+
+export function getFont() {
+  const v = readRaw(FONT_KEY, DEFAULT_FONT)
+  return FONT_OPTS.some((o) => o.key === v) ? v : DEFAULT_FONT
+}
+
+/** 幂等注入一个 <link rel=stylesheet>（同一 URL 只注一次，重复调用零开销） */
+function injectCss(url) {
+  const ID = 'whbis-font-css'
+  const host = document.getElementById(ID) || (() => {
+    const h = document.createElement('div')
+    h.id = ID
+    h.style.display = 'none'
+    document.head.appendChild(h)
+    return h
+  })()
+  if (host.querySelector(`link[data-h="${cssKey(url)}"]`)) return
+  const link = document.createElement('link')
+  link.rel = 'stylesheet'
+  link.href = url
+  link.dataset.h = cssKey(url)
+  host.appendChild(link)
+}
+
+/** URL → 稳定短 id（data 属性不能用任意字符，取个简单 hash） */
+function cssKey(url) {
+  let h = 0
+  for (let i = 0; i < url.length; i++) h = (h * 31 + url.charCodeAt(i)) >>> 0
+  return 'f' + h.toString(36)
+}
+
+/** 把字体档位应用到 <html>：注入所需 CSS + 写 --app-font 变量（App.vue 的 page 据此生效） */
+export function applyFont(key) {
+  // #ifdef H5
+  try {
+    const opt = FONT_OPTS.find((o) => o.key === (key || getFont())) || FONT_OPTS[0]
+    opt.css.forEach(injectCss)
+    const family = opt.family ? `${opt.family}, ${BASE_FONT_STACK}` : BASE_FONT_STACK
+    document.documentElement.style.setProperty('--app-font', family)
+  } catch (e) { /* 忽略 */ }
+  // #endif
+}
+
+/** 落库 + 应用，返回生效档 key */
+export function setFont(key) {
+  if (FONT_OPTS.some((o) => o.key === key)) {
+    writeRaw(FONT_KEY, key)
+    applyFont(key)
+  }
+  return getFont()
+}
+
+/**
+ * 预载全部档位 CSS（设置面板打开时调用一次）：让每个选项卡上的字体名
+ * 直接用真字体渲染当预览。unicode-range 分片下，预览文案只会拉对应字形
+ * 的小分片（每档几十 KB），不会整包下载。
+ */
+export function ensureFontPreviews() {
+  // #ifdef H5
+  try {
+    FONT_OPTS.forEach((o) => o.css.forEach(injectCss))
+  } catch (e) { /* 忽略 */ }
+  // #endif
+}

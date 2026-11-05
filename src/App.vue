@@ -1,6 +1,6 @@
 <script>
 import { warmUp } from './utils/api.js'
-import { applySkin, watchSystemSkin, applyAccent } from './utils/settings.js'
+import { applySkin, watchSystemSkin, applyAccent, applyFont } from './utils/settings.js'
 // #ifdef H5
 import { assetUrl } from './utils/asset.js'
 // #endif
@@ -14,6 +14,8 @@ export default {
     watchSystemSkin()
     // 主题色：把（可能自定义过的）强调色变量族挂到 <html>，全站按钮/页签/选中态跟随
     applyAccent()
+    // 界面字体：按设置注入 webfont CSS 并写 --app-font（选过的字体启动即恢复）
+    applyFont()
     // #ifdef H5
     // 子路径部署（如 GitHub Pages /repo/）时，将基址感知的背景图写入 CSS 变量
     document.documentElement.style.setProperty('--app-bg-image', `url("${assetUrl('/static/background.jpg')}")`)
@@ -43,9 +45,11 @@ export default {
   --ac2-rgb: 6, 182, 212;
 }
 page {
-  font-family: -apple-system, BlinkMacSystemFont, 'PingFang SC', 'HarmonyOS Sans SC',
+  /* 字体随「账号与设置 → 界面字体」切换：--app-font 挂在 <html>（settings.applyFont），
+     未设置时回退到历史系统栈，与逐字一致 */
+  font-family: var(--app-font, -apple-system, BlinkMacSystemFont, 'PingFang SC', 'HarmonyOS Sans SC',
     'Source Han Sans CN', 'Microsoft YaHei UI', 'Microsoft YaHei', 'Segoe UI', Roboto,
-    Helvetica, Arial, sans-serif;
+    Helvetica, Arial, sans-serif);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   text-rendering: optimizeLegibility;

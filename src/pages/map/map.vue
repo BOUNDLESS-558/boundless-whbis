@@ -217,6 +217,25 @@
 
           <view class="acct-div"></view>
 
+          <!-- 界面字体：内置 OFL 开源可商用 webfont，unicode-range 分片按需加载。
+               选项卡上的字体名直接用真字体渲染当预览（开窗时预载各档 CSS） -->
+          <view class="acct-sec-title">界面字体</view>
+          <view class="font-grid">
+            <view
+              v-for="o in fontOpts"
+              :key="o.key"
+              class="font-chip"
+              :class="{ on: uiFont === o.key }"
+              @click="onFont(o.key)"
+            >
+              <text class="font-chip-name" :style="{ fontFamily: o.preview }">{{ o.label }}</text>
+              <text class="font-chip-note">{{ o.note }}</text>
+            </view>
+          </view>
+          <view class="acct-tip">开源可商用字体，按需分片加载；改完全站即时生效、本机记忆，加载失败自动回退系统字体</view>
+
+          <view class="acct-div"></view>
+
           <!-- 地图来源：自绘走向图底图瓦片源（高德 / 腾讯） -->
           <view class="acct-sec-title">地图来源</view>
           <view class="acct-seg">
@@ -298,6 +317,10 @@ import {
   setRefreshDefault,
   getMapSource,
   setMapSource,
+  FONT_OPTS,
+  getFont,
+  setFont,
+  ensureFontPreviews,
   getDisplayName,
   setDisplayName,
   getSessionDays,
@@ -352,6 +375,9 @@ export default {
       // 地图来源：自绘走向图底图瓦片源
       mapSource: 'amap',
       mapSourceOpts: MAP_SOURCE_OPTS,
+      // 界面字体：当前生效档 + 档位列表（preview = 选项卡预览用的 family 串）
+      uiFont: 'system',
+      fontOpts: FONT_OPTS.map((o) => ({ ...o, preview: o.family ? o.family + ', sans-serif' : 'inherit' })),
       sessionOpts: [
         { days: 7, label: '7 天' },
         { days: 15, label: '15 天' },
@@ -582,6 +608,9 @@ export default {
       this.refreshDefault = getRefreshDefault()
       this.mapSource = getMapSource()
       this.sessionDays = getSessionDays()
+      this.uiFont = getFont()
+      // 预载各档 CSS：让「界面字体」选项卡用真字体渲染当预览
+      ensureFontPreviews()
       this.refreshSessionText()
       // 密码表单每次开窗都清空，并回填「是否已自定义」
       this.pwdOld = ''
@@ -661,6 +690,12 @@ export default {
       const c = this.$refs.mapC
       if (c && typeof c.onMapSourceChange === 'function') c.onMapSourceChange()
       uni.showToast({ title: `地图来源：${key === 'tencent' ? '腾讯地图' : '高德地图'}`, icon: 'none' })
+    },
+    // 界面字体：写 <html> --app-font 全站即时跟随；本机持久化，启动自动恢复
+    onFont(key) {
+      this.uiFont = setFont(key)
+      const opt = this.fontOpts.find((o) => o.key === key)
+      uni.showToast({ title: `字体已切换：${opt ? opt.label : key}`, icon: 'none' })
     },
     // 全局默认刷新：实时线路 / 实时车辆未手动选过间隔时采用；已打开的视图即时跟随
     onRefreshDefault(sec) {
@@ -1164,6 +1199,43 @@ export default {
 }
 .ac-picker {
   background: conic-gradient(#f43f5e, #f97316, #facc15, #4ade80, #22d3ee, #818cf8, #e879f9, #f43f5e);
+}
+
+/* 界面字体：两列芯片网格；芯片内的字体名用真字体渲染当预览 */
+.font-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10rpx;
+}
+.font-chip {
+  flex: 1 1 calc(50% - 10rpx);
+  min-width: calc(50% - 10rpx);
+  box-sizing: border-box;
+  padding: 14rpx 18rpx;
+  border-radius: 14rpx;
+  background: rgba(255, 255, 255, 0.05);
+  border: 2rpx solid transparent;
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+.font-chip:hover {
+  background: rgba(255, 255, 255, 0.09);
+}
+.font-chip.on {
+  background: rgba(var(--ac-rgb), 0.16);
+  border-color: rgba(var(--ac-rgb), 0.55);
+}
+.font-chip-name {
+  display: block;
+  font-size: 28rpx;
+  color: #fff;
+  line-height: 1.3;
+}
+.font-chip-note {
+  display: block;
+  margin-top: 4rpx;
+  font-size: 20rpx;
+  color: rgba(255, 255, 255, 0.45);
 }
 
 /* 窗内二次确认态 */
