@@ -16,14 +16,27 @@
  */
 import { execFileSync } from 'node:child_process'
 import fs from 'node:fs'
+import os from 'node:os'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const ROOT = path.resolve(__dirname, '..')
 const DIST = path.join(ROOT, 'dist', 'build', 'h5')
-const STAGE = path.join(ROOT, '.pages-stage')
+// 每次用系统临时目录里的全新唯一目录：不需要先删旧目录，也不会把上一轮残留
+// 文件混进提交。收尾清理失败（例如 IDE 的 safe-delete 插件拦截 fs.rm）只警告，
+// 绝不阻断后面的强推——推送才是本脚本的目的。
+const STAGE = fs.mkdtempSync(path.join(os.tmpdir(), 'whbis-pages-'))
 const TMP_INDEX = path.join(ROOT, '.git', 'pages-tmp-index')
+
+/** 尽力删除；失败只警告（清理是收尾动作，不该让部署失败） */
+function safeRemove(target, recursive = false) {
+  try {
+    fs.rmSync(target, { recursive, force: true })
+  } catch (e) {
+    console.log(`· 清理 ${path.basename(target)} 失败（不影响部署）：${e.message}`)
+  }
+}
 const BRANCH = 'pages'
 const REMOTE = 'origin'
 // 远端同样叫 pages：产物只落在 pages 分支，绝不覆盖 origin/main（源码主干）
@@ -43,7 +56,6 @@ if (!fs.existsSync(path.join(DIST, 'index.html'))) {
 }
 
 // 2. 暂存区 = 产物 + .nojekyll（禁用 Jekyll，否则 assets/_*.js 会被 Pages 忽略返回 404）
-fs.rmSync(STAGE, { recursive: true, force: true })
 fs.cpSync(DIST, STAGE, { recursive: true })
 fs.writeFileSync(path.join(STAGE, '.nojekyll'), '')
 const fileCount = (() => {
@@ -55,7 +67,7 @@ const fileCount = (() => {
 console.log(`· 暂存 ${fileCount} 个文件（含 .nojekyll）`)
 
 // 3. 临时 index 生成孤立提交 → 更新本地 pages 分支
-fs.rmSync(TMP_INDEX, { force: true })
+safeRemove(TMP_INDEX)
 const env = { ...process.env, GIT_INDEX_FILE: TMP_INDEX, GIT_WORK_TREE: STAGE }
 git(['read-tree', '--empty'], { env })
 git(['add', '-A', '.'], { env, cwd: STAGE })
@@ -63,8 +75,8 @@ const tree = git(['write-tree'], { env })
 const msg = `deploy: H5 构建产物 @ ${new Date().toISOString().replace('T', ' ').slice(0, 16)} UTC`
 const commit = git(['commit-tree', tree, '-m', msg], { env })
 git(['update-ref', `refs/heads/${BRANCH}`, commit])
-fs.rmSync(TMP_INDEX, { force: true })
-fs.rmSync(STAGE, { recursive: true, force: true })
+safeRemove(TMP_INDEX)
+safeRemove(STAGE, true)
 console.log(`· 本地 ${BRANCH} 分支 → ${commit.slice(0, 7)}（孤立，无历史）`)
 
 // 4. 强推远端
