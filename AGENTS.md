@@ -12,8 +12,11 @@ npm run build:h5     # → dist/build/h5
 npm run build:app    # → dist/build/app（之后必须 HBuilderX 云打包，纯 CLI 出不了包）
 npm run test:md5     # MD5 单测（RFC 1321 向量 + 实测对照）
 npm run test:busid   # 车辆编号还原（全量建字典约 400ms，30s 超时保护）
-npm run scan:lines   # 枚举探测线路网，合并写入 src/data/lines.json（数据生成器，会写文件）
+npm run test:routeclean # 站点序列清洗回归（离线读 network.json，不发请求/不写文件）
+npm run scan:lines   # 枚举探测线路网，合并写入 src/static/lines.json（数据生成器，会写文件）
 npm run scan:org     # 从 buspedia.top 采集营运公司填充 lines.json 的 org 字段（会写文件）
+npm run scan:routes:stops # 只拉站点→清洗→落 src/static/lines/（不调 OSRM，快）
+npm run scan:routes  # 在上面的基础上补算 OSRM 贴路几何（免 Key，慢，可断点续跑）
 npm run deploy:pages # 构建 + 强推 origin/pages（GitHub Pages）
 ```
 
@@ -47,8 +50,8 @@ npm run deploy:pages # 构建 + 强推 origin/pages（GitHub Pages）
 
 后端只有「按 lineCode 查单条」的 `/line`，**没有线路列表接口**，所以线路库靠枚举探测生成：
 
-- `scripts/scan-lines.mjs` → `src/data/lines.json`（当前 1137 条：数字 529 / D 546 / K 56 / 电 5 / BRT 1）。它是**允许主动写文件的生成器之一**（产物就是数据资产）。`utils/lineIndex.js` 直接 `import` 该 JSON，构建期进 bundle，联想时 0 请求。
-- `src/data/lines.json` 是武汉公交线路库数据资产，由 `scripts/scan-lines.mjs` 生成（`lineIndex.js` 直接 `import`，构建期进 bundle，联想时 0 请求）。`scan-lines.mjs` 重写时**只补强不降级**，别改成整文件覆盖。
+- `scripts/scan-lines.mjs` → `src/static/lines.json`（当前 1137 条：数字 529 / D 546 / K 56 / 电 5 / BRT 1）。它是**允许主动写文件的生成器之一**（产物就是数据资产）。`utils/lineIndex.js` 直接 `import` 该 JSON，构建期进 bundle，联想时 0 请求。
+- `src/static/lines.json` 是武汉公交线路库数据资产，由 `scripts/scan-lines.mjs` 生成（`lineIndex.js` 直接 `import`，构建期进 bundle，联想时 0 请求）。`scan-lines.mjs` 重写时**只补强不降级**，别改成整文件覆盖。
 - **判据是「`lineName` 有值」**，不是「站点非空」：2/3/5/11/19 路都是 `20000` + 有 `lineName` + `stopDetailList` 为空，按站点判会漏 14 条。反向复核顺便用另一方向补站数/起讫站（反向起点 = 正向终点）。
 - **`lineCode` ≠ 线路号**：后端 lineCode 是内部编码，`1001` 实际是「电1」、`2001` 是「J1」、`81` 是「H81」。JSON 里 `no` = 按 `lineName` 归一后的真实线路号（展示/联想用），`code` = lineCode（查询用）。别把两者混用，否则 J/H 线会以数字编号混进库里。
 - **前缀白名单只有 `电 / BRT / K / D`**（用户确认）：`--prefix` 传其它字母会直接报错退出，别再扫 26 个字母；落盘前还会剔除名字带 H/J 前缀及「测试/内部线路」的条目。
@@ -95,8 +98,13 @@ npm run deploy:pages # 构建 + 强推 origin/pages（GitHub Pages）
   - 逐段质检用**最大垂距**，不要用「规划距离/直线距离」ratio——站前掉头 ratio 11 只偏 76m 却真实，吸到高架 ratio 17 已跑 3km 外。
   - 四级修复：贴走廊 → 加 1/3、2/3 途经点 → **换端点吸附候选**（`/nearest?number=3`）→ 站间直线。第三级是实测关键：坏段根因是站点被吸到高架层/对向车道；吸附点离站 >60m 不认，且要用 `distance >= straight*0.8` 剔除「跳过」而非「绕开」。
   - 缓存 7 天，键 `whbis:osrm-route:v5:`。**升版本号后旧键不会自动清理**，探针需先清 localStorage。公共 demo 服务会限速断连，全失败只回退站点连线。
-  - 已实测**无效、不要重试**：`exclude=motorway`、`alternatives=3`、foot/walking profile、FOSSGIS 服务；以及「免 Key 拿高德官方轨迹」三条路（iframe 嵌入 / 直拉 amap.com 接口 / OSM relation，详见代码注释）。对应的临时探针（`probe-embed-and-exclude.mjs`、`probe-amap-*.mjs` 等）已随路线否决删除。
+  - 已实测**无效、不要重试**：`exclude=motorway`、`alternatives=3`、foot/walking profile、FOSSGIS 服务；以及「免 Key 拿高德官方轨迹」三条野路子（iframe 嵌入 / 直拉 amap.com 接口 / OSM relation，详见代码注释）。对应的临时探针（`probe-embed-and-exclude.mjs`、`probe-amap-*.mjs` 等）已随路线否决删除。**注意区分**：现在 `scripts/scan-routes-amap.mjs` 用的是**正式高德 Web 服务 Key + `/v3/bus/linename` REST 接口**（Key 仅本地采集用、走环境变量、不入库），与上面被否决的免 Key 野路子不是一回事，不要混为一谈。
 - 走向未贴路时画的是站间直连（细虚线 + `routeAlert` 提示）。**判断截图前先确认吸附完成**（缓存已落库、无 alert），别把初屏当结果。
+- **线路静态资产优先（2026-11-05 起，A+B 混合）**：`src/static/lines/bNN.json`（64 个哈希分片）由生成器产出，每条线路双方向含 `base` / 清洗后的 `stops` / `route`（展平 GCJ-02 几何）/ `snapped` / `source` / `algo`。`source`：`'amap'` = 高德官方公交轨迹（A，更优）；`'osrm'` = 本脚本驾车路网近似（B，兜底）。`LineMap.loadAllStops()` / `LineStops.loadDirStops()` 经 `utils/lineAsset.js` 懒加载（内存缓存 + Promise 去重，不进 bundle / localStorage），命中即不发 `/line`；`assetSnapped` 为真时连 OSRM 也不请求。资产缺失/404 回退原实时链路（链路内也走清洗）。
+  - **A（高德官方轨迹，`scripts/scan-routes-amap.mjs`）**：`/v3/bus/linename?extensions=all` 一次返回 `polyline`（公交公司上报的真实走向）+ `busstops`，根治病灶②（驾车路网绕街区→规整矩形）。**Key 仅本地一次性采集用，走环境变量 `AMAP_KEY`，不进前端/仓库**。高德返回即 GCJ-02，与资产口径一致直接落盘，无需转换。按线路号一次拉全方向，用起讫站名匹配方向，**只写 `source:'amap'` 行**，高德未收录的线（D/K 定制线）不写、保留 B 的 OSRM 兜底。默认按免费额度限速（`--delay 1100`），小样本先 `--only 337,909,273` 验证字段/覆盖率再全量。
+  - **B（OSRM 驾车近似，`scripts/scan-routes.mjs`）**：**只算 `source:'amap'` 之外的方向，且永不覆盖 amap 行**（哪怕 `--force`）。算法版本 `VERSION`，行内记 `algo`；版本不符则重算，保证旧资产随升级刷新。**只用免 Key 的 OSRM 公共服务**，串行 + `--osrm-delay`，支持 `--only`/`--limit`/`--force`/`--no-route`/`--dry` 与断点续跑。
+  - **清洗规则在 `utils/routeClean.js`，唯一真源**：运行时与两生成器共用（生成器经 `scripts/_loadRouteClean.mjs` 用 data: URL 载入同一份源码，因 `package.json` 无 `type:module`）。规则：过滤 `0/0`/越界、按 `stopNo` 排序、相邻 <5m 去重、剔孤立离群点 / 折返簇 / 端点孤立错点 / **整段坐标重复**（`dropDuplicateRuns`，修 909 型「同一段路两套站名塞两遍→巨大矩形」，只认正序、相隔 ≥5 站、连续 ≥3 点重合，环线逆序重合不误删）。B 算路额外 `stripLoops`（多回环切除，保护真正环线：终点≈起点不切）+ 收紧 leg 质检（驾车距离 ≤ 直线*2.2+350，坏段过半整条退站点连线）。回归 `npm run test:routeclean`。**别放宽规则去追「长跳变段数」**——292 路 20.9km 单向跨区、只有 2 个有效站的 D 线属真实/残缺数据，删了会误伤。
+  - `fitRoute()` 的包围盒**包含贴路几何**，否则绕行段被挤到视野边缘/裁掉。
 
 ### 方向配色（全站唯一真源）
 

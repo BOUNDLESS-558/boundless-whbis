@@ -227,7 +227,7 @@ export default {
   font-weight: 800;
   letter-spacing: 6rpx;
   color: #fff;
-  background: linear-gradient(135deg, #6366f1, #06b6d4);
+  background: linear-gradient(135deg, var(--ac), var(--ac-2));
   box-shadow: 0 10rpx 26rpx rgba(79, 110, 247, 0.42), inset 0 1rpx 0 rgba(255, 255, 255, 0.3);
   cursor: pointer;
   transition: transform 0.15s, filter 0.2s;

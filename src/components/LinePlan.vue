@@ -182,8 +182,8 @@ export default {
   transition: transform 0.15s, background 0.2s, color 0.2s;
 }
 .ph-copy:hover {
-  color: #c7d2fe;
-  background: rgba(99, 102, 241, 0.3);
+  color: var(--ac-text);
+  background: rgba(var(--ac-rgb), 0.3);
 }
 .ph-copy:active {
   transform: scale(0.94);
@@ -204,7 +204,7 @@ export default {
   transition: transform 0.25s, background 0.2s;
 }
 .ph-fold:hover {
-  background: rgba(129, 140, 248, 0.3);
+  background: rgba(var(--ac-rgb), 0.3);
 }
 .ph-fold.folded {
   transform: rotate(-90deg);
@@ -287,7 +287,7 @@ export default {
   min-width: 0;
   font-size: 34rpx;
   font-weight: 800;
-  color: #a5b4fc;
+  color: var(--ac-hi);
   font-variant-numeric: tabular-nums;
 }
 .plan-org {

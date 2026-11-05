@@ -145,6 +145,8 @@ import { fetchLine, fetchRealTime, decryptBusId, onBusIdReady } from '../utils/a
 import { matchBusesToStops } from '../utils/geo.js'
 import { buildLineCode } from '../config.js'
 import { getRefreshDefault } from '../utils/settings.js'
+import { cleanStops } from '../utils/routeClean.js'
+import { loadLineAsset, assetDir } from '../utils/lineAsset.js'
 
 // 自动刷新间隔（秒）：0 = 手动。与地图页各存一份（地图页是 whbis:map-refresh-sec），
 // 两个视图的使用节奏不同，共用反而互相干扰；线路带默认 15 秒（旧详情页行为）。
@@ -428,13 +430,23 @@ export default {
       // 站点数据到达后 .route-strip 才随 v-if 渲染出来，此时才能拿到 ref 并绑定拖拽/滚轮
       this.$nextTick(() => this.bindStripScroll())
     },
-    // 加载某方向站点与基础信息
+    // 加载某方向站点与基础信息：优先读静态资产（两个方向共享一次分片请求），
+    // 资产缺失时回退实时 /line，并对站点序列做同样的清洗。
     async loadDirStops(dir) {
       const code = buildLineCode(this.lineNo, dir)
       try {
+        const asset = await loadLineAsset(this.lineNo)
+        const row = assetDir(asset, dir)
+        if (row && Array.isArray(row.stops) && row.stops.length) {
+          this.diagram[dir].base = row.base || {}
+          this.diagram[dir].cols = row.stops.map((s) => ({ ...s, buses: [] }))
+          return
+        }
+      } catch (e) { /* 资产不可用：走实时接口 */ }
+      try {
         const data = await fetchLine(code)
         this.diagram[dir].base = (data && data.lineDetailBaseDto) || {}
-        const stops = (data && data.stopDetailList) || []
+        const stops = cleanStops((data && data.stopDetailList) || []).stops
         this.diagram[dir].cols = stops.map((s) => ({ ...s, buses: [] }))
       } catch (e) {
         this.diagram[dir].cols = []
@@ -746,13 +758,13 @@ export default {
   align-items: stretch;
   border-radius: 999rpx;
   overflow: hidden;
-  background: linear-gradient(135deg, #6366f1, #06b6d4);
-  box-shadow: 0 10rpx 24rpx rgba(99, 102, 241, 0.42), inset 0 1rpx 0 rgba(255, 255, 255, 0.3);
+  background: linear-gradient(135deg, var(--ac), var(--ac-2));
+  box-shadow: 0 10rpx 24rpx rgba(var(--ac-rgb), 0.42), inset 0 1rpx 0 rgba(255, 255, 255, 0.3);
   transition: box-shadow 0.2s;
 }
 /* 自动刷新进行中：外圈加一道青色光环，一眼看出“正在自动跑” */
 .refresh-pill.auto {
-  box-shadow: 0 0 0 3rpx rgba(103, 232, 249, 0.55), 0 10rpx 24rpx rgba(99, 102, 241, 0.42);
+  box-shadow: 0 0 0 3rpx rgba(103, 232, 249, 0.55), 0 10rpx 24rpx rgba(var(--ac-rgb), 0.42);
 }
 .refresh-pill.busy .rp-refresh {
   opacity: 0.55;
@@ -935,7 +947,7 @@ export default {
   height: 40rpx;
   border-radius: 50%;
   background: #0b1020;
-  border: 4rpx solid #a5b4fc; /* 兜底 */
+  border: 4rpx solid var(--ac-hi); /* 兜底 */
   border-color: var(--ring);
   box-sizing: border-box;
   display: flex;
@@ -946,7 +958,7 @@ export default {
 .dot-no {
   font-size: 18rpx;
   font-weight: 700;
-  color: #c7d2fe;
+  color: var(--ac-text);
   color: var(--num);
 }
 /* 首末站：实心方向色 + 白环，与地图页站点标记一致 */
@@ -991,8 +1003,8 @@ export default {
   font-size: 18rpx;
   /* 地铁换乘标签用紫色，避开与上行（青蓝）/ 下行（玫红）方向色撞色 */
   color: #c4b5fd;
-  background: rgba(139, 92, 246, 0.16);
-  border: 2rpx solid rgba(139, 92, 246, 0.3);
+  background: rgba(var(--ac-rgb), 0.16);
+  border: 2rpx solid rgba(var(--ac-rgb), 0.3);
   border-radius: 8rpx;
   padding: 2rpx 12rpx;
   margin-bottom: 6rpx;

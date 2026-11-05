@@ -340,7 +340,7 @@ export default {
   flex: 0 0 auto;
   font-size: 24rpx;
   font-weight: 700;
-  color: #a5b4fc;
+  color: var(--ac-hi);
 }
 /* 三态统计 */
 .db-stat {
@@ -433,8 +433,8 @@ export default {
 .db-chip.on {
   color: #fff;
   font-weight: 700;
-  background: linear-gradient(135deg, #6366f1, #06b6d4);
-  border-color: rgba(129, 140, 248, 0.7);
+  background: linear-gradient(135deg, var(--ac), var(--ac-2));
+  border-color: rgba(var(--ac-rgb), 0.7);
 }
 /* 列表 */
 .db-lhead {
@@ -460,8 +460,8 @@ export default {
   transition: transform 0.15s, background 0.2s, color 0.2s;
 }
 .db-copy:hover {
-  color: #c7d2fe;
-  background: rgba(99, 102, 241, 0.3);
+  color: var(--ac-text);
+  background: rgba(var(--ac-rgb), 0.3);
 }
 .db-copy:active {
   transform: scale(0.94);
@@ -538,9 +538,9 @@ export default {
   border-radius: 18rpx;
   font-size: 25rpx;
   font-weight: 600;
-  color: #a5b4fc;
-  background: rgba(99, 102, 241, 0.12);
-  border: 2rpx solid rgba(129, 140, 248, 0.3);
+  color: var(--ac-hi);
+  background: rgba(var(--ac-rgb), 0.12);
+  border: 2rpx solid rgba(var(--ac-rgb), 0.3);
   cursor: pointer;
 }
 /* 状态徽标：营运中翠绿 / 已收班琥珀 / 已停运石板灰（避开上下行方向色） */
@@ -688,6 +688,6 @@ export default {
 .db-pbtn.primary {
   color: #fff;
   border-color: transparent;
-  background: linear-gradient(135deg, #6366f1, #06b6d4);
+  background: linear-gradient(135deg, var(--ac), var(--ac-2));
 }
 </style>

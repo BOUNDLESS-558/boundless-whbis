@@ -397,7 +397,7 @@ export default {
 .seg-tab.on {
   color: #fff;
   font-weight: 700;
-  background: linear-gradient(135deg, #6366f1, #06b6d4);
+  background: linear-gradient(135deg, var(--ac), var(--ac-2));
 }
 .vr-meta {
   flex: 0 0 auto;
@@ -426,8 +426,8 @@ export default {
   transition: background 0.18s, border-color 0.18s;
 }
 .vr-acct:hover {
-  background: rgba(99, 102, 241, 0.16);
-  border-color: rgba(129, 140, 248, 0.45);
+  background: rgba(var(--ac-rgb), 0.16);
+  border-color: rgba(var(--ac-rgb), 0.45);
 }
 .vr-acct-ico {
   flex: 0 0 auto;
@@ -504,7 +504,7 @@ export default {
   font-weight: 700;
   letter-spacing: 2rpx;
   color: #fff;
-  background: linear-gradient(135deg, #6366f1, #06b6d4);
+  background: linear-gradient(135deg, var(--ac), var(--ac-2));
   box-shadow: 0 10rpx 26rpx rgba(79, 110, 247, 0.42), inset 0 1rpx 0 rgba(255, 255, 255, 0.3);
   cursor: pointer;
   transition: transform 0.15s, box-shadow 0.2s, filter 0.2s;

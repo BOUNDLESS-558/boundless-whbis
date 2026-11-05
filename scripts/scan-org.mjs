@@ -1,5 +1,5 @@
 /**
- * 营运公司采集：buspedia.top → src/data/lines.json 的 org 字段
+ * 营运公司采集：buspedia.top → src/static/lines.json 的 org 字段
  *
  * 后端线路接口不返回营运公司。buspedia.top（巴士派迪）维护了武汉公交集团
  * 全部线路的分公司归属，数据以 Nuxt SSR 内嵌在 /comp/zek3io/lines 页面中。
@@ -26,7 +26,7 @@ import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
-const FILE = path.resolve(__dirname, '../src/data/lines.json')
+const FILE = path.resolve(__dirname, '../src/static/lines.json')
 const BP_URL = 'https://buspedia.top/comp/zek3io/lines'
 const UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/130'
 const TIMEOUT = Number(process.env.BP_TIMEOUT || 180000)

@@ -489,7 +489,9 @@ import {
   cityWarned, markCityWarned, loadCityNet, netSearchLines, bboxIntersects,
 } from '../utils/cityBus.js'
 import LinePlan from './LinePlan.vue'
-import { getRefreshDefault, getMapSource } from '../utils/settings.js'
+import { getRefreshDefault, getMapSource, accentRgba, getAccent } from '../utils/settings.js'
+import { cleanStops, pointsOf, fromFlat } from '../utils/routeClean.js'
+import { loadLineAsset, assetDir } from '../utils/lineAsset.js'
 
 // —— 方向配色（全站统一）：上行 = 青蓝，下行 = 玫红 ——
 // 色相相隔约 150°，在浅色高德底图与深色自绘画布上都清晰；不依赖红绿对比，色盲用户也能分辨。
@@ -639,6 +641,8 @@ export default {
       routeByDir: { 0: [], 1: [] },
       // 走向贴路状态：idle 未开始 / loading 计算中 / ok 已贴路 / fail 失败（当前为站间直连）
       routeState: { 0: 'idle', 1: 'idle' },
+      // 该方向的贴路几何是否来自静态资产且已贴路（是则跳过运行时 OSRM，避免重复请求）
+      assetSnapped: { 0: false, 1: false },
       busesByDir: { 0: [], 1: [] },
       // 当前选中查看详情的车辆（null=不显示详情窗）
       selectedBus: null,
@@ -1090,6 +1094,7 @@ export default {
       this.stopsByDir = { 0: [], 1: [] }
       this.routeByDir = { 0: [], 1: [] }
       this.routeState = { 0: 'idle', 1: 'idle' }
+      this.assetSnapped = { 0: false, 1: false }
       this.busesByDir = { 0: [], 1: [] }
       this.selectedBus = null
       this.camInited = false
@@ -1174,6 +1179,7 @@ export default {
       this.stopsByDir = { 0: [], 1: [] }
       this.routeByDir = { 0: [], 1: [] }
       this.routeState = { 0: 'idle', 1: 'idle' }
+      this.assetSnapped = { 0: false, 1: false }
       this.busesByDir = { 0: [], 1: [] }
       this.selectedBus = null
       // 新线路需要重新自适应视角（丢弃旧线路记住的视野）
@@ -1187,11 +1193,31 @@ export default {
     },
     // 加载双方向站点（全部模式与一次性轨迹规划都需要）
     async loadAllStops() {
-      const dirs = [0, 1].filter((d) => !(this.stopsByDir[d] && this.stopsByDir[d].length))
-      for (const d of dirs) {
+      // 静态资产优先：一次 HTTP（浏览器缓存）同时拿到「离线清洗过的站点明细」与
+      // 「离线算好的走向几何」。命中即不发 /line，也不受 OSRM 公共 demo 限速影响。
+      // 资产是分片按需加载的，缺失/404 会返回 null，下面原链路照常兜底。
+      let asset = null
+      try { asset = await loadLineAsset(this.lineNo) } catch (e) { asset = null }
+      if (asset) {
+        for (const d of [0, 1]) {
+          const row = assetDir(asset, d)
+          if (!row || !Array.isArray(row.stops) || row.stops.length < 2) continue
+          this.stopsByDir[d] = row.stops
+          const geo = Array.isArray(row.route) && row.route.length >= 4 ? fromFlat(row.route) : []
+          if (geo.length > 1) {
+            this.routeByDir[d] = geo
+            this.routeState[d] = 'ok'
+            this.assetSnapped[d] = row.snapped === true
+          }
+        }
+      }
+      // 资产没覆盖到的方向仍走 /line，但站点序列先清洗：
+      // 过滤 0/0 与越界、按 stopNo 排序、去重、剔孤立错点与折返簇（否则会画出巨大折返）
+      const missing = [0, 1].filter((d) => !(this.stopsByDir[d] && this.stopsByDir[d].length))
+      for (const d of missing) {
         try {
           const data = await fetchLine(buildLineCode(this.lineNo, d))
-          this.stopsByDir[d] = (data && data.stopDetailList) || []
+          this.stopsByDir[d] = cleanStops((data && data.stopDetailList) || []).stops
         } catch (e) {
           this.stopsByDir[d] = []
         }
@@ -1206,7 +1232,7 @@ export default {
       if (!this.camInited) this.fitRoute()
       else this.renderSchematic()
       this.planRouteAlongRoads()
-      // 无 Key 模式：用 OSRM 把站点连线吸附到真实道路（有缓存，失败自动回退）
+      // 资产未贴路的方向由 OSRM 后台补算（渐进增强）；已贴路的方向直接跳过
       this.planRouteViaOsrm()
     },
     // 等待高德 SDK 核心就绪（限 12s）：uni-app 只加载地图核心，插件需按需再加载
@@ -1266,31 +1292,34 @@ export default {
         this.renderSchematic()
       }
     },
-    // 无 Key 模式走向吸附：OSRM 免 Key 公共路由，按线路-方向缓存 7 天；失败保持站点连线
+    // 无 Key 模式走向吸附：OSRM 免 Key 公共路由，按线路-方向缓存 7 天；失败保持站点连线。
+    // 资产已贴路的方向跳过（0 请求）；资产只有「干净站点连线」的方向后台补算，成功即平滑替换，
+    // 不把已有实线切成 loading 虚线，避免闪烁。
     async planRouteViaOsrm() {
       if (this.useMap) return
       const DIRS = [0, 1]
       const todo = DIRS.filter((dir) =>
-        (this.stopsByDir[dir] || []).filter((s) => !isNaN(parseFloat(s.latitude)) && !isNaN(parseFloat(s.longitude))).length > 1
+        !this.assetSnapped[dir] && cleanStops(this.stopsByDir[dir] || []).stops.length > 1
       )
       if (!todo.length) return
-      todo.forEach((dir) => { this.routeState[dir] = 'loading' })
+      todo.forEach((dir) => {
+        if (!this.routeByDir[dir] || this.routeByDir[dir].length < 2) this.routeState[dir] = 'loading'
+      })
       this.renderSchematic()
       for (const dir of todo) {
-        const stops = (this.stopsByDir[dir] || [])
-          .map((s) => ({ lat: parseFloat(s.latitude), lng: parseFloat(s.longitude) }))
-          .filter((p) => !isNaN(p.lat) && !isNaN(p.lng))
+        const stops = pointsOf(cleanStops(this.stopsByDir[dir] || []).stops)
         try {
           const pts = await fetchRoadRoute(stops, `${this.lineNo}-${dir}`)
-          if (!pts || pts.length < 2) {
+          if (pts && pts.length > 1) {
+            this.routeByDir[dir] = pts
+            this.routeState[dir] = 'ok'
+            this.assetSnapped[dir] = true // 本会话内不再重复请求
+            this.renderSchematic()
+          } else if (!this.routeByDir[dir] || this.routeByDir[dir].length < 2) {
             this.routeState[dir] = 'fail'
-            continue
           }
-          this.routeByDir[dir] = pts
-          this.routeState[dir] = 'ok'
-          this.renderSchematic()
         } catch (e) {
-          this.routeState[dir] = 'fail'
+          if (!this.routeByDir[dir] || this.routeByDir[dir].length < 2) this.routeState[dir] = 'fail'
         }
       }
       this.renderSchematic()
@@ -1988,7 +2017,7 @@ export default {
               fontSize: 11,
               fontWeight: 'bold',
               borderRadius: 12,
-              bgColor: 'rgba(99, 102, 241, 0.92)',
+              bgColor: accentRgba(0.92), // 聚合数字标签底色跟随主题色（marker 吃不到 CSS 变量）
               padding: 3,
               textAlign: 'center',
               borderColor: 'rgba(0, 0, 0, 0)',
@@ -2249,6 +2278,12 @@ export default {
         ;(this.stopsByDir[d] || []).forEach((st) => {
           const lat = parseFloat(st.latitude)
           const lng = parseFloat(st.longitude)
+          if (!isNaN(lat) && !isNaN(lng)) pts.push({ lat, lng })
+        })
+        // 贴路几何会绕出站点包围盒（真实绕行 / 掉头），只按站点算视野会把这些段挤到边缘甚至裁掉
+        ;(this.routeByDir[d] || []).forEach((p) => {
+          const lat = parseFloat(p.latitude)
+          const lng = parseFloat(p.longitude)
           if (!isNaN(lat) && !isNaN(lng)) pts.push({ lat, lng })
         })
       })
@@ -2744,7 +2779,7 @@ export default {
         // 单车点半径 6（与线路态车辆圆点同量级），聚合团 14 以容纳数字标签
         r: c.bus ? 6 : 14,
         n: c.n,
-        color: c.bus ? SPEED_BANDS[c.bus.band].color : '#6366F1',
+        color: c.bus ? SPEED_BANDS[c.bus.band].color : getAccent(), // 无车点兜底色跟随主题（canvas/SVG 用色须是真实色值）
         bus: c.bus || null,
         located: !!c.bus && this.locatedBus === c.bus,
       }))
@@ -3287,7 +3322,7 @@ export default {
   height: 100%;
   overflow: hidden;
   background:
-    radial-gradient(60% 45% at 72% 18%, rgba(99, 102, 241, 0.18), transparent 70%),
+    radial-gradient(60% 45% at 72% 18%, rgba(var(--ac-rgb), 0.18), transparent 70%),
     radial-gradient(55% 45% at 18% 82%, rgba(6, 182, 212, 0.14), transparent 70%),
     #070b18;
   cursor: grab;
@@ -3567,7 +3602,7 @@ export default {
   font-size: 24rpx;
   font-weight: 700;
   color: #fff;
-  background: linear-gradient(135deg, #6366f1, #06b6d4);
+  background: linear-gradient(135deg, var(--ac), var(--ac-2));
   border-radius: 14rpx;
   cursor: pointer;
   transition: filter 0.18s;
@@ -3613,7 +3648,7 @@ export default {
 }
 .dir-tab.active {
   color: #fff;
-  background: linear-gradient(135deg, #6366f1, #06b6d4);
+  background: linear-gradient(135deg, var(--ac), var(--ac-2));
   font-weight: 700;
 }
 /* 上/下行选中态直接用方向色，与地图走向线同色 */
@@ -3675,8 +3710,8 @@ export default {
   margin-left: auto;
   padding: 0 18rpx;
   border-radius: 999rpx;
-  background: rgba(129, 140, 248, 0.14);
-  border: 2rpx solid rgba(129, 140, 248, 0.38);
+  background: rgba(var(--ac-rgb), 0.14);
+  border: 2rpx solid rgba(var(--ac-rgb), 0.38);
   white-space: nowrap;
   flex: 0 1 auto;
   min-width: 0;
@@ -3692,7 +3727,7 @@ export default {
   font-size: 28rpx;
   font-weight: 800;
   line-height: 1;
-  color: #c7d2fe;
+  color: var(--ac-text);
   font-variant-numeric: tabular-nums;
   /* 作为 dir-cur 的 flex 子项可收缩，溢出时省略号收尾（dir-cur 已继承 white-space:nowrap） */
   flex: 0 1 auto;
@@ -3819,8 +3854,8 @@ export default {
   transition: transform 0.15s, background 0.2s, color 0.2s;
 }
 .copy-btn:hover {
-  color: #c7d2fe;
-  background: rgba(99, 102, 241, 0.3);
+  color: var(--ac-text);
+  background: rgba(var(--ac-rgb), 0.3);
 }
 .copy-btn:active {
   transform: scale(0.94);
@@ -3861,7 +3896,7 @@ export default {
   transition: transform 0.25s, background 0.2s;
 }
 .collapse-btn:hover {
-  background: rgba(129, 140, 248, 0.3);
+  background: rgba(var(--ac-rgb), 0.3);
 }
 .collapse-btn.folded {
   transform: rotate(-90deg);
@@ -3919,7 +3954,7 @@ export default {
   box-sizing: border-box;
   border-radius: 999rpx;
   overflow: hidden;
-  background: linear-gradient(135deg, #6366f1, #06b6d4);
+  background: linear-gradient(135deg, var(--ac), var(--ac-2));
   box-shadow: 0 8rpx 20rpx rgba(6, 182, 212, 0.35);
 }
 /* 自动刷新进行中：外圈加一道青色光环，一眼看出“正在自动跑” */
@@ -4094,7 +4129,7 @@ export default {
 .bus-org {
   font-size: 34rpx;
   font-weight: 800;
-  color: #a5b4fc;
+  color: var(--ac-hi);
   font-variant-numeric: tabular-nums;
 }
 .bus-hash {
@@ -4179,12 +4214,12 @@ export default {
 }
 /* 已开启（站名 / 底图）：统一用靛蓝——青蓝已被征用为上行色，不能再当普通开关色用 */
 .tool-btn.on {
-  color: #c7d2fe;
-  background: rgba(99, 102, 241, 0.22);
-  border-color: rgba(129, 140, 248, 0.55);
+  color: var(--ac-text);
+  background: rgba(var(--ac-rgb), 0.22);
+  border-color: rgba(var(--ac-rgb), 0.55);
 }
 .tool-btn.on:hover {
-  background: rgba(99, 102, 241, 0.32);
+  background: rgba(var(--ac-rgb), 0.32);
 }
 /* 走向尚未贴路（计算中/失败）的提示，避免把站间直连当成真实走向 */
 .view-alert {
@@ -4259,7 +4294,7 @@ export default {
 }
 /* 已固定：标题栏不可拖，边框变成紫色提示“锁定中” */
 .bus-sheet.pinned {
-  border-color: rgba(129, 140, 248, 0.55);
+  border-color: rgba(var(--ac-rgb), 0.55);
 }
 .bus-sheet.pinned .sheet-head {
   cursor: default;
@@ -4302,9 +4337,9 @@ export default {
   transform: scale(0.92);
 }
 .sheet-pin.on {
-  color: #c7d2fe;
-  background: rgba(99, 102, 241, 0.3);
-  border-color: rgba(129, 140, 248, 0.65);
+  color: var(--ac-text);
+  background: rgba(var(--ac-rgb), 0.3);
+  border-color: rgba(var(--ac-rgb), 0.65);
 }
 /* 站点详情窗：换乘线路区（芯片流式排布，与全站靛蓝描边语言一致） */
 .st-head {
@@ -4353,8 +4388,8 @@ export default {
   transition: background 0.2s, border-color 0.2s, transform 0.15s;
 }
 .st-chip:hover {
-  background: rgba(99, 102, 241, 0.16);
-  border-color: rgba(129, 140, 248, 0.45);
+  background: rgba(var(--ac-rgb), 0.16);
+  border-color: rgba(var(--ac-rgb), 0.45);
 }
 .st-chip:active {
   transform: scale(0.985);
@@ -4371,7 +4406,7 @@ export default {
   text-align: center;
   white-space: nowrap;
   border-radius: 8rpx;
-  background: rgba(99, 102, 241, 0.88);
+  background: rgba(var(--ac-rgb), 0.88);
   color: #ffffff;
   font-size: 22rpx;
   font-weight: 800;
@@ -4407,7 +4442,7 @@ export default {
   transition: color 0.2s;
 }
 .st-chip:hover .st-go {
-  color: #c7d2fe;
+  color: var(--ac-text);
 }
 .st-none {
   font-size: 22rpx;
@@ -4477,13 +4512,13 @@ export default {
 }
 .sheet-btn.primary {
   color: #fff;
-  background: linear-gradient(135deg, #6366f1, #06b6d4);
+  background: linear-gradient(135deg, var(--ac), var(--ac-2));
   border: none;
 }
 /* 全市详情窗的“打开这条线路”：主行动用靛蓝青渐变（与定位键的次操作拉开） */
 .sheet-btn.go {
   color: #fff;
-  background: linear-gradient(135deg, #6366f1, #06b6d4);
+  background: linear-gradient(135deg, var(--ac), var(--ac-2));
   border: none;
 }
 /* —— 全市实时分布 —— */
@@ -4593,7 +4628,7 @@ export default {
 .cc-bar-in {
   height: 100%;
   border-radius: 3rpx;
-  background: linear-gradient(90deg, #6366f1, #22d3ee);
+  background: linear-gradient(90deg, var(--ac), var(--ac-2));
   transition: width 0.25s ease-out;
 }
 /* 全市次操作键行（重扫 / 自动跟随 / 自编号），窄屏允许换行 */
@@ -4631,13 +4666,13 @@ export default {
   transform: scale(0.97);
 }
 .cc-btn.ghost:hover {
-  background: rgba(99, 102, 241, 0.22);
+  background: rgba(var(--ac-rgb), 0.22);
 }
 /* 自动跟随已开启：用靛蓝而不是上行的青，避免与方向色抢语义 */
 .cc-btn.on {
-  color: #c7d2fe;
-  background: rgba(99, 102, 241, 0.22);
-  border-color: rgba(129, 140, 248, 0.55);
+  color: var(--ac-text);
+  background: rgba(var(--ac-rgb), 0.22);
+  border-color: rgba(var(--ac-rgb), 0.55);
 }
 /* 车速图例：贴左下角，与线路态的走向图例互斥（同样进 fitRect 的可绘制区计算） */
 .city-legend {
@@ -4720,7 +4755,7 @@ export default {
 }
 /* 当前详情窗里那辆车的自编号加重，避免在几十个标签里找不到 */
 .city-tag.sel {
-  background: rgba(99, 102, 241, 0.9);
+  background: rgba(var(--ac-rgb), 0.9);
   border-color: rgba(255, 255, 255, 0.85);
   color: #fff !important;
 }

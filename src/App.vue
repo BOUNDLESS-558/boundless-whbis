@@ -1,6 +1,6 @@
 <script>
 import { warmUp } from './utils/api.js'
-import { applySkin, watchSystemSkin } from './utils/settings.js'
+import { applySkin, watchSystemSkin, applyAccent } from './utils/settings.js'
 // #ifdef H5
 import { assetUrl } from './utils/asset.js'
 // #endif
@@ -12,6 +12,8 @@ export default {
     // 皮肤：按设置（黑 / 白 / 跟随系统）应用到 <html data-skin>，并监听系统深浅色切换
     applySkin()
     watchSystemSkin()
+    // 主题色：把（可能自定义过的）强调色变量族挂到 <html>，全站按钮/页签/选中态跟随
+    applyAccent()
     // #ifdef H5
     // 子路径部署（如 GitHub Pages /repo/）时，将基址感知的背景图写入 CSS 变量
     document.documentElement.style.setProperty('--app-bg-image', `url("${assetUrl('/static/background.jpg')}")`)
@@ -27,6 +29,19 @@ export default {
 
 <style>
 /* 全局主题：现代极光渐变背景 + 精致字体 */
+
+/* 主题色变量族默认值（= 历史靛蓝配色），挂在 :root（即 documentElement）。
+   注意：必须放 :root 而非 page —— settings.applyAccent() 把用户选择写到 documentElement，
+   若 page 也声明默认值，会作为更近的祖先遮蔽 <html> 上的改动，导致选色无反应。*/
+:root {
+  --ac: #6366f1;
+  --ac-hi: #818cf8;
+  --ac-deep: #4f46e5;
+  --ac-text: #c7d2fe;
+  --ac-2: #06b6d4;
+  --ac-rgb: 99, 102, 241;
+  --ac2-rgb: 6, 182, 212;
+}
 page {
   font-family: -apple-system, BlinkMacSystemFont, 'PingFang SC', 'HarmonyOS Sans SC',
     'Source Han Sans CN', 'Microsoft YaHei UI', 'Microsoft YaHei', 'Segoe UI', Roboto,
@@ -50,7 +65,7 @@ page {
 
 /* 文字选中效果 */
 ::selection {
-  background: rgba(129, 140, 248, 0.45);
+  background: rgba(var(--ac-rgb), 0.45);
   color: #ffffff;
 }
 

@@ -1,12 +1,12 @@
 /**
  * 线路号本地索引
  *
- * 数据来源：`scripts/scan-lines.mjs` 枚举官方 /line 接口生成（src/data/lines.json）。
+ * 数据来源：`scripts/scan-lines.mjs` 枚举官方 /line 接口生成（src/static/lines.json）。
  * 白名单口径：纯数字 + 电 / BRT / K / D 四种前缀（本集团营运线路）。
  * 库里的 `no` 是按 lineName 归一后的**真实线路号**，`code` 才是后端 lineCode
  * （两者偶尔不同：电1 的 lineCode 是 1001）。查询用 code，展示用 no。
  */
-import DB from '../data/lines.json'
+import DB from '../static/lines.json'
 
 /** 线路库总条数 / 生成时间（页面可直接展示） */
 export const LINE_COUNT = DB.count

@@ -1,5 +1,5 @@
 /**
- * 线网扫描：枚举武汉公交线路号 → 生成 src/data/lines.json
+ * 线网扫描：枚举武汉公交线路号 → 生成 src/static/lines.json
  *
  * 背景：后端只有「按 lineCode 查单条线路」的 /line，没有线路列表接口。
  * 因此把线路号当枚举空间逐个探测：只要 lineDetailBaseDto.lineName 有值，即判定该线路真实存在
@@ -67,7 +67,7 @@ const MERGE = has('merge')
 const NORMALIZE_ONLY = has('normalize-only')
 // 全市线网底图模式（产物是 src/static/network.json，与线路库互不干扰）
 const NET = has('net')
-const OUT = path.resolve(argOf('out', NET ? 'src/static/network.json' : 'src/data/lines.json'))
+const OUT = path.resolve(argOf('out', NET ? 'src/static/network.json' : 'src/static/lines.json'))
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
 
@@ -137,7 +137,7 @@ const t0 = Date.now()
 
 // —— --net：全市线网底图（读线路库→逐方向拉站点坐标→落 src/static/network.json）——
 if (NET) {
-  const LIB = path.resolve(argOf('lib', 'src/data/lines.json'))
+  const LIB = path.resolve(argOf('lib', 'src/static/lines.json'))
   if (!fs.existsSync(LIB)) { console.error('找不到线路库：' + LIB + '（先跑一次普通的 scan-lines）'); process.exit(1) }
   const lib = JSON.parse(fs.readFileSync(LIB, 'utf8'))
   // 只扫营运线：停运线没有在运车辆，画在地图上纯属干扰

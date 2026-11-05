@@ -280,7 +280,7 @@ export default {
 }
 /* 已固定：标题栏不可拖，描边变紫提示“锁定中”（与车辆详情窗同一语言） */
 .float-win.pinned {
-  border-color: rgba(129, 140, 248, 0.55);
+  border-color: rgba(var(--ac-rgb), 0.55);
 }
 .float-win.pinned .fw-head {
   cursor: default;
@@ -346,9 +346,9 @@ export default {
   transform: scale(0.92);
 }
 .fw-pin.on {
-  color: #c7d2fe;
-  background: rgba(99, 102, 241, 0.3);
-  border-color: rgba(129, 140, 248, 0.65);
+  color: var(--ac-text);
+  background: rgba(var(--ac-rgb), 0.3);
+  border-color: rgba(var(--ac-rgb), 0.65);
 }
 /* 内容区自己滚：标题行常驻，窗口高度由根节点的 max-height 卡住。
    滚动条与 .bus-list / .plan-body 同族细轨，避免各悬浮窗出现原生白条 */

@@ -5,6 +5,9 @@
  *   全局 CSS（App.vue）据此换肤；「跟随系统」监听 prefers-color-scheme 变化即时跟随。
  * - 全局默认刷新间隔：手动(0) / 15 / 30 / 45 / 60 秒。实时线路 / 实时车辆在用户没手动选过
  *   间隔时采用该默认值（各视图里手动选过的间隔仍然优先，互不覆盖）。
+ * - 主题色（强调色）：预设色板 + 调色盘自定义。派生出 --ac / --ac-hi / --ac-deep / --ac-text /
+ *   --ac-2 / --ac-rgb / --ac2-rgb 一族 CSS 变量挂 <html>，全站按钮 / 页签 / 选中态跟随变色；
+ *   默认靛蓝与历史配色逐像素一致。H5 生效（App 端保持默认）。
  * - 用户名（展示名）：按账号本地保存，仅改显示不改登录身份；账号名不可修改。
  * - 登录有效期：会话本体在 auth.js，这里原样转出 get/setSessionDays。
  * - 地图来源：自绘走向图底图瓦片源（高德 / 腾讯）。两者均为 GCJ-02，与公交接口同源零纠偏；
@@ -15,6 +18,7 @@ import { normAccount, getSessionDays, setSessionDays } from './auth.js'
 export { getSessionDays, setSessionDays }
 
 const SKIN_KEY = 'whbis:skin'
+const ACCENT_KEY = 'whbis:accent'
 const REFRESH_KEY = 'whbis:refresh-default'
 const PROFILE_KEY = 'whbis:profile'
 const MAPSRC_KEY = 'whbis:map-source'
@@ -26,6 +30,133 @@ export const SKIN_OPTS = [
 ]
 // 0 = 手动刷新（不自动轮询，仅用户下拉/点刷新时拉取）
 export const REFRESH_DEFAULT_OPTS = [0, 15, 30, 45, 60]
+
+// ── 主题色（强调色）──
+
+export const DEFAULT_ACCENT = '#6366f1'
+// 预设色板：避开上行青蓝 #06B6D4 与下行玫红 #F43F5E（方向配色专用，别让主题色撞上去）
+export const ACCENT_PRESETS = [
+  { key: 'indigo', hex: '#6366f1', label: '靛蓝' },
+  { key: 'purple', hex: '#a855f7', label: '紫罗兰' },
+  { key: 'magenta', hex: '#ec4899', label: '洋红' },
+  { key: 'green', hex: '#10b981', label: '翠绿' },
+  { key: 'orange', hex: '#f97316', label: '活力橙' },
+  { key: 'blue', hex: '#3b82f6', label: '天蓝' },
+]
+
+/** 规范成 #rrggbb 小写；非法输入返回 null */
+function normHex(v) {
+  let s = String(v == null ? '' : v).trim().toLowerCase()
+  if (s.charAt(0) !== '#') s = '#' + s
+  if (/^#[0-9a-f]{3}$/.test(s)) s = '#' + s[1] + s[1] + s[2] + s[2] + s[3] + s[3]
+  return /^#[0-9a-f]{6}$/.test(s) ? s : null
+}
+
+function hexToRgb(hex) {
+  const n = parseInt(hex.slice(1), 16)
+  return [(n >> 16) & 255, (n >> 8) & 255, n & 255]
+}
+
+function rgbToHsl(r, g, b) {
+  r /= 255; g /= 255; b /= 255
+  const mx = Math.max(r, g, b)
+  const mn = Math.min(r, g, b)
+  const l = (mx + mn) / 2
+  let h = 0
+  let s = 0
+  if (mx !== mn) {
+    const d = mx - mn
+    s = l > 0.5 ? d / (2 - mx - mn) : d / (mx + mn)
+    if (mx === r) h = (g - b) / d + (g < b ? 6 : 0)
+    else if (mx === g) h = (b - r) / d + 2
+    else h = (r - g) / d + 4
+    h *= 60
+  }
+  return [h, s * 100, l * 100]
+}
+
+function hslToHex(h, s, l) {
+  h = ((h % 360) + 360) % 360
+  s /= 100; l /= 100
+  const c = (1 - Math.abs(2 * l - 1)) * s
+  const x = c * (1 - Math.abs(((h / 60) % 2) - 1))
+  const m = l - c / 2
+  let r = 0; let g = 0; let b = 0
+  if (h < 60) { r = c; g = x } else if (h < 120) { r = x; g = c } else if (h < 180) { g = c; b = x } else if (h < 240) { g = x; b = c } else if (h < 300) { r = x; b = c } else { r = c; b = x }
+  const to = (v) => Math.round((v + m) * 255).toString(16).padStart(2, '0')
+  return '#' + to(r) + to(g) + to(b)
+}
+
+/**
+ * 由基准色派生全站强调色变量族：
+ * - ac 基准 / hi 提亮（浅文字、描边）/ deep 压暗（hover、渐变深端）/ text 浅色文字
+ * - ac2 渐变搭档色（基准色相 -52°，默认靛蓝恰好落在历史用的青色端）
+ * - rgb / rgb2 供 rgba(var(--ac-rgb), α) 写法
+ * 默认靛蓝直接返回历史常量，保证与既有视觉逐像素一致。
+ */
+export function accentScale(hex) {
+  const base = normHex(hex) || DEFAULT_ACCENT
+  if (base === DEFAULT_ACCENT) {
+    return {
+      ac: '#6366f1', hi: '#818cf8', deep: '#4f46e5', text: '#c7d2fe',
+      ac2: '#06b6d4', rgb: '99, 102, 241', rgb2: '6, 182, 212',
+    }
+  }
+  const [h, s, l] = rgbToHsl(...hexToRgb(base))
+  const cl = (v, lo, hi2) => Math.max(lo, Math.min(hi2, v))
+  const h2 = (h + 308) % 360 // -52°：冷色系搭档（靛蓝→青），暖色系也得带邻近过渡的渐变端
+  return {
+    ac: base,
+    hi: hslToHex(h, s, cl(l + 8, 60, 92)),
+    deep: hslToHex(h, cl(s - 4, 30, 100), cl(l - 12, 28, 60)),
+    text: hslToHex(h, s, cl(l + 21, 70, 90)),
+    ac2: hslToHex(h2, s, cl(l, 35, 70)),
+    rgb: hexToRgb(base).join(', '),
+    rgb2: hexToRgb(hslToHex(h2, s, cl(l, 35, 70))).join(', '),
+  }
+}
+
+export function getAccent() {
+  return normHex(readRaw(ACCENT_KEY, DEFAULT_ACCENT)) || DEFAULT_ACCENT
+}
+
+/** 把主题色变量族应用到 <html>（App.vue 全局 CSS 与各组件 var() 据此变色） */
+export function applyAccent(hex) {
+  // #ifdef H5
+  try {
+    const sc = accentScale(hex)
+    const st = document.documentElement.style
+    st.setProperty('--ac', sc.ac)
+    st.setProperty('--ac-hi', sc.hi)
+    st.setProperty('--ac-deep', sc.deep)
+    st.setProperty('--ac-text', sc.text)
+    st.setProperty('--ac-2', sc.ac2)
+    st.setProperty('--ac-rgb', sc.rgb)
+    st.setProperty('--ac2-rgb', sc.rgb2)
+  } catch (e) { /* 忽略 */ }
+  // #endif
+}
+
+/** 落库 + 应用，返回生效色 */
+export function setAccent(hex) {
+  const n = normHex(hex)
+  if (n) {
+    writeRaw(ACCENT_KEY, n)
+    applyAccent(n)
+  }
+  return getAccent()
+}
+
+/** 仅应用不落库（调色盘拖动时的实时预览；cancel 时回退也走它） */
+export function previewAccent(hex) {
+  applyAccent(hex)
+}
+
+/** JS 侧取主题色 rgba 字符串（marker 标签底色等 CSS 变量够不到的场景） */
+export function accentRgba(alpha) {
+  const [r, g, b] = hexToRgb(getAccent())
+  return `rgba(${r}, ${g}, ${b}, ${alpha})`
+}
 // 自绘走向图底图瓦片源
 export const MAP_SOURCE_OPTS = [
   { key: 'amap', label: '高德地图' },

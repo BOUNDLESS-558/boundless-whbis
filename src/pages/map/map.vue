@@ -193,6 +193,28 @@
             >{{ o.label }}</view>
           </view>
 
+          <!-- 主题色：预设色板 + 调色盘。写 --ac CSS 变量族挂 <html>，
+               全站按钮 / 页签 / 选中态 / 胶囊即时跟随（预设避开上行青蓝与下行玫红方向色） -->
+          <view class="acct-sec-title">主题色</view>
+          <view class="ac-row">
+            <view
+              v-for="p in accentPresets"
+              :key="p.hex"
+              class="ac-dot"
+              :class="{ on: accent === p.hex }"
+              :style="{ background: p.hex }"
+              :title="p.label"
+              @click="onAccent(p.hex)"
+            ></view>
+            <view
+              class="ac-dot ac-picker"
+              :class="{ on: !accentPresets.some((p) => p.hex === accent) }"
+              title="调色盘：任选自定义颜色"
+              @click="pickAccent"
+            ></view>
+          </view>
+          <view class="acct-tip">主题色作用于查询按钮 / 页签 / 选中态等强调元素，自定义后本机记忆，改完即时生效</view>
+
           <view class="acct-div"></view>
 
           <!-- 地图来源：自绘走向图底图瓦片源（高德 / 腾讯） -->
@@ -266,8 +288,12 @@ import {
   SKIN_OPTS,
   REFRESH_DEFAULT_OPTS,
   MAP_SOURCE_OPTS,
+  ACCENT_PRESETS,
   getSkin,
   setSkin,
+  getAccent,
+  setAccent,
+  previewAccent,
   getRefreshDefault,
   setRefreshDefault,
   getMapSource,
@@ -319,6 +345,9 @@ export default {
       svgEyeOff: '<svg viewBox="0 0 24 24" width="1em" height="1em" style="display:block" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="m4 4 16 16"/><path d="M9.9 5.1A10.8 10.8 0 0 1 12 5c6.5 0 10 7 10 7a17.8 17.8 0 0 1-2.7 3.5M6.3 6.5A16.4 16.4 0 0 0 2 12s3.5 7 10 7a10.6 10.6 0 0 0 4.4-.9"/><path d="M9.9 9.9a2.9 2.9 0 0 0 4.2 4.2"/></svg>',
       pwdCustom: false,
       skinOpts: SKIN_OPTS,
+      // 主题色：当前生效 hex（含自定义）与预设色板
+      accent: '#6366f1',
+      accentPresets: ACCENT_PRESETS,
       refreshOpts: REFRESH_DEFAULT_OPTS,
       // 地图来源：自绘走向图底图瓦片源
       mapSource: 'amap',
@@ -499,10 +528,19 @@ export default {
         saved = null
       }
       if (!saved || !saved.lineCode) return
-      // 清理旧版外部线路记忆（其 lineCode 形如 hanqi-xxx，现有数据源拉不到数据，直接忽略）
-      if (saved.source === 'hanqi' || String(saved.lineCode).startsWith('hanqi-')) return
-      this.applyPick(typeof saved === 'string' ? JSON.parse(saved) : saved)
-      this.view = 'map'
+      // 旧版外部线路记忆（lineCode 形如 hanqi-xxx，现有数据源拉不到数据）：清掉这条过期记忆，
+      // 否则每次直接进本页都恢复不了线路、卡在线路库落地页；清掉后下次起恢复最近一次有效线路
+      if (saved.source === 'hanqi' || String(saved.lineCode).startsWith('hanqi-')) {
+        try { uni.removeStorageSync(HOME_LINE_KEY) } catch (e) { /* 存储不可用时保持忽略 */ }
+        return
+      }
+      try {
+        this.applyPick(typeof saved === 'string' ? JSON.parse(saved) : saved)
+        this.view = 'map'
+      } catch (e) {
+        // 记忆损坏（JSON 解析失败等）：清掉，落回线路库落地页，别让异常打断 onLoad
+        try { uni.removeStorageSync(HOME_LINE_KEY) } catch (e2) { /* 忽略 */ }
+      }
     },
     // 全市公交是否已激活（激活后持久化，免重复激活）
     isCityActivated() {
@@ -540,6 +578,7 @@ export default {
       }
       this.syncIdentity()
       this.skin = getSkin()
+      this.accent = getAccent()
       this.refreshDefault = getRefreshDefault()
       this.mapSource = getMapSource()
       this.sessionDays = getSessionDays()
@@ -583,6 +622,38 @@ export default {
     // 皮肤：黑 / 白 / 跟随系统（写 <html data-skin>，全局 CSS 换肤）
     onSkin(key) {
       this.skin = setSkin(key)
+    },
+    // 主题色：写 --ac CSS 变量族挂 <html>，全站强调元素即时跟随；本机持久化
+    onAccent(hex) {
+      this.accent = setAccent(hex)
+    },
+    // 调色盘：原生取色器（H5）。拖动实时预览，确认落库，取消回退到已存颜色
+    pickAccent() {
+      // #ifdef H5
+      try {
+        if (this._acInput && this._acInput.parentNode) this._acInput.parentNode.removeChild(this._acInput)
+        const input = document.createElement('input')
+        input.type = 'color'
+        input.value = this.accent
+        input.style.cssText = 'position:fixed;left:-9999px;top:0;width:0;height:0;opacity:0'
+        input.addEventListener('input', () => {
+          previewAccent(input.value) // 拖动实时预览（不落库）
+        })
+        input.addEventListener('change', () => {
+          this.accent = setAccent(input.value)
+          if (input.parentNode) input.parentNode.removeChild(input)
+          this._acInput = null
+        })
+        input.addEventListener('cancel', () => {
+          previewAccent(this.accent) // 取消：回退到已存颜色
+          if (input.parentNode) input.parentNode.removeChild(input)
+          this._acInput = null
+        })
+        document.body.appendChild(input)
+        this._acInput = input
+        input.click()
+      } catch (e) { /* 忽略 */ }
+      // #endif
     },
     // 地图来源：高德 / 腾讯（自绘走向图底图瓦片源，改完对打开的地图即时生效）
     onMapSource(key) {
@@ -777,8 +848,8 @@ export default {
   transition: border-color 0.2s, background 0.2s;
 }
 .act-groove:focus-within {
-  border-color: rgba(129, 140, 248, 0.6);
-  background: rgba(99, 102, 241, 0.1);
+  border-color: rgba(var(--ac-rgb), 0.6);
+  background: rgba(var(--ac-rgb), 0.1);
 }
 .act-input {
   flex: 1;
@@ -812,7 +883,7 @@ export default {
 }
 .act-btn.main {
   color: #fff;
-  background: linear-gradient(135deg, #6366f1, #06b6d4);
+  background: linear-gradient(135deg, var(--ac), var(--ac-2));
   box-shadow: 0 10rpx 26rpx rgba(79, 110, 247, 0.42), inset 0 1rpx 0 rgba(255, 255, 255, 0.3);
 }
 .act-btn.main:hover {
@@ -905,8 +976,8 @@ export default {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: linear-gradient(135deg, rgba(99, 102, 241, 0.35), rgba(6, 182, 212, 0.3));
-  border: 3rpx solid rgba(129, 140, 248, 0.5);
+  background: linear-gradient(135deg, rgba(var(--ac-rgb), 0.35), rgba(var(--ac2-rgb), 0.3));
+  border: 3rpx solid rgba(var(--ac-rgb), 0.5);
   cursor: pointer;
   transition: filter 0.18s;
 }
@@ -934,7 +1005,7 @@ export default {
   font-size: 22rpx;
   border-radius: 50%;
   color: #fff;
-  background: rgba(99, 102, 241, 0.92);
+  background: rgba(var(--ac-rgb), 0.92);
   border: 3rpx solid rgba(11, 16, 32, 0.9);
 }
 .acct-id-main {
@@ -972,7 +1043,7 @@ export default {
   font-size: 24rpx;
   font-weight: 600;
   color: #fff;
-  background: linear-gradient(135deg, #6366f1, #818cf8);
+  background: linear-gradient(135deg, var(--ac), var(--ac-hi));
   cursor: pointer;
   transition: filter 0.18s, transform 0.15s;
 }
@@ -1014,7 +1085,7 @@ export default {
   transition: background 0.18s;
 }
 .acct-mini:hover {
-  background: rgba(99, 102, 241, 0.18);
+  background: rgba(var(--ac-rgb), 0.18);
 }
 .acct-mini-hint {
   flex: 1;
@@ -1064,9 +1135,37 @@ export default {
 .acct-seg-item.on {
   color: #fff;
   font-weight: 700;
-  background: linear-gradient(135deg, #6366f1, #818cf8);
-  box-shadow: 0 6rpx 16rpx rgba(99, 102, 241, 0.35);
+  background: linear-gradient(135deg, var(--ac), var(--ac-hi));
+  box-shadow: 0 6rpx 16rpx rgba(var(--ac-rgb), 0.35);
 }
+/* 主题色行：预设色点 + 调色盘（彩虹锥形渐变标识） */
+.ac-row {
+  display: flex;
+  align-items: center;
+  gap: 14rpx;
+  flex-wrap: wrap;
+}
+.ac-dot {
+  width: 52rpx;
+  height: 52rpx;
+  border-radius: 50%;
+  border: 3rpx solid rgba(255, 255, 255, 0.22);
+  box-sizing: border-box;
+  cursor: pointer;
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+.ac-dot:hover {
+  transform: scale(1.1);
+}
+.ac-dot.on {
+  border-color: #ffffff;
+  box-shadow: 0 0 0 4rpx rgba(var(--ac-rgb), 0.45);
+  transform: scale(1.08);
+}
+.ac-picker {
+  background: conic-gradient(#f43f5e, #f97316, #facc15, #4ade80, #22d3ee, #818cf8, #e879f9, #f43f5e);
+}
+
 /* 窗内二次确认态 */
 .acct-q {
   padding: 18rpx 0 26rpx;
@@ -1135,8 +1234,8 @@ export default {
 }
 .acct-btn.save {
   color: #fff;
-  background: linear-gradient(135deg, #6366f1, #818cf8);
-  box-shadow: 0 10rpx 26rpx rgba(99, 102, 241, 0.35), inset 0 1rpx 0 rgba(255, 255, 255, 0.3);
+  background: linear-gradient(135deg, var(--ac), var(--ac-hi));
+  box-shadow: 0 10rpx 26rpx rgba(var(--ac-rgb), 0.35), inset 0 1rpx 0 rgba(255, 255, 255, 0.3);
 }
 .acct-btn.save:hover {
   filter: brightness(1.08);
