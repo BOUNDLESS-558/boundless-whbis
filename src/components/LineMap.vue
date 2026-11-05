@@ -288,6 +288,7 @@
           <view class="cc-btn ghost" v-else title="中止本轮拉取（保留已扫到的部分结果）" @click="cancelCity">✕ 中止</view>
           <view class="cc-btn ghost" :class="{ on: cityFollow > 0 }" :title="cityFollowTitle" @click="cycleCityFollow">{{ cityFollowLabel }}</view>
           <view class="cc-btn ghost" :class="{ on: cityShowOrgId }" title="近景给每辆车标出自编号" @click="toggleCityTags">自编号</view>
+          <view class="cc-btn ghost" :class="{ on: rankOpen }" title="按车速从高到低列出全局在运车辆（纯本地排序，不发请求）" @click="toggleRank">🏁 车速榜</view>
         </view>
       </block>
     </view>
@@ -302,6 +303,18 @@
       </text>
       <text class="cl-tip">点车点看详情 · 点数字团放大</text>
     </view>
+
+    <!-- 车速榜：全市态右上角浮窗（此时右侧栏隐藏，空间空着）。数据源就是当前快照，
+         组件内部纯本地排序，切换档位 / 折叠都不发请求；点行走 selectBus + focusBus -->
+    <SpeedRank
+      v-if="cityOn && rankOpen"
+      :buses="cityBuses"
+      :meta="cityMeta"
+      :busy="cityBusy"
+      @pick="onRankPick"
+      @fold="onRankFold"
+      @close="closeRank"
+    />
 
     <!-- 右侧栏：实时车辆面板在上，发车时刻表面板独立挂在它下方（两张卡各自成块，不共用一个面板壳）。
          全市态整栏隐藏：这里的内容属于「当前这一条线」，与全市分布不是一个作用域，且要把画面让给车点 -->
@@ -387,7 +400,7 @@
       >
         <view class="sheet-title">
           <text class="sheet-grip">⣿</text>
-          <text class="sheet-line">{{ sheetTitle }}</text>
+          <text class="sheet-line" :title="sheetTitle">{{ sheetTitle }}</text>
           <text class="sheet-dir" :class="'d' + selectedBus.dir">{{ selectedBus.dir === 0 ? '上行' : '下行' }}</text>
         </view>
         <view class="sheet-actions">
@@ -400,13 +413,49 @@
           <view class="sheet-close" @click.stop="closeSheet" title="关闭">✕</view>
         </view>
       </view>
-      <view class="sheet-row" v-if="cityOn"><text class="sk">所属线路</text><text class="sv">{{ selectedBus.no }} 路 · {{ selectedBus.dir === 0 ? '上行' : '下行' }}</text></view>
-      <view class="sheet-row"><text class="sk">所属营运公司</text><text class="sv">{{ busCompanyText(selectedBus) }}</text></view>
-      <view class="sheet-row"><text class="sk">自编号</text><text class="sv">{{ selectedBus.orgId || '未知（编号字典还原中…）' }}</text></view>
-      <view class="sheet-row"><text class="sk">车速</text><text class="sv">{{ selectedBus.gpsSpeed }} km/h</text></view>
-      <view class="sheet-row"><text class="sk">运行状态</text><text class="sv">{{ busStateText(selectedBus) }}</text></view>
-      <view class="sheet-row"><text class="sk">GPS 时间</text><text class="sv">{{ selectedBus.time }}</text></view>
-      <view class="sheet-row"><text class="sk">经纬度（GCJ-02）</text><text class="sv">{{ selectedBus.lng }}, {{ selectedBus.lat }}</text></view>
+      <!-- 元数据行：公司全名独占一行，不再被「左标签 + 右值」挤到折行 -->
+      <view class="sheet-sub" :title="busCompanyText(selectedBus)">
+        <text class="ss-tag">营运公司</text>
+        <text class="ss-org">{{ busCompanyText(selectedBus) }}</text>
+      </view>
+      <!-- 当前走向：这辆车所在方向的起点站 → 终点站（下行已反转），与全站首末站绿/琥珀语义一致 -->
+      <view class="sheet-route" v-if="sheetRoute">
+        <view class="sr-head">
+          <text class="sk">当前走向</text>
+          <text class="sr-dir" :class="'d' + sheetRoute.dir">{{ sheetRoute.dir === 0 ? '上行' : '下行' }}</text>
+        </view>
+        <view class="sr-line">
+          <text class="sr-tag sr-start">起</text>
+          <text class="sr-name sr-from" :title="sheetRoute.from">{{ sheetRoute.from }}</text>
+          <text class="sr-arrow">→</text>
+          <text class="sr-tag sr-end">终</text>
+          <text class="sr-name sr-to" :title="sheetRoute.to">{{ sheetRoute.to }}</text>
+        </view>
+      </view>
+      <!-- 2×2 指标网格：小标签在上、数值在下，短值各占半行宽度，省掉四行横排 -->
+      <view class="sheet-grid">
+        <view class="sg-cell">
+          <text class="sg-k">自编号</text>
+          <view class="sg-v">{{ selectedBus.orgId || '编号还原中…' }}</view>
+        </view>
+        <view class="sg-cell">
+          <text class="sg-k">车速</text>
+          <view class="sg-v"><text class="sg-num">{{ selectedBus.gpsSpeed }}</text><text class="sg-u">km/h</text></view>
+        </view>
+        <view class="sg-cell">
+          <text class="sg-k">运行状态</text>
+          <view class="sg-v">{{ busStateText(selectedBus) }}</view>
+        </view>
+        <view class="sg-cell">
+          <text class="sg-k">GPS 时间</text>
+          <view class="sg-v">{{ selectedBus.time }}</view>
+        </view>
+      </view>
+      <!-- 坐标精度收敛到 6 位（≈0.1m，高于 GPS 自身精度），原始 17 位小数会折成两行 -->
+      <view class="sheet-coord" :title="busCoord">
+        <text class="sg-k">坐标 · GCJ-02</text>
+        <text class="sc-v">{{ busCoord }}</text>
+      </view>
       <view class="sheet-btns">
         <view class="sheet-btn" @click="focusBus(selectedBus)" title="居中并把地图放到最大，精确查看这辆车">📍 在地图上定位</view>
         <!-- 全市态下的出口：从一辆车跳到它所属的线路（看得到走向、站点与同线其他车） -->
@@ -427,7 +476,7 @@
       >
         <view class="sheet-title">
           <text class="sheet-grip">⣿</text>
-          <text class="sheet-line">{{ selectedStop.name }}</text>
+          <text class="sheet-line" :title="selectedStop.name">{{ selectedStop.name }}</text>
           <text class="sheet-dir" :class="'d' + selectedStop.dir">{{ selectedStop.dir === 0 ? '上行' : '下行' }}</text>
         </view>
         <view class="sheet-actions">
@@ -440,29 +489,28 @@
           <view class="sheet-close" @click.stop="closeSheet" title="关闭">✕</view>
         </view>
       </view>
-      <view class="sheet-row"><text class="sk">所属方向</text><text class="sv">{{ selectedStop.dir === 0 ? '上行' : '下行' }} · {{ lineName || lineNo }} 路</text></view>
-      <view class="sheet-transfer">
-        <view class="st-head">
-          <text class="sk">可换乘线路</text>
-          <text class="st-n">{{ stopLinesBusy ? '全市线网匹配中…' : stopLines.length + ' 条 · 点击直达' }}</text>
+      <!-- 方向 / 所属线路 / 换乘条数合并成一行元信息，省掉两行左右分栏 -->
+      <view class="sheet-sub">
+        <text class="ss-tag">{{ selectedStop.dir === 0 ? '上行' : '下行' }} · {{ stopLineLabel }}</text>
+        <text class="ss-org">{{ stopLinesBusy ? '全市线网匹配中…' : stopLines.length + ' 条可换乘 · 点击直达' }}</text>
+      </view>
+      <view class="st-list">
+        <view
+          class="st-chip"
+          v-for="t in stopLines"
+          :key="t.no"
+          :class="{ cur: t.cur }"
+          @click="openStopLine(t)"
+          :title="(t.cur ? '当前线路 · ' : '查看 ') + t.no + ' 路（' + (t.start || '?') + ' → ' + (t.end || '?') + '）'"
+        >
+          <text class="st-no">{{ t.no }}</text>
+          <!-- 乘客看站牌只关心「往哪开」：只留终点站，单行完整显示；完整起讫站留在 title -->
+          <text class="st-route" :title="(t.start || '?') + ' → ' + (t.end || '?')">{{ t.end ? '开往 ' + t.end : '起讫站未知' }}</text>
+          <text class="st-cur" v-if="t.cur">当前</text>
+          <text class="st-go">›</text>
         </view>
-        <view class="st-list">
-          <view
-            class="st-chip"
-            v-for="t in stopLines"
-            :key="t.no"
-            :class="{ cur: t.cur }"
-            @click="openStopLine(t)"
-            :title="(t.cur ? '当前线路 · ' : '查看 ') + t.no + ' 路（' + (t.start || '?') + ' → ' + (t.end || '?') + '）'"
-          >
-            <text class="st-no">{{ t.no }}</text>
-            <text class="st-route">{{ t.start || '?' }} → {{ t.end || '?' }}</text>
-            <text class="st-cur" v-if="t.cur">当前</text>
-            <text class="st-go">›</text>
-          </view>
-          <view class="st-none" v-if="!stopLinesBusy && !stopLines.length">
-            <text>全市线网中未找到其它途经该站的线路</text>
-          </view>
+        <view class="st-none" v-if="!stopLinesBusy && !stopLines.length">
+          <text>全市线网中未找到其它途经该站的线路</text>
         </view>
       </view>
     </view>
@@ -489,9 +537,11 @@ import {
   cityWarned, markCityWarned, loadCityNet, netSearchLines, bboxIntersects,
 } from '../utils/cityBus.js'
 import LinePlan from './LinePlan.vue'
+import SpeedRank from './SpeedRank.vue'
 import { getRefreshDefault, getMapSource, accentRgba, getAccent } from '../utils/settings.js'
 import { cleanStops, pointsOf, fromFlat } from '../utils/routeClean.js'
 import { loadLineAsset, assetDir } from '../utils/lineAsset.js'
+import { orgCompanyOf, routeOf } from '../utils/speedRank.js'
 
 // —— 方向配色（全站统一）：上行 = 青蓝，下行 = 玫红 ——
 // 色相相隔约 150°，在浅色高德底图与深色自绘画布上都清晰；不依赖红绿对比，色盲用户也能分辨。
@@ -511,6 +561,9 @@ const REFRESH_KEY = 'whbis:map-refresh-sec'
 // 所以不给 15/30 秒这种线路态档位，最低 5 分钟且默认关闭，配额代价写在按钮提示里。
 const CITY_FOLLOW_OPTS = [0, 5, 15, 30]
 const CITY_FOLLOW_KEY = 'whbis:city-follow-sec'
+// 车速榜开启态：本机记忆。开启后只有点浮窗右上角 ✕ 才清除；
+// 切视图 / LineMap 被卸载重建都不该让它自动消失（榜单是全市态专属，回到全市态自动复现）
+const RANK_OPEN_KEY = 'whbis:rank-open'
 // 聚合网格边长（px）：原生 marker 是 DOM 节点，成本高→网格稀一点；自绘走 SVG，可以密一点
 const CITY_CELL_NATIVE = 52
 const CITY_CELL_SVG = 34
@@ -534,11 +587,6 @@ const CITY_TAG_MIN_ZOOM = 13.4
 const CITY_TAG_MIN_SCALE = 15.4
 const CITY_TAG_MAX = 120
 const CN_ORG = ['', '第一', '第二', '第三', '第四', '第五', '第六', '第七', '第八', '第九']
-// 营运公司：由自编号首位推断（1 → 武汉公交集团第一公司）
-function orgCompanyOf(b) {
-  const d = String(b.orgId || '').charAt(0)
-  return d >= '1' && d <= '9' ? `武汉公交集团${CN_ORG[Number(d)]}公司` : '未知公司'
-}
 // 行驶状态：到站 / 行驶 / 停靠
 function busStateOf(b) {
   return b.arrived === '1' ? '到站' : (parseFloat(b.gpsSpeed) > 0 ? '行驶' : '停靠')
@@ -614,7 +662,7 @@ function smoothPath(pts, snapped) {
 }
 
 export default {
-  components: { LinePlan },
+  components: { LinePlan, SpeedRank },
   props: {
     lineCodeProp: { type: String, default: '' },
     initDirection: { type: Number, default: 0 },
@@ -670,8 +718,8 @@ export default {
       canvas: { w: 375, h: 667 },
       cam: { u: 0.5, v: 0.4, zoom: 13 },
       projCenter: { x: 187, y: 333 },
-      // UI 占位（控制卡 / 右侧面板 / 图例），用于计算路线可绘制区域
-      uiRects: { ctrl: null, side: null, legend: null },
+      // UI 占位（控制卡 / 右侧面板 / 车速榜 / 图例），用于计算路线可绘制区域
+      uiRects: { ctrl: null, side: null, legend: null, rank: null },
       // 相机是否已按线路自适应过一次（避免 15s 刷新时视图乱跳）
       camInited: false,
       showStopLabels: true,
@@ -704,6 +752,14 @@ export default {
       cityBuses: [],
       // 本轮扫描元信息：{ at, ms, total, done, failed, lines, count, partial }
       cityMeta: null,
+      // 车速榜浮窗开关（只在全市态显示，纯本地排序快照，不发额外请求）。
+      // 初值从本机恢复：LineMap 常因「未选线路时切出全市视图」被整个卸载，
+      // 只靠组件内 data 会丢状态；只有关闭按钮会把它清掉。
+      rankOpen: (() => {
+        try { return uni.getStorageSync(RANK_OPEN_KEY) === 1 } catch (e) { return false }
+      })(),
+      // 榜单是否折叠（由 SpeedRank 抛回）：折叠后只剩标题一条，不该继续占用右侧绘制区
+      rankFolded: false,
       // 按线路号筛选（缩小到某条线的车，不重新请求）
       cityFilterNo: '',
       // 自动跟随间隔（分钟，0=手动）
@@ -772,6 +828,44 @@ export default {
     sheetTitle() {
       if (this.cityOn) return (this.selectedBus && this.selectedBus.no) || ''
       return this.lineName
+    },
+    // 详情窗「当前走向」：这辆车所属方向的起点站 → 终点站。
+    // 优先取已加载的该方向站点明细（API/静态资产，最准）；没加载过（如全市态
+    // 从车点直接点开、还没进过这条线）就退回本地静态索引 lines.json，
+    // routeOf 会按方向反转下行，保证「上行 A→B / 下行 B→A」不会写反。
+    sheetRoute() {
+      const b = this.selectedBus
+      if (!b) return null
+      const dir = Number(b.dir)
+      const d = dir === 0 || dir === 1 ? dir : Number(this.direction || 0)
+      const no = (b.no != null && b.no !== '') ? b.no : this.lineNo
+      // stopsByDir 属于 this.lineNo 这条线。全市态点开别线的车时它不会清空，
+      // 必须先比对线路号，否则会把上一条线的起讫站安到这辆车上。
+      const sameLine = String(no) === String(this.lineNo || '')
+      const arr = sameLine ? (this.stopsByDir[d] || []) : []
+      if (arr.length > 1) {
+        const from = String(arr[0].stopName || '').trim()
+        const to = String(arr[arr.length - 1].stopName || '').trim()
+        if (from && to) return { dir: d, from, to }
+      }
+      const rt = routeOf(no, d)
+      return rt.known ? { dir: d, from: rt.from, to: rt.to } : null
+    },
+    // 详情窗坐标：接口给的是 17 位小数，横排必然折行。收敛到 6 位（≈0.1m，
+    // 已高于 GPS 定位精度），用等宽数字单行展示，完整原始值仍可从别处复制。
+    busCoord() {
+      const b = this.selectedBus
+      if (!b) return ''
+      const f = (v) => {
+        const n = Number(v)
+        return isFinite(n) && n !== 0 ? n.toFixed(6) : '—'
+      }
+      return `${f(b.lng)}, ${f(b.lat)}`
+    },
+    // 站点窗元信息里的线路名：宿主有时传「337」、有时传「337路」，统一只加一次「路」
+    stopLineLabel() {
+      const s = String(this.lineName || this.lineNo || '').trim()
+      return /路$/.test(s) ? s : `${s} 路`
     },
     // —— 全市实时分布 ——
     // 快照里经线路筛选后的车辆（纯本地过滤，不发请求）
@@ -1012,6 +1106,11 @@ export default {
     // 子组件 watch 先于父组件刷新自身 lineName 那批回调，单独触发会读到滞后的 prop，曾把线路名停在上一条）
     lineCodeProp() { this.applyHostLine() },
     lineNameProp() { this.applyHostLine() },
+    // 榜单浮窗出现/收起会改变右侧可绘制区，重新量一次占位
+    rankOpen() {
+      if (!this.rankOpen) this.rankFolded = false
+      this.$nextTick(() => this.measureUi())
+    },
     // 全市公交视图：宿主顶部分段是唯一入口，本组件不再自带开关
     cityMode(v) {
       if (v) { if (!this.cityOn) this.enterCity() }
@@ -1677,6 +1776,8 @@ export default {
     exitCity() {
       this.cancelCity()
       this.cityOn = false
+      // 不重置 rankOpen：切出全市态只是把浮窗藏起来（v-if 带 cityOn），
+      // 回到全市态要自动复现；只有浮窗右上角 ✕ 才会真正关闭
       this.cityDots = []
       this.cityNetPaths = []
       this.cityTags = []
@@ -2254,11 +2355,18 @@ export default {
       q.select('.schematic-legend').boundingClientRect()
       q.select('.schematic').boundingClientRect()
       q.select('.city-legend').boundingClientRect()
+      q.select('.rank-card').boundingClientRect()
       q.exec((res) => {
         const arr = res || []
         const prevCtrl = this.uiRects.ctrl
         const prevSide = this.uiRects.side
-        this.uiRects = { ctrl: arr[0] || null, side: arr[1] || null, legend: arr[2] || arr[4] || null }
+        const prevRank = this.uiRects.rank
+        this.uiRects = {
+          ctrl: arr[0] || null,
+          side: arr[1] || null,
+          legend: arr[2] || arr[4] || null,
+          rank: arr[5] || null,
+        }
         // H5 有原生标题栏（--window-top），窗口高度不等于画布高度，以实际画布矩形为准
         const box = arr[3]
         const prevCanvas = this.canvas
@@ -2268,7 +2376,10 @@ export default {
         // 控制卡/面板高度会随异步数据（营运公司徽章、车辆数）变化，画布也可能因窗口缩放变化；
         // 占位变了就得重排，但用户已手动平移/缩放时保持其视角不动
         const changed = (prev, now) => !!(prev && now && Math.abs(now.bottom - prev.bottom) > 8)
-        const grew = changed(prevCtrl, this.uiRects.ctrl) || changed(prevSide, this.uiRects.side)
+        // 榜单从无到有/从有到无会吃掉右侧整块绘制区，必须重排（changed 只比较都有值的情况）
+        const rankToggled = !!prevRank !== !!this.uiRects.rank
+        const grew = changed(prevCtrl, this.uiRects.ctrl) || changed(prevSide, this.uiRects.side) ||
+          rankToggled || changed(prevRank, this.uiRects.rank)
         const resized = prevCanvas.w !== this.canvas.w || prevCanvas.h !== this.canvas.h
         if (!this.camInited || ((grew || resized) && !this._userMoved)) this.fitRoute()
         else this.renderSchematic()
@@ -2276,11 +2387,12 @@ export default {
         this.setupPanelResize()
       })
     },
-    // 可绘制矩形：避开左上控制卡、右侧栏（桌面）/ 底部横栏（手机）、底部图例
+    // 可绘制矩形：避开左上控制卡、右侧栏 / 车速榜浮窗（桌面）/ 底部横栏（手机）、底部图例
     fitRect() {
       const { w, h } = this.canvas
       const c = this.uiRects.ctrl
-      const p = this.uiRects.side
+      // 折叠时榜单只剩标题一条，不再占用右侧绘制区（收起前那一大片要避让）
+      const p = this.uiRects.side || (this.rankFolded ? null : this.uiRects.rank)
       const lg = this.uiRects.legend
       let x0 = 28
       let y0 = c ? Math.min(c.bottom + 26, h * 0.58) : h * 0.3
@@ -2869,6 +2981,34 @@ export default {
       this.selectedStop = null
       this.selectedBus = bus
       this.renderSchematic()
+    },
+    // 车速榜开关：开启态写本机，控制卡按钮与浮窗 ✕ 共用同一份状态
+    toggleRank() {
+      this.rankOpen = !this.rankOpen
+      this.saveRankOpen()
+    },
+    // 唯一「真正关闭」的入口：浮窗右上角 ✕（清掉记忆，下次不会自己冒出来）
+    closeRank() {
+      this.rankOpen = false
+      this.saveRankOpen()
+    },
+    saveRankOpen() {
+      try { uni.setStorageSync(RANK_OPEN_KEY, this.rankOpen ? 1 : 0) } catch (e) { /* 存储不可用仅本次生效 */ }
+    },
+    // 榜单折叠：同步状态并重新量占位（折叠后高度骤变，全览要重排）
+    onRankFold(v) {
+      this.rankFolded = !!v
+      this.$nextTick(() => this.measureUi())
+    },
+    // 车速榜点行：清掉线路筛选（否则目标车可能被筛掉），弹详情窗并精确居中定位
+    onRankPick(bus) {
+      if (!bus) return
+      if (this.cityFilterNo) {
+        this.cityFilterNo = ''
+        this.cityHitLine = null
+      }
+      this.selectBus(bus)
+      this.focusBus(bus)
     },
     // 选中站点：弹出站点详情窗，并异步匹配可换乘线路（两窗互斥，同时只显示一扇）
     selectStop(stop) {
@@ -4391,66 +4531,49 @@ export default {
   background: rgba(var(--ac-rgb), 0.3);
   border-color: rgba(var(--ac-rgb), 0.65);
 }
-/* 站点详情窗：换乘线路区（芯片流式排布，与全站靛蓝描边语言一致） */
-.st-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-top: 20rpx;
-}
-.st-n {
-  font-size: 20rpx;
-  color: rgba(255, 255, 255, 0.42);
-}
+/* 站点详情窗：换乘线路行式列表，行间只用细分割线，不再每项自带背景/圆角 */
 .st-list {
-  margin-top: 14rpx;
+  margin-top: 6rpx;
   display: flex;
   flex-direction: column;
-  gap: 10rpx;
   max-height: 400rpx;
   overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.26) transparent;
+  overscroll-behavior: contain;
   padding-right: 8rpx;
 }
-/* 细滚动条：换掉原生白条，用与卡片同族的暗色细轨 */
 .st-list::-webkit-scrollbar {
   width: 8rpx;
 }
-.st-list::-webkit-scrollbar-track {
-  background: transparent;
-}
 .st-list::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.16);
+  background: rgba(255, 255, 255, 0.26);
   border-radius: 999rpx;
-}
-.st-list::-webkit-scrollbar-thumb:hover {
-  background: rgba(255, 255, 255, 0.3);
 }
 .st-chip {
   flex-shrink: 0;
   display: flex;
   align-items: center;
-  gap: 16rpx;
-  padding: 12rpx 16rpx;
-  border-radius: 14rpx;
-  background: rgba(255, 255, 255, 0.05);
-  border: 2rpx solid rgba(255, 255, 255, 0.08);
+  gap: 14rpx;
+  min-width: 0;
+  padding: 14rpx 6rpx;
+  border-bottom: 2rpx solid rgba(255, 255, 255, 0.07);
   cursor: pointer;
-  transition: background 0.2s, border-color 0.2s, transform 0.15s;
+  transition: background 0.2s;
 }
 .st-chip:hover {
-  background: rgba(var(--ac-rgb), 0.16);
-  border-color: rgba(var(--ac-rgb), 0.45);
+  background: rgba(var(--ac-rgb), 0.1);
 }
 .st-chip:active {
-  transform: scale(0.985);
+  opacity: 0.7;
 }
 /* 线路号徽章：实体靛蓝牌，公交站牌视觉；当前线路换成琥珀 */
 .st-no {
-  flex-shrink: 0;
+  flex: 0 0 auto;
   box-sizing: border-box;
-  min-width: 96rpx;
-  max-width: 176rpx;
-  padding: 4rpx 14rpx;
+  min-width: 76rpx;
+  max-width: 150rpx;
+  padding: 4rpx 12rpx;
   overflow: hidden;
   text-overflow: ellipsis;
   text-align: center;
@@ -4458,7 +4581,7 @@ export default {
   border-radius: 8rpx;
   background: rgba(var(--ac-rgb), 0.88);
   color: #ffffff;
-  font-size: 22rpx;
+  font-size: 24rpx;
   font-weight: 800;
   font-variant-numeric: tabular-nums;
 }
@@ -4467,28 +4590,26 @@ export default {
   color: #0b1020;
 }
 .st-route {
-  flex: 1;
+  flex: 1 1 0;
   min-width: 0;
-  font-size: 22rpx;
-  color: rgba(255, 255, 255, 0.62);
+  font-size: 23rpx;
+  color: rgba(255, 255, 255, 0.8);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 .st-cur {
-  flex-shrink: 0;
+  flex: 0 0 auto;
   font-size: 18rpx;
   line-height: 1;
   color: #fcd34d;
-  border: 2rpx solid rgba(252, 211, 77, 0.45);
-  border-radius: 999rpx;
-  padding: 4rpx 12rpx;
+  letter-spacing: 1rpx;
 }
 .st-go {
-  flex-shrink: 0;
+  flex: 0 0 auto;
   font-size: 28rpx;
   line-height: 1;
-  color: rgba(255, 255, 255, 0.26);
+  color: rgba(255, 255, 255, 0.36);
   transition: color 0.2s;
 }
 .st-chip:hover .st-go {
@@ -4500,6 +4621,10 @@ export default {
   padding: 8rpx 0;
 }
 .sheet-line {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
   font-size: 36rpx;
   font-weight: 800;
   color: #fff;
@@ -4521,24 +4646,163 @@ export default {
   background: rgba(225, 29, 72, 0.26);
   border: 2rpx solid rgba(251, 113, 133, 0.5);
 }
-.sheet-row {
+/* 元数据行：左小标签 + 右单行值，长公司名 / 站名不再折行 */
+.sheet-sub {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 16rpx 0;
+  gap: 16rpx;
+  min-width: 0;
+  padding: 14rpx 0;
   border-bottom: 2rpx solid rgba(255, 255, 255, 0.06);
 }
-.sk {
-  font-size: 26rpx;
-  color: rgba(255, 255, 255, 0.55);
+.ss-tag {
+  flex: 0 0 auto;
+  font-size: 20rpx;
+  color: rgba(255, 255, 255, 0.44);
+  white-space: nowrap;
 }
-.sv {
+.ss-org {
+  flex: 1 1 0;
+  min-width: 0;
+  text-align: right;
+  font-size: 22rpx;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.82);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+/* 2×2 指标网格：标签在上、数值在下；竖线只在右列、横线只在第二行 */
+.sheet-grid {
+  display: flex;
+  flex-wrap: wrap;
+  border-bottom: 2rpx solid rgba(255, 255, 255, 0.06);
+}
+.sg-cell {
+  box-sizing: border-box;
+  width: 50%;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6rpx;
+  padding: 14rpx 0 16rpx;
+}
+.sg-cell:nth-child(odd) {
+  padding-right: 20rpx;
+}
+.sg-cell:nth-child(even) {
+  padding-left: 24rpx;
+  border-left: 2rpx solid rgba(255, 255, 255, 0.06);
+}
+.sg-cell:nth-child(n+3) {
+  border-top: 2rpx solid rgba(255, 255, 255, 0.06);
+}
+.sg-k {
+  font-size: 20rpx;
+  color: rgba(255, 255, 255, 0.44);
+  white-space: nowrap;
+}
+.sg-v {
+  min-width: 0;
   font-size: 28rpx;
   font-weight: 700;
   color: #eef1ff;
   font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.sg-u {
+  margin-left: 6rpx;
+  font-size: 18rpx;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.46);
+}
+/* 坐标：等宽数字 + 6 位小数，单行展示 */
+.sheet-coord {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16rpx;
+  min-width: 0;
+  padding: 14rpx 0;
+  border-bottom: 2rpx solid rgba(255, 255, 255, 0.06);
+}
+.sc-v {
+  flex: 1 1 0;
+  min-width: 0;
   text-align: right;
-  margin-left: 20rpx;
+  font-size: 22rpx;
+  font-weight: 600;
+  color: #eef1ff;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+/* 当前走向：起绿 / 终琥珀，站名过长时各自省略，箭头不压缩 */
+.sheet-route {
+  padding: 16rpx 0;
+  border-bottom: 2rpx solid rgba(255, 255, 255, 0.06);
+}
+.sr-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 10rpx;
+}
+.sr-dir {
+  flex: 0 0 auto;
+  padding: 1rpx 10rpx;
+  border-radius: 7rpx;
+  font-size: 18rpx;
+}
+.sr-dir.d0 { color: #67e8f9; background: rgba(6, 182, 212, 0.18); }
+.sr-dir.d1 { color: #fda4af; background: rgba(225, 29, 72, 0.18); }
+.sr-line {
+  display: flex;
+  align-items: center;
+  gap: 8rpx;
+  min-width: 0;
+}
+.sr-tag {
+  flex: 0 0 auto;
+  padding: 1rpx 9rpx;
+  border-radius: 7rpx;
+  font-size: 18rpx;
+  font-weight: 800;
+  color: #0b1020;
+}
+.sr-start { background: #22c55e; }
+.sr-end { background: #f59e0b; }
+.sr-name {
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  font-size: 22rpx;
+  font-weight: 600;
+  color: #eef1ff;
+}
+/* 起站名按文字实际宽度排，箭头紧跟其后；两段等宽会把箭头顶到行中间偏右 */
+.sr-from {
+  flex: 0 1 auto;
+  /* 超长起站名也要留出终站名的空间，箭头最远不越过行中点 */
+  max-width: 38%;
+}
+.sr-to {
+  /* basis 必须是 0：用 auto 会把终站名的内容宽计入收缩基准，反过来挤掉起站名 */
+  flex: 1 1 0;
+}
+.sr-arrow {
+  flex: 0 0 auto;
+  font-size: 22rpx;
+  color: rgba(255, 255, 255, 0.42);
+}
+.sk {
+  font-size: 26rpx;
+  color: rgba(255, 255, 255, 0.55);
 }
 .sheet-btns {
   display: flex;
