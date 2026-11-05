@@ -282,13 +282,17 @@ for (const l of todo) {
     const pts = parsePolyline(m.polyline)
     if (pts.length < 2) { stats.dirMiss++; stats.fallback++; continue }
     // 高德 polyline 本就优化过，只做极轻抽稀去掉浮点抖动，不丢走向细节
+    // reversed=true 表示该方向的起讫站与高德 busline 相反（往返同路的线路，高德常只给
+    // 一条 polyline，两个方向都会匹配到它）。必须反转点序，否则上下行几何同向重合，
+    // 「全部」视角里后画的玫红会整条盖掉青蓝，方向箭头也反了。
     const route = simplify(pts, 0.00001)
-    if (route.length < 2) { stats.dirMiss++; stats.fallback++; continue }
+    const dirRoute = m.reversed ? route.slice().reverse() : route
+    if (dirRoute.length < 2) { stats.dirMiss++; stats.fallback++; continue }
 
     putRow(no, d, {
       base,
       stops: slimStops(stops),
-      route: toFlat(route),
+      route: toFlat(dirRoute),
       snapped: true,
       source: 'amap',
       algo: AMAP_ALGO,

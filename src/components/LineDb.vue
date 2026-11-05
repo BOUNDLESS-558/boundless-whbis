@@ -83,7 +83,13 @@
       <view class="db-item" v-for="l in visibleLines" :key="l.no" @click="openDetail(l)">
         <text class="db-no">{{ l.no }}</text>
         <view class="db-item-body">
-          <text class="db-route">{{ l.start || '起点未知' }} → {{ l.end || '终点未知' }}</text>
+          <view class="db-route">
+            <text class="rt-tag rt-start">起</text>
+            <text class="rt-name">{{ l.start || '起点未知' }}</text>
+            <text class="rt-arrow">→</text>
+            <text class="rt-tag rt-end">终</text>
+            <text class="rt-name">{{ l.end || '终点未知' }}</text>
+          </view>
           <text class="db-meta">{{ l.stops ? l.stops + ' 站' : '站数未知' }} · {{ l.dirs.length > 1 ? '双向' : '单向' }} · {{ l.price ? '¥' + l.price : '票价未知' }}</text>
         </view>
         <text class="db-badge" :class="'db-badge-' + statusOf(l).key">{{ statusOf(l).label }}</text>
@@ -106,7 +112,13 @@
         <text class="db-badge" :class="'db-badge-' + statusOf(detail).key">{{ statusOf(detail).label }}</text>
         <text class="db-pop-close" @click="closeDetail">✕</text>
       </view>
-      <view class="db-pop-route">{{ detail.start || '起点未知' }} ⇄ {{ detail.end || '终点未知' }}</view>
+      <view class="db-pop-route">
+        <text class="rt-tag rt-start">起</text>
+        <text class="rt-name">{{ detail.start || '起点未知' }}</text>
+        <text class="rt-arrow">⇄</text>
+        <text class="rt-tag rt-end">终</text>
+        <text class="rt-name">{{ detail.end || '终点未知' }}</text>
+      </view>
       <view class="db-pop-grid">
         <view class="db-cell"><text class="db-k">首班</text><text class="db-v">{{ detail.early || '未知' }}</text></view>
         <view class="db-cell"><text class="db-k">末班</text><text class="db-v">{{ detail.last || '未知' }}</text></view>
@@ -506,11 +518,35 @@ export default {
   gap: 6rpx;
 }
 .db-route {
+  display: flex;
+  align-items: center;
+  gap: 6rpx;
   font-size: 25rpx;
   color: rgba(255, 255, 255, 0.88);
   overflow: hidden;
   white-space: nowrap;
+}
+/* 起讫站共用：起点绿 / 终点琥珀，站名各自省略，箭头不压缩 */
+.rt-tag {
+  flex: 0 0 auto;
+  padding: 1rpx 8rpx;
+  border-radius: 6rpx;
+  font-size: 18rpx;
+  font-weight: 800;
+  color: #0b1020;
+}
+.rt-start { background: #22c55e; }
+.rt-end { background: #f59e0b; }
+.rt-name {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
   text-overflow: ellipsis;
+}
+.rt-arrow {
+  flex: 0 0 auto;
+  color: rgba(255, 255, 255, 0.42);
 }
 .db-meta {
   font-size: 20rpx;
@@ -624,10 +660,18 @@ export default {
 }
 .db-pop-route {
   margin-top: 22rpx;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6rpx;
   font-size: 30rpx;
   font-weight: 700;
   line-height: 1.4;
   color: #fff;
+}
+.db-pop-route .rt-name {
+  white-space: normal;
+  overflow: visible;
 }
 .db-pop-grid {
   margin-top: 24rpx;

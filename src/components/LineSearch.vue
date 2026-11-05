@@ -61,7 +61,13 @@
         <view class="sug-item" v-for="s in suggestList" :key="s.code || s.no" @click="pickSuggest(s)">
           <text class="sug-no">{{ s.no }}</text>
           <view class="sug-body">
-            <text class="sug-route">{{ (s.start || '起点未知') + ' → ' + (s.end || '终点未知') }}</text>
+            <view class="sug-route">
+              <text class="rt-tag rt-start">起</text>
+              <text class="rt-name">{{ s.start || '起点未知' }}</text>
+              <text class="rt-arrow">→</text>
+              <text class="rt-tag rt-end">终</text>
+              <text class="rt-name">{{ s.end || '终点未知' }}</text>
+            </view>
             <text class="sug-meta">{{ sugMeta(s) }}</text>
           </view>
           <text class="st-badge" :class="'st-' + statusOf(s).key">{{ statusOf(s).label }}</text>
@@ -580,11 +586,35 @@ export default {
   gap: 6rpx;
 }
 .sug-route {
+  display: flex;
+  align-items: center;
+  gap: 6rpx;
   font-size: 22rpx;
   color: rgba(255, 255, 255, 0.86);
   overflow: hidden;
   white-space: nowrap;
+}
+/* 起讫站共用：起点绿 / 终点琥珀，与站点条 / 地图同语义 */
+.rt-tag {
+  flex: 0 0 auto;
+  padding: 1rpx 8rpx;
+  border-radius: 6rpx;
+  font-size: 17rpx;
+  font-weight: 800;
+  color: #0b1020;
+}
+.rt-start { background: #22c55e; }
+.rt-end { background: #f59e0b; }
+.rt-name {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
   text-overflow: ellipsis;
+}
+.rt-arrow {
+  flex: 0 0 auto;
+  color: rgba(255, 255, 255, 0.42);
 }
 .sug-meta {
   font-size: 19rpx;

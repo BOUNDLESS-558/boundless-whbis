@@ -123,131 +123,179 @@
             <text class="acct-mini-hint">PNG / JPG / JPEG，自动压缩，可多次更换</text>
           </view>
 
+          <!-- 分区折叠的总控：点标题逐项折叠，这里一键全收 / 全展；展开态本机记忆 -->
+          <view class="acct-fold-bar">
+            <text class="acct-fold-hint">点击分区标题可折叠 / 展开</text>
+            <view class="acct-fold-btn" @click="toggleAllAcctSections">{{ acctAllOpen ? '全部折叠' : '全部展开' }}</view>
+          </view>
+
           <view class="acct-div"></view>
 
           <!-- 登录有效期 -->
-          <view class="acct-sec-title">登录有效期</view>
-          <view class="acct-seg">
-            <view
-              class="acct-seg-item"
-              v-for="o in sessionOpts"
-              :key="o.days"
-              :class="{ on: sessionDays === o.days }"
-              @click="onSessionDays(o.days)"
-            >{{ o.label }}</view>
+          <view class="acct-sec-head" @click="toggleAcctSection('session')">
+            <text class="acct-sec-title">登录有效期</text>
+            <text class="acct-sec-sum" v-if="!acctSec.session">{{ acctSecSummary.session }}</text>
+            <text class="acct-sec-chev" :class="{ folded: !acctSec.session }">▾</text>
           </view>
-          <view class="acct-row">
-            <text class="acct-label">登录状态</text>
-            <text class="acct-value ok">{{ sessionExpText }}</text>
+          <view v-show="acctSec.session" class="acct-sec-body">
+            <view class="acct-seg">
+              <view
+                class="acct-seg-item"
+                v-for="o in sessionOpts"
+                :key="o.days"
+                :class="{ on: sessionDays === o.days }"
+                @click="onSessionDays(o.days)"
+              >{{ o.label }}</view>
+            </view>
+            <view class="acct-row">
+              <text class="acct-label">登录状态</text>
+              <text class="acct-value ok">{{ sessionExpText }}</text>
+            </view>
           </view>
 
           <view class="acct-div"></view>
 
           <!-- 登录密码：预置口令可改为本机自定义密码（只存哈希；改密 / 恢复均需验当前密码） -->
-          <view class="acct-sec-title">登录密码</view>
-          <view class="acct-tip">{{ pwdCustom ? '已设置自定义密码，下次登录用新密码；也可恢复为预置口令' : '当前用预置口令登录，可修改为自己的密码（仅存本机哈希）' }}</view>
-          <!-- 眼睛按钮内嵌输入框右侧：当前密码独立开关；新密码与确认密码共用一个关联开关 -->
-          <view class="acct-pwd-field">
-            <input class="acct-name-input acct-pwd-input" v-model="pwdOld" :password="!pwdShowOld" type="text" placeholder="当前密码" placeholder-class="acct-name-ph" />
-            <view class="acct-eye" :class="{ on: pwdShowOld }" @click="pwdShowOld = !pwdShowOld" v-html="pwdShowOld ? svgEyeOn : svgEyeOff" />
+          <view class="acct-sec-head" @click="toggleAcctSection('pwd')">
+            <text class="acct-sec-title">登录密码</text>
+            <text class="acct-sec-sum" v-if="!acctSec.pwd">{{ acctSecSummary.pwd }}</text>
+            <text class="acct-sec-chev" :class="{ folded: !acctSec.pwd }">▾</text>
           </view>
-          <view class="acct-pwd-field">
-            <input class="acct-name-input acct-pwd-input" v-model="pwdNew" :password="!pwdShowNew" type="text" placeholder="新密码（6~32 位）" placeholder-class="acct-name-ph" />
-            <view class="acct-eye" :class="{ on: pwdShowNew }" @click="pwdShowNew = !pwdShowNew" v-html="pwdShowNew ? svgEyeOn : svgEyeOff" />
-          </view>
-          <view class="acct-pwd-field">
-            <input class="acct-name-input acct-pwd-input" v-model="pwdConfirm" :password="!pwdShowNew" type="text" placeholder="确认新密码" placeholder-class="acct-name-ph" @confirm="onChangePwd" />
-            <view class="acct-eye" :class="{ on: pwdShowNew }" @click="pwdShowNew = !pwdShowNew" v-html="pwdShowNew ? svgEyeOn : svgEyeOff" />
-          </view>
-          <view class="acct-btns">
-            <view class="acct-btn ghost" v-if="pwdCustom" @click="onResetPwd">恢复默认口令</view>
-            <view class="acct-btn save" @click="onChangePwd">修改密码</view>
+          <view v-show="acctSec.pwd" class="acct-sec-body">
+            <view class="acct-tip">{{ pwdCustom ? '已设置自定义密码，下次登录用新密码；也可恢复为预置口令' : '当前用预置口令登录，可修改为自己的密码（仅存本机哈希）' }}</view>
+            <!-- 眼睛按钮内嵌输入框右侧：当前密码独立开关；新密码与确认密码共用一个关联开关 -->
+            <view class="acct-pwd-field">
+              <input class="acct-name-input acct-pwd-input" v-model="pwdOld" :password="!pwdShowOld" type="text" placeholder="当前密码" placeholder-class="acct-name-ph" />
+              <view class="acct-eye" :class="{ on: pwdShowOld }" @click="pwdShowOld = !pwdShowOld" v-html="pwdShowOld ? svgEyeOn : svgEyeOff" />
+            </view>
+            <view class="acct-pwd-field">
+              <input class="acct-name-input acct-pwd-input" v-model="pwdNew" :password="!pwdShowNew" type="text" placeholder="新密码（6~32 位）" placeholder-class="acct-name-ph" />
+              <view class="acct-eye" :class="{ on: pwdShowNew }" @click="pwdShowNew = !pwdShowNew" v-html="pwdShowNew ? svgEyeOn : svgEyeOff" />
+            </view>
+            <view class="acct-pwd-field">
+              <input class="acct-name-input acct-pwd-input" v-model="pwdConfirm" :password="!pwdShowNew" type="text" placeholder="确认新密码" placeholder-class="acct-name-ph" @confirm="onChangePwd" />
+              <view class="acct-eye" :class="{ on: pwdShowNew }" @click="pwdShowNew = !pwdShowNew" v-html="pwdShowNew ? svgEyeOn : svgEyeOff" />
+            </view>
+            <view class="acct-btns">
+              <view class="acct-btn ghost" v-if="pwdCustom" @click="onResetPwd">恢复默认口令</view>
+              <view class="acct-btn save" @click="onChangePwd">修改密码</view>
+            </view>
           </view>
 
           <view class="acct-div"></view>
 
           <!-- 全局默认刷新间隔 -->
-          <view class="acct-sec-title">全局默认刷新间隔</view>
-          <view class="acct-seg">
-            <view
-              class="acct-seg-item"
-              v-for="s in refreshOpts"
-              :key="s"
-              :class="{ on: refreshDefault === s }"
-              @click="onRefreshDefault(s)"
-            >{{ s === 0 ? '手动' : s + ' 秒' }}</view>
+          <view class="acct-sec-head" @click="toggleAcctSection('refresh')">
+            <text class="acct-sec-title">全局默认刷新间隔</text>
+            <text class="acct-sec-sum" v-if="!acctSec.refresh">{{ acctSecSummary.refresh }}</text>
+            <text class="acct-sec-chev" :class="{ folded: !acctSec.refresh }">▾</text>
           </view>
-          <view class="acct-tip">实时线路 / 实时车辆未手动选过间隔时采用该默认值，改完即时生效</view>
+          <view v-show="acctSec.refresh" class="acct-sec-body">
+            <view class="acct-seg">
+              <view
+                class="acct-seg-item"
+                v-for="s in refreshOpts"
+                :key="s"
+                :class="{ on: refreshDefault === s }"
+                @click="onRefreshDefault(s)"
+              >{{ s === 0 ? '手动' : s + ' 秒' }}</view>
+            </view>
+            <view class="acct-tip">实时线路 / 实时车辆未手动选过间隔时采用该默认值，改完即时生效</view>
+          </view>
 
           <view class="acct-div"></view>
 
           <!-- 皮肤 -->
-          <view class="acct-sec-title">皮肤</view>
-          <view class="acct-seg">
-            <view
-              class="acct-seg-item"
-              v-for="o in skinOpts"
-              :key="o.key"
-              :class="{ on: skin === o.key }"
-              @click="onSkin(o.key)"
-            >{{ o.label }}</view>
+          <view class="acct-sec-head" @click="toggleAcctSection('skin')">
+            <text class="acct-sec-title">皮肤</text>
+            <text class="acct-sec-sum" v-if="!acctSec.skin">{{ acctSecSummary.skin }}</text>
+            <text class="acct-sec-chev" :class="{ folded: !acctSec.skin }">▾</text>
+          </view>
+          <view v-show="acctSec.skin" class="acct-sec-body">
+            <view class="acct-seg">
+              <view
+                class="acct-seg-item"
+                v-for="o in skinOpts"
+                :key="o.key"
+                :class="{ on: skin === o.key }"
+                @click="onSkin(o.key)"
+              >{{ o.label }}</view>
+            </view>
           </view>
 
           <!-- 主题色：预设色板 + 调色盘。写 --ac CSS 变量族挂 <html>，
                全站按钮 / 页签 / 选中态 / 胶囊即时跟随（预设避开上行青蓝与下行玫红方向色） -->
-          <view class="acct-sec-title">主题色</view>
-          <view class="ac-row">
-            <view
-              v-for="p in accentPresets"
-              :key="p.hex"
-              class="ac-dot"
-              :class="{ on: accent === p.hex }"
-              :style="{ background: p.hex }"
-              :title="p.label"
-              @click="onAccent(p.hex)"
-            ></view>
-            <view
-              class="ac-dot ac-picker"
-              :class="{ on: !accentPresets.some((p) => p.hex === accent) }"
-              title="调色盘：任选自定义颜色"
-              @click="pickAccent"
-            ></view>
+          <view class="acct-sec-head" @click="toggleAcctSection('accent')">
+            <text class="acct-sec-title">主题色</text>
+            <text class="acct-sec-sum" v-if="!acctSec.accent">{{ acctSecSummary.accent }}</text>
+            <text class="acct-sec-chev" :class="{ folded: !acctSec.accent }">▾</text>
           </view>
-          <view class="acct-tip">主题色作用于查询按钮 / 页签 / 选中态等强调元素，自定义后本机记忆，改完即时生效</view>
+          <view v-show="acctSec.accent" class="acct-sec-body">
+            <view class="ac-row">
+              <view
+                v-for="p in accentPresets"
+                :key="p.hex"
+                class="ac-dot"
+                :class="{ on: accent === p.hex }"
+                :style="{ background: p.hex }"
+                :title="p.label"
+                @click="onAccent(p.hex)"
+              ></view>
+              <view
+                class="ac-dot ac-picker"
+                :class="{ on: !accentPresets.some((p) => p.hex === accent) }"
+                title="调色盘：任选自定义颜色"
+                @click="pickAccent"
+              ></view>
+            </view>
+            <view class="acct-tip">主题色作用于查询按钮 / 页签 / 选中态等强调元素，自定义后本机记忆，改完即时生效</view>
+          </view>
 
           <view class="acct-div"></view>
 
           <!-- 界面字体：内置 OFL 开源可商用 webfont，unicode-range 分片按需加载。
                选项卡上的字体名直接用真字体渲染当预览（开窗时预载各档 CSS） -->
-          <view class="acct-sec-title">界面字体</view>
-          <view class="font-grid">
-            <view
-              v-for="o in fontOpts"
-              :key="o.key"
-              class="font-chip"
-              :class="{ on: uiFont === o.key }"
-              @click="onFont(o.key)"
-            >
-              <text class="font-chip-name" :style="{ fontFamily: o.preview }">{{ o.label }}</text>
-              <text class="font-chip-note">{{ o.note }}</text>
-            </view>
+          <view class="acct-sec-head" @click="toggleAcctSection('font')">
+            <text class="acct-sec-title">界面字体</text>
+            <text class="acct-sec-sum" v-if="!acctSec.font">{{ acctSecSummary.font }}</text>
+            <text class="acct-sec-chev" :class="{ folded: !acctSec.font }">▾</text>
           </view>
-          <view class="acct-tip">开源可商用字体，按需分片加载；改完全站即时生效、本机记忆，加载失败自动回退系统字体</view>
+          <view v-show="acctSec.font" class="acct-sec-body">
+            <view class="font-grid">
+              <view
+                v-for="o in fontOpts"
+                :key="o.key"
+                class="font-chip"
+                :class="{ on: uiFont === o.key }"
+                @click="onFont(o.key)"
+              >
+                <text class="font-chip-name" :style="{ fontFamily: o.preview }">{{ o.label }}</text>
+                <text class="font-chip-note">{{ o.note }}</text>
+              </view>
+            </view>
+            <view class="acct-tip">开源可商用字体，按需分片加载；改完全站即时生效、本机记忆，加载失败自动回退系统字体</view>
+          </view>
 
           <view class="acct-div"></view>
 
           <!-- 地图来源：自绘走向图底图瓦片源（高德 / 腾讯） -->
-          <view class="acct-sec-title">地图来源</view>
-          <view class="acct-seg">
-            <view
-              class="acct-seg-item"
-              v-for="o in mapSourceOpts"
-              :key="o.key"
-              :class="{ on: mapSource === o.key }"
-              @click="onMapSource(o.key)"
-            >{{ o.label }}</view>
+          <view class="acct-sec-head" @click="toggleAcctSection('map')">
+            <text class="acct-sec-title">地图来源</text>
+            <text class="acct-sec-sum" v-if="!acctSec.map">{{ acctSecSummary.map }}</text>
+            <text class="acct-sec-chev" :class="{ folded: !acctSec.map }">▾</text>
           </view>
-          <view class="acct-tip">底图瓦片源，线路走向 / 车辆 / 站点不受影响，改完即时生效</view>
+          <view v-show="acctSec.map" class="acct-sec-body">
+            <view class="acct-seg">
+              <view
+                class="acct-seg-item"
+                v-for="o in mapSourceOpts"
+                :key="o.key"
+                :class="{ on: mapSource === o.key }"
+                @click="onMapSource(o.key)"
+              >{{ o.label }}</view>
+            </view>
+            <view class="acct-tip">底图瓦片源，线路走向 / 车辆 / 站点不受影响，改完即时生效</view>
+          </view>
 
           <view class="acct-tip">注销后回到登录页，本机账号保留，下次可直接登录</view>
           <view class="acct-logout" @click="acctConfirm = true">注销登录</view>
@@ -337,6 +385,14 @@ const LINE_VIEWS = ['map', 'stops']
 // 全市公交激活：输入正确激活码后持久化，之后免再激活
 const CITY_ACT_KEY = 'whbis:city-activated'
 const CITY_ACT_CODE = 'BOUNDLESS_558'
+// 「账号与设置」各分区的展开态：本机记忆，避免每次开窗都要重新点开
+const ACCT_SECTIONS_KEY = 'whbis:acct-sections'
+const ACCT_SECTION_KEYS = ['session', 'pwd', 'refresh', 'skin', 'accent', 'font', 'map']
+// 默认：常用的小分区展开，字体（13 档）与密码表单这类长分区默认收起，
+// 让面板首屏就能看到全部设置项，不用一路滚到底
+const ACCT_SECTIONS_DEFAULT = {
+  session: true, pwd: false, refresh: true, skin: true, accent: true, font: false, map: true,
+}
 
 export default {
   name: 'HomePage',
@@ -378,6 +434,8 @@ export default {
       // 界面字体：当前生效档 + 档位列表（preview = 选项卡预览用的 family 串）
       uiFont: 'system',
       fontOpts: FONT_OPTS.map((o) => ({ ...o, preview: o.family ? o.family + ', sans-serif' : 'inherit' })),
+      // 设置分区展开态（本机记忆，见 ACCT_SECTIONS_DEFAULT）
+      acctSec: { ...ACCT_SECTIONS_DEFAULT },
       sessionOpts: [
         { days: 7, label: '7 天' },
         { days: 15, label: '15 天' },
@@ -418,6 +476,27 @@ export default {
     // 默认头像：用户名 / 账号名的首字母色块
     avatarLetter() {
       return (this.dispName || this.account || '·').trim().charAt(0).toUpperCase()
+    },
+    // 折叠态下每个分区显示的「当前值」摘要，收起后仍能一眼看到设置结果
+    acctSecSummary() {
+      const font = this.fontOpts.find((o) => o.key === this.uiFont)
+      const skin = this.skinOpts.find((o) => o.key === this.skin)
+      const map = this.mapSourceOpts.find((o) => o.key === this.mapSource)
+      const accent = this.accentPresets.find((p) => p.hex === this.accent)
+      const days = this.sessionOpts.find((o) => o.days === this.sessionDays)
+      return {
+        session: days ? days.label : `${this.sessionDays} 天`,
+        pwd: this.pwdCustom ? '自定义密码' : '预置口令',
+        refresh: this.refreshDefault === 0 ? '手动刷新' : `${this.refreshDefault} 秒`,
+        skin: skin ? skin.label : '黑色',
+        accent: accent ? accent.label : '自定义',
+        font: font ? font.label : '系统默认',
+        map: map ? map.label : '高德地图',
+      }
+    },
+    // 是否所有分区都已展开（决定快捷按钮文案与方向）
+    acctAllOpen() {
+      return ACCT_SECTION_KEYS.every((k) => !!this.acctSec[k])
     },
   },
   onLoad(query) {
@@ -464,6 +543,37 @@ export default {
     this.fire(['cleanup', 'stopAutoRefresh'])
   },
   methods: {
+    // 分区展开态：本机记忆（只认已知的 key，脏数据自动回退默认值）
+    loadAcctSections() {
+      let saved = null
+      try {
+        saved = uni.getStorageSync(ACCT_SECTIONS_KEY)
+        if (typeof saved === 'string') saved = JSON.parse(saved)
+      } catch (e) { saved = null }
+      const next = { ...ACCT_SECTIONS_DEFAULT }
+      if (saved && typeof saved === 'object') {
+        ACCT_SECTION_KEYS.forEach((k) => {
+          if (typeof saved[k] === 'boolean') next[k] = saved[k]
+        })
+      }
+      this.acctSec = next
+    },
+    saveAcctSections() {
+      try { uni.setStorageSync(ACCT_SECTIONS_KEY, this.acctSec) } catch (e) { /* 存储不可用仅本次生效 */ }
+    },
+    toggleAcctSection(key) {
+      if (!ACCT_SECTION_KEYS.includes(key)) return
+      this.acctSec = { ...this.acctSec, [key]: !this.acctSec[key] }
+      this.saveAcctSections()
+    },
+    // 一键折叠 / 展开全部：已全开就全收，否则全展开
+    toggleAllAcctSections() {
+      const open = !this.acctAllOpen
+      const next = {}
+      ACCT_SECTION_KEYS.forEach((k) => { next[k] = open })
+      this.acctSec = next
+      this.saveAcctSections()
+    },
     // 依次尝试调用子组件上的这几个方法（有第一个就用第一个）
     fire(names) {
       ;['mapC', 'stopsC'].forEach((key) => {
@@ -609,6 +719,7 @@ export default {
       this.mapSource = getMapSource()
       this.sessionDays = getSessionDays()
       this.uiFont = getFont()
+      this.loadAcctSections()
       // 预载各档 CSS：让「界面字体」选项卡用真字体渲染当预览
       ensureFontPreviews()
       this.refreshSessionText()
@@ -1137,11 +1248,83 @@ export default {
   margin: 22rpx 0;
   background: rgba(255, 255, 255, 0.08);
 }
+/* 分区折叠头：标题 + 折叠态下的当前值摘要 + 旋转箭头，整行可点 */
+.acct-sec-head {
+  display: flex;
+  align-items: center;
+  gap: 12rpx;
+  margin-bottom: 14rpx;
+  padding: 6rpx 2rpx;
+  cursor: pointer;
+  user-select: none;
+}
+.acct-sec-head:active .acct-sec-title {
+  color: #fff;
+}
 .acct-sec-title {
   font-size: 24rpx;
   font-weight: 700;
   color: rgba(255, 255, 255, 0.62);
-  margin-bottom: 14rpx;
+  transition: color 0.15s;
+}
+.acct-sec-sum {
+  flex: 1;
+  min-width: 0;
+  text-align: right;
+  font-size: 21rpx;
+  color: rgba(255, 255, 255, 0.38);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.acct-sec-chev {
+  flex: 0 0 auto;
+  font-size: 22rpx;
+  color: rgba(255, 255, 255, 0.42);
+  transition: transform 0.18s ease;
+}
+.acct-sec-chev.folded {
+  transform: rotate(-90deg);
+}
+/* 展开区：轻微淡入 + 下滑，避免生硬闪现 */
+.acct-sec-body {
+  animation: acct-sec-in 0.18s ease-out;
+}
+@keyframes acct-sec-in {
+  from { opacity: 0; transform: translateY(-6rpx); }
+  to { opacity: 1; transform: translateY(0); }
+}
+/* 一键全收 / 全展 */
+.acct-fold-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12rpx;
+  margin-top: 16rpx;
+}
+.acct-fold-hint {
+  flex: 1;
+  min-width: 0;
+  font-size: 20rpx;
+  color: rgba(255, 255, 255, 0.32);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.acct-fold-btn {
+  flex: 0 0 auto;
+  padding: 6rpx 16rpx;
+  border-radius: 10rpx;
+  font-size: 20rpx;
+  color: rgba(255, 255, 255, 0.72);
+  background: rgba(255, 255, 255, 0.06);
+  border: 2rpx solid rgba(255, 255, 255, 0.12);
+  cursor: pointer;
+  transition: background 0.18s, color 0.18s;
+}
+.acct-fold-btn:hover {
+  color: #fff;
+  background: rgba(var(--ac-rgb), 0.22);
 }
 /* 分段选择器（有效期 / 刷新 / 皮肤共用）：凹槽底 + 选中靛蓝胶囊 */
 .acct-seg {

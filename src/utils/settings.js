@@ -313,16 +313,27 @@ export const BASE_FONT_STACK =
 
 const FS5 = 'https://cdn.jsdelivr.net/npm/@fontsource/'
 const LGW = 'https://cdn.jsdelivr.net/npm/lxgw-wenkai-webfont@1.7.0/'
+const LGW_LITE = 'https://cdn.jsdelivr.net/npm/lxgw-wenkai-lite-webfont@1.6.0/'
+const LGW_SCREEN = 'https://cdn.jsdelivr.net/npm/lxgw-wenkai-screen-webfont@1.6.0/'
 
 /**
  * 字体档位：css 为需要注入的 <link> 列表；family 为该字体在 CSS 里的 font-family 名。
- * 排序按「日常可用度」：默认在前，楷体其次，展示性强的靠后。
+ * 排序按「日常可用度」：系统默认 → 正文字体（黑/宋/楷）→ 圆体 → 书法展示体。
+ * 全部 SIL OFL / 免费商用；CSS 均为 unicode-range 分片，只下载页面用到的字形。
  */
 export const FONT_OPTS = [
   { key: 'system', label: '系统默认', note: '跟随系统 · 零加载', family: '', css: [] },
   {
     key: 'wenkai', label: '霞鹜文楷', note: '楷体 · 温润易读', family: "'LXGW WenKai'",
     css: [LGW + 'lxgwwenkai-regular.css', LGW + 'lxgwwenkai-bold.css'],
+  },
+  {
+    key: 'wenkai-screen', label: '霞鹜文楷·屏显', note: '加粗优化 · 更适合屏幕', family: "'LXGW WenKai Screen'",
+    css: [LGW_SCREEN + 'lxgwwenkaiscreen.css', LGW_SCREEN + 'lxgwwenkaiscreenr.css'],
+  },
+  {
+    key: 'wenkai-lite', label: '霞鹜文楷·精简', note: '轻量版 · 加载更快', family: "'LXGW WenKai Lite'",
+    css: [LGW_LITE + 'lxgwwenkailite-regular.css', LGW_LITE + 'lxgwwenkailite-bold.css'],
   },
   {
     key: 'noto-sans', label: '思源黑体', note: '现代黑体 · 端正', family: "'Noto Sans SC'",
@@ -333,12 +344,32 @@ export const FONT_OPTS = [
     css: [FS5 + 'noto-serif-sc@5.1.0/400.css', FS5 + 'noto-serif-sc@5.1.0/700.css'],
   },
   {
+    key: 'xiaowei', label: '站酷小薇体', note: '复古宋体 · 秀气', family: "'ZCOOL XiaoWei'",
+    css: [FS5 + 'zcool-xiaowei@5.1.0/400.css'],
+  },
+  {
+    key: 'qingke', label: '站酷庆科黄油体', note: '圆润粗体 · 标题感', family: "'ZCOOL QingKe HuangYou'",
+    css: [FS5 + 'zcool-qingke-huangyou@5.1.0/400.css'],
+  },
+  {
     key: 'kuaile', label: '站酷快乐体', note: '圆润手写 · 活泼', family: "'ZCOOL KuaiLe'",
     css: [FS5 + 'zcool-kuaile@5.1.0/400.css'],
   },
   {
     key: 'mashan', label: '马善政楷书', note: '毛笔楷书 · 飘逸', family: "'Ma Shan Zheng'",
     css: [FS5 + 'ma-shan-zheng@5.1.0/400.css'],
+  },
+  {
+    key: 'longcang', label: '龙藏体', note: '行书手写 · 洒脱', family: "'Long Cang'",
+    css: [FS5 + 'long-cang@5.1.0/400.css'],
+  },
+  {
+    key: 'zhimang', label: '志莽行书', note: '行草 · 洒脱奔放', family: "'Zhi Mang Xing'",
+    css: [FS5 + 'zhi-mang-xing@5.1.0/400.css'],
+  },
+  {
+    key: 'liujian', label: '柳建毛草', note: '草书 · 写意', family: "'Liu Jian Mao Cao'",
+    css: [FS5 + 'liu-jian-mao-cao@5.1.0/400.css'],
   },
 ]
 

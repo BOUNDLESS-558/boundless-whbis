@@ -6,8 +6,10 @@
         <view class="line-badge" :class="dir === 0 ? 'up' : 'down'">{{ lineName }}</view>
         <view class="hd-body">
           <view class="hd-route">
+            <text class="hd-tag hd-tag-first">起</text>
             <text class="hd-start">{{ activeBase.startStop || startStop || '起点' }}</text>
             <text class="hd-arrow">⇌</text>
+            <text class="hd-tag hd-tag-last">终</text>
             <text class="hd-end">{{ activeBase.endStop || endStop || '终点' }}</text>
           </view>
           <!-- 营运公司（由车辆自编号首位推断） -->
@@ -107,19 +109,28 @@
                 <text class="b-state">{{ b.arrived === '1' ? '到站' : '行驶' }}</text>
               </view>
             </view>
-            <!-- 连续线段 + 站点 -->
+            <!-- 连续线段 + 站点：首站=起点(绿) / 末站=终点(琥珀)，中间站空心环，明确“起”“终” -->
             <view class="node-mid">
               <view class="seg" :class="{ first: i === 0, last: i === activeCols.length - 1 }"></view>
               <view
                 class="dot"
-                :class="{ terminal: isTerminal(i, activeCols.length), busy: stop.buses && stop.buses.length }"
+                :class="{
+                  terminal: isTerminal(i, activeCols.length),
+                  't-first': i === 0,
+                  't-last': i === activeCols.length - 1,
+                  busy: stop.buses && stop.buses.length,
+                }"
               >
-                <text class="dot-no">{{ stop.stopNo }}</text>
+                <text class="dot-no" v-if="i !== 0 && i !== activeCols.length - 1">{{ stop.stopNo }}</text>
+                <text class="dot-end" v-else>{{ i === 0 ? '起' : '终' }}</text>
               </view>
             </view>
             <!-- 站名 + 换乘 -->
             <view class="node-label">
               <text class="node-name" :style="nameZoneStyle">{{ stop.stopName }}</text>
+              <view class="node-badge" v-if="i === 0 || i === activeCols.length - 1">
+                <text class="nb" :class="i === 0 ? 'nb-first' : 'nb-last'">{{ i === 0 ? '始发站' : '终点站' }}</text>
+              </view>
               <view class="node-tags" v-if="stop.transferInfos && stop.transferInfos.length">
                 <text class="ttag" v-for="t in stop.transferInfos" :key="t.subwayLineNo">{{ t.subwayLineNo }}号线</text>
               </view>
@@ -613,6 +624,23 @@ export default {
   margin: 0 12rpx;
   color: rgba(255, 255, 255, 0.42);
 }
+/* 起讫站前的起/终小标记：与站点条同配色（起点绿 / 终点琥珀） */
+.hd-tag {
+  flex: 0 0 auto;
+  align-self: center;
+  margin-right: 8rpx;
+  padding: 1rpx 9rpx;
+  border-radius: 7rpx;
+  font-size: 19rpx;
+  font-weight: 800;
+  color: #0b1020;
+}
+.hd-tag-first {
+  background: #22c55e;
+}
+.hd-tag-last {
+  background: #f59e0b;
+}
 .hd-orgs {
   display: flex;
   flex-wrap: wrap;
@@ -969,6 +997,39 @@ export default {
 }
 .dot.terminal .dot-no {
   color: #0b1020;
+}
+/* 起点 / 终点：绿 / 琥珀，与方向色（青 / 玫红）区分，明确“起”“终”两端 */
+.dot.t-first {
+  background: #22c55e;
+  border-color: #ffffff;
+}
+.dot.t-last {
+  background: #f59e0b;
+  border-color: #ffffff;
+}
+.dot .dot-end {
+  font-size: 20rpx;
+  font-weight: 800;
+  color: #0b1020;
+}
+/* 站名下的首末站徽标：起点绿 / 终点琥珀 */
+.node-badge {
+  margin-top: 6rpx;
+}
+.nb {
+  display: inline-block;
+  font-size: 18rpx;
+  font-weight: 700;
+  line-height: 1.4;
+  padding: 1rpx 10rpx;
+  border-radius: 8rpx;
+  color: #ffffff;
+}
+.nb-first {
+  background: #22c55e;
+}
+.nb-last {
+  background: #f59e0b;
 }
 /* 有车的站：白环 + 方向色光晕 */
 .dot.busy {

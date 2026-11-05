@@ -129,11 +129,11 @@
           v-for="s in labelStops"
           :key="'lb' + s.dir + '-' + s.idx"
           class="stop-label"
-          :class="{ left: s.anchor === 'end', terminal: s.terminal }"
+          :class="{ left: s.anchor === 'end', terminal: s.terminal, 'end-first': s.endKind === 'first', 'end-last': s.endKind === 'last' }"
           :style="{ left: s.lx + 'px', top: s.ly + 'px' }"
           @click="onStopLabelTap(s)"
         >
-          <text>{{ s.name }}</text>
+          <text v-if="s.endTag" class="lb-end">{{ s.endTag }}·</text><text>{{ s.name }}</text>
         </view>
         <view
           v-for="b in svgBuses"
@@ -869,8 +869,10 @@ export default {
           }
           // 站名开关：关闭时不挂 label，让工具行「站名」在原生模式下也能显隐站名贴片
           if (this.showStopLabels) {
+            // 起点 / 终点加「起·/终·」前缀（绿/琥珀语义同自绘模式，marker 图标保持方向色）
+            const endPrefix = isEnd ? (i === 0 ? '起' : '终') + '·' : ''
             stopMarker.label = {
-              content: s.stopName,
+              content: endPrefix + s.stopName,
               // 站点文字跟随方向色（青蓝/玫红），与参考图一致；底色近纯白保证浅色底图上可读
               color: st.labelText,
               fontSize: 10,
@@ -914,6 +916,7 @@ export default {
       if (this.cityOn) return this.cityNativeNet()
       const dirs = this.dirFilter === 2 ? [0, 1] : [this.dirFilter]
       const split = dirs.length > 1 ? 14 : 0
+      const sameDir = dirs.length > 1 && this.routeSameDirection()
       const casings = []
       const lines = []
       dirs.forEach((dir) => {
@@ -925,7 +928,8 @@ export default {
             .filter((p) => !isNaN(p.latitude) && !isNaN(p.longitude))
         }
         if (points.length < 2) return
-        const pts = offsetPolyline(points, split)
+        // 同向重合时 dir1 反向偏移，两条折线分居两侧（与自绘 sideShift 兜底一致）
+        const pts = offsetPolyline(points, sameDir && dir === 1 ? -split : split)
         const st = DIR_STYLE[dir]
         casings.push({ points: pts, color: st.casing, width: 9, arrowLine: false })      // 白色外描边
         // 主线统一用提亮一档的 direction 色（与自绘 svgStroke 同源）。
@@ -1153,6 +1157,20 @@ export default {
       }
       this.loadByLine(no, this.dirFilter === 2 ? this.direction : this.dirFilter)
     },
+    /**
+     * 双方向几何是否「同向重合」：起终点都相近时，法向偏移会把两条线推向同一侧，
+     * 后画的方向整条盖住先画的（曾出现在 amap 采集未反转 reversed 方向的资产上）。
+     * 装载时已按 reversed 反转，这里再兜一层：命中就给 dir1 用反向偏移。
+     */
+    routeSameDirection() {
+      const a = this.routeByDir[0] || []
+      const b = this.routeByDir[1] || []
+      if (a.length < 2 || b.length < 2) return false
+      const near = (p, q) => p && q &&
+        Math.abs(Number(p.latitude) - Number(q.latitude)) < 1e-5 &&
+        Math.abs(Number(p.longitude) - Number(q.longitude)) < 1e-5
+      return near(a[0], b[0]) && near(a[a.length - 1], b[b.length - 1])
+    },
     // 切换视角方向：0 上行 / 1 下行 / 2 全部（站点与轨迹已双方向缓存，切换仅重绘）
     // 自绘模式：走向/站点/车辆都是 SVG + HTML 图层，改 dirFilter 重算 svg* 即可，
     // 底图瓦片随 cam 不变、完全不动。地图 <map> 组件（原生模式）则需重建以切换 marker 集合，
@@ -1203,7 +1221,14 @@ export default {
           const row = assetDir(asset, d)
           if (!row || !Array.isArray(row.stops) || row.stops.length < 2) continue
           this.stopsByDir[d] = row.stops
-          const geo = Array.isArray(row.route) && row.route.length >= 4 ? fromFlat(row.route) : []
+          const flat = Array.isArray(row.route) && row.route.length >= 4 ? row.route : null
+          let geo = flat ? fromFlat(flat) : []
+          // 高德对往返同路的线路只返回一条 polyline，采集时按起讫站给「反向」方向
+          // 记了 amap.reversed=true 但没反转几何。上下行轨迹同向会让「全部」视角的
+          // 两条线完全重合（后画的玫红盖掉青蓝），且方向箭头也反了。
+          // 这里在装载时反转，让两个方向点序相反：sideShift / offsetPolyline 的
+          // 法向自然相反，双轨分居两侧；箭头与站点顺序也随之对齐。
+          if (geo.length > 1 && row.amap && row.amap.reversed === true) geo = geo.reverse()
           if (geo.length > 1) {
             this.routeByDir[d] = geo
             this.routeState[d] = 'ok'
@@ -2532,6 +2557,8 @@ export default {
         return
       }
       const dirs = this.dirFilter === 2 ? [0, 1] : [this.dirFilter]
+      // 双方向同屏且几何同向重合时，给 dir1 反向偏移（见 routeSameDirection 注释）
+      const sameDir = dirs.length > 1 && this.routeSameDirection()
       const s = zoomScale(this.cam.zoom)
       const sx = (lng) => (mercX(lng) - this.cam.u) * s + this.projCenter.x
       const sy = (lat) => (mercY(lat) - this.cam.v) * s + this.projCenter.y
@@ -2555,7 +2582,9 @@ export default {
           ? this.routeByDir[d].map((p) => ({ lat: p.latitude, lng: p.longitude }))
           : (this.stopsByDir[d] || []).map((st) => ({ lat: parseFloat(st.latitude), lng: parseFloat(st.longitude) }))
         const raw = src.filter((p) => !isNaN(p.lat) && !isNaN(p.lng)).map((p) => ({ x: sx(p.lng), y: sy(p.lat) }))
-        return sideShift(raw, trackOff)
+        // 同向重合时 dir1 反向偏移，保证两条线分居两侧都能看见
+        const off = (sameDir && d === 1) ? -trackOff : trackOff
+        return sideShift(raw, off)
       }
 
       // 1) 走向线（轨迹点过多时抽样，避免路径字符串过长拖慢渲染）+ 方向箭头
@@ -2623,7 +2652,14 @@ export default {
           if (isNaN(lat) || isNaN(lng)) return
           const x = sx(lng)
           const y = sy(lat)
-          const terminal = i === 0 || i === arr.length - 1
+          const isFirst = i === 0
+          const isLast = i === arr.length - 1
+          const terminal = isFirst || isLast
+          // 起点=绿 / 终点=琥珀，与方向色（青 / 玫红）区分，明确“起”“终”
+          const END_COLOR = { first: '#22c55e', last: '#f59e0b' }
+          const endKind = isFirst ? 'first' : isLast ? 'last' : ''
+          const endTag = isFirst ? '起' : isLast ? '终' : ''
+          const color = !terminal ? DIR_STYLE[d].svgStroke : END_COLOR[endKind]
           stops.push({
             dir: d,
             idx: i,
@@ -2631,7 +2667,9 @@ export default {
             x,
             y,
             terminal,
-            color: DIR_STYLE[d].svgStroke,
+            endKind,
+            endTag,
+            color,
           })
           // 放太小时不标站名（避免叠成一团）；窄屏因为有 stride 抽稀，可以放宽到能看站序的级别
           const zoomGate = w < 600 ? 10.5 : 13
@@ -2645,7 +2683,7 @@ export default {
           else if (x > w - 110) right = false
           // 与站点圆点（半径 6.5）留出 4px 间隙
           const lx = right ? x + 11 : x - 11
-          const sw = textW(st.stopName)
+          const sw = textW((endTag ? endTag + '·' : '') + st.stopName)
           const nx1 = right ? lx : lx - sw
           const box = { x1: nx1, x2: nx1 + sw, y1: y - 6, y2: y + 6 }
           // 压在车辆圆点上就直接不放（首末站不因此丢弃，交由后面与车号文本框避让）
@@ -2663,6 +2701,8 @@ export default {
             idx: i,
             name: st.stopName,
             terminal,
+            endKind,
+            endTag,
             anchor: right ? 'start' : 'end',
             lx,
             ly: y,
@@ -3402,6 +3442,16 @@ export default {
 .stop-label.terminal {
   color: #f8fafc;
   font-weight: 700;
+}
+/* 地图站名前缀：起(绿) / 终(琥珀)，与站点圆点同语义 */
+.stop-label .lb-end {
+  font-weight: 800;
+}
+.stop-label.end-first .lb-end {
+  color: #22c55e;
+}
+.stop-label.end-last .lb-end {
+  color: #f59e0b;
 }
 .bus-label {
   position: absolute;
