@@ -68,7 +68,14 @@ console.log(`· 暂存 ${fileCount} 个文件（含 .nojekyll）`)
 
 // 3. 临时 index 生成孤立提交 → 更新本地 pages 分支
 safeRemove(TMP_INDEX)
-const env = { ...process.env, GIT_INDEX_FILE: TMP_INDEX, GIT_WORK_TREE: STAGE }
+// GIT_DIR 必须显式给出：`git add` 的 cwd 是系统临时目录（不在仓库内），
+// 不指定就报 "fatal: not a git repository"。
+const env = {
+  ...process.env,
+  GIT_DIR: path.join(ROOT, '.git'),
+  GIT_INDEX_FILE: TMP_INDEX,
+  GIT_WORK_TREE: STAGE,
+}
 git(['read-tree', '--empty'], { env })
 git(['add', '-A', '.'], { env, cwd: STAGE })
 const tree = git(['write-tree'], { env })
