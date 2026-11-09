@@ -1206,6 +1206,11 @@ export default {
         }
       })
     },
+    // 侧栏（实时车辆 + 发车时刻）随「全市 / 单线路」视图切换而销毁重建，
+    // 重建后必须重新挂缩放手柄并把记忆的尺寸（宽 + 高）还原，否则宽度记不住
+    cityOn() {
+      this.$nextTick(() => this.setupPanelResize())
+    },
     // 宿主页顶部「上行/下行」切换 → 地图视角单向跟随（地图内仍可用「全部 / ⇄」自由查看）
     initDirection(v) {
       const d = Number(v || 0)
@@ -4436,18 +4441,6 @@ export default {
   overflow-x: hidden;
   -webkit-overflow-scrolling: touch;
   overscroll-behavior: contain;
-  scrollbar-width: thin;
-  scrollbar-color: rgba(255, 255, 255, 0.26) transparent;
-}
-.bus-list::-webkit-scrollbar {
-  width: 8rpx;
-}
-.bus-list::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.26);
-  border-radius: 999rpx;
-}
-.bus-list::-webkit-scrollbar-track {
-  background: transparent;
 }
 /* 窄屏（手机）：整列只有 62vh，两张卡对半分，各自滚各自 */
 @media (max-width: 720px) {
@@ -4713,17 +4706,8 @@ export default {
   flex-direction: column;
   max-height: 400rpx;
   overflow-y: auto;
-  scrollbar-width: thin;
-  scrollbar-color: rgba(255, 255, 255, 0.26) transparent;
   overscroll-behavior: contain;
   padding-right: 8rpx;
-}
-.st-list::-webkit-scrollbar {
-  width: 8rpx;
-}
-.st-list::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.26);
-  border-radius: 999rpx;
 }
 .st-chip {
   flex-shrink: 0;

@@ -376,17 +376,5 @@ export default {
   overscroll-behavior: contain;
   padding: 20rpx 12rpx 24rpx;
   box-sizing: border-box;
-  scrollbar-width: thin;
-  scrollbar-color: rgba(255, 255, 255, 0.26) transparent;
-}
-.fw-body::-webkit-scrollbar {
-  width: 8rpx;
-}
-.fw-body::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.26);
-  border-radius: 999rpx;
-}
-.fw-body::-webkit-scrollbar-track {
-  background: transparent;
 }
 </style>

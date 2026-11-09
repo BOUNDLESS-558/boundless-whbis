@@ -244,18 +244,6 @@ export default {
   -webkit-overflow-scrolling: touch;
   /* 滚到顶/底不要把惯性传给地图，也别让细滚动条压在时间数字上 */
   overscroll-behavior: contain;
-  scrollbar-width: thin;
-  scrollbar-color: rgba(255, 255, 255, 0.26) transparent;
-}
-.plan-body::-webkit-scrollbar {
-  width: 8rpx;
-}
-.plan-body::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.26);
-  border-radius: 999rpx;
-}
-.plan-body::-webkit-scrollbar-track {
-  background: transparent;
 }
 /* 分组头：整行压在方向色上，与车辆列表里的分组感一致 */
 .pg-head {

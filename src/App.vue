@@ -93,4 +93,28 @@ html[data-skin='light'] .amap-container,
 html[data-skin='light'] .amap-container * {
   filter: invert(1) hue-rotate(180deg);
 }
+
+/* ── 统一滚动条：所有面板 / 列表共用一套细窄半透明风格（与深色玻璃面板协调）──
+   rpx 在 ::-webkit-scrollbar 伪元素上不一定被编译，故用 px 直接定宽 */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.26) transparent;
+}
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.26);
+  border-radius: 999px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.42);
+}
+::-webkit-scrollbar-corner {
+  background: transparent;
+}
 </style>

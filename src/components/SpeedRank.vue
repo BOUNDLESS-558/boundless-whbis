@@ -282,17 +282,8 @@ export default {
   overflow-x: hidden;
   -webkit-overflow-scrolling: touch;
   overscroll-behavior: contain;
-  scrollbar-width: thin;
-  scrollbar-color: rgba(255, 255, 255, 0.26) transparent;
   padding: 0 16rpx 16rpx;
 }
-.rank-list::-webkit-scrollbar { width: 8rpx; }
-.rank-list::-webkit-scrollbar-track { background: transparent; }
-.rank-list::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.26);
-  border-radius: 999rpx;
-}
-.rank-list::-webkit-scrollbar-thumb:hover { background: rgba(255, 255, 255, 0.4); }
 .rank-row {
   display: flex;
   align-items: center;
