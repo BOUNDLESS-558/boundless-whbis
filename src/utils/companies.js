@@ -12,7 +12,9 @@
 export const COMPANIES = {
   JT: {
     abbr: 'JT', assetPrefix: 'b', name: '武汉公交集团', short: '公交集团',
-    color: '#6366f1', logo: '/static/logo-jt.svg', prefixRe: /^(\d|电|BRT|K|D)/i,
+    // 集团徽标用官方蓝色 e 标（static/logo.png），与品牌行 / favicon 同一张图；
+    // 不再用旧的 logo-jt.svg（靛蓝方块 + 公交简笔画），保持全站品牌一致
+    color: '#6366f1', logo: '/static/logo.png', prefixRe: /^(\d|电|BRT|K|D|YX)/i,
   },
   CC: {
     abbr: 'CC', assetPrefix: 'CCB', name: '武汉蔡城公交客运公司', short: '蔡城公交',

@@ -128,6 +128,7 @@ export default {
         rows,
         toast: `已复制 ${rows.length} 班时刻`,
         imageToast: `已复制 ${rows.length} 班时刻为图片`,
+        excelToast: `已复制 ${rows.length} 班时刻为 Excel 表格`,
       })
     },
   },

@@ -416,6 +416,7 @@ export default {
         rows: lines.map((s) => s.split('\t')),
         toast: `已复制 ${lines.length} 辆车信息`,
         imageToast: `已复制 ${lines.length} 辆车信息为图片`,
+        excelToast: `已复制 ${lines.length} 辆车信息为 Excel 表格`,
       })
     },
     // H5：为线路带绑定鼠标拖拽 + 滚轮横向滚动（PC 端可用）

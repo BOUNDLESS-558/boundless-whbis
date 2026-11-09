@@ -178,6 +178,7 @@ export default {
         { key: 'BRT', label: 'BRT' },
         { key: 'K', label: 'K' },
         { key: 'D', label: 'D' },
+        { key: 'YX', label: 'YX 夜行' },
       ],
       status: '全部',
       org: '全部',
@@ -314,6 +315,7 @@ export default {
         rows,
         toast: `已复制 ${list.length} 条线路`,
         imageToast: `已复制 ${list.length} 条线路为图片`,
+        excelToast: `已复制 ${list.length} 条线路为 Excel 表格`,
       })
     },
     loadMore() {

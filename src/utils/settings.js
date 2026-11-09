@@ -22,7 +22,7 @@ const ACCENT_KEY = 'whbis:accent'
 const REFRESH_KEY = 'whbis:refresh-default'
 const PROFILE_KEY = 'whbis:profile'
 const MAPSRC_KEY = 'whbis:map-source'
-// 复制方式：所有「复制」按钮统一按此档执行（文本 TSV / 画成图片）
+// 复制方式：所有「复制」按钮统一按此档执行（文本 TSV / 画成图片 / Excel 表格）
 const COPY_MODE_KEY = 'whbis:copy-mode'
 
 export const SKIN_OPTS = [
@@ -261,10 +261,12 @@ export function setMapSource(key) {
 }
 
 // ── 复制方式（全站统一）──
-// text = 复制 TSV 纯文本；image = 把表格画成 PNG 写进系统剪贴板（H5 安全上下文）
+// text = TSV 纯文本；image = PNG 图片（页脚带生成时间）；
+// excel = HTML <table> 写进剪贴板，粘贴到 Excel / WPS 直接是可编辑表格（H5 安全上下文）
 export const COPY_MODE_OPTS = [
   { key: 'text', label: '复制为文本', note: 'TSV 表格，可粘进 Excel' },
-  { key: 'image', label: '复制为图片', note: 'PNG 图片，可直接粘贴发送' },
+  { key: 'image', label: '复制为图片', note: 'PNG 图片，带生成时间，可直接粘贴发送' },
+  { key: 'excel', label: '复制为 Excel', note: '带样式表格，粘贴到 Excel / WPS 即可编辑' },
 ]
 
 export function getCopyMode() {

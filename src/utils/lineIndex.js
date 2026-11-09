@@ -174,9 +174,9 @@ export function allLines() {
   return pool()
 }
 
-/** 线路号前缀归类：电 / BRT / K / D / C / P / 汉奇 / 数字 */
+/** 线路号前缀归类：电 / BRT / K / D / YX / C / P / 汉奇 / 数字（YX = 集团夜行线） */
 export function linePrefix(no) {
-  const m = /^(电|BRT|K|D|C|P|汉奇)/i.exec(String(no == null ? '' : no))
+  const m = /^(BRT|YX|电|K|D|C|P|汉奇)/i.exec(String(no == null ? '' : no))
   return m ? m[1].toUpperCase() : '数字'
 }
 

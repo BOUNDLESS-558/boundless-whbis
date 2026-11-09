@@ -538,6 +538,7 @@ import { assetUrl } from '../utils/asset.js'
 import { distance } from '../utils/geo.js'
 import { allLines } from '../utils/lineIndex.js'
 import { createResizable } from '../utils/panelResize.js'
+import { readPanelPos, writePanelPos, clampPanelPos } from '../utils/panelPos.js'
 import {
   citySweepCost, sweepCity, loadSnapshot, loadLastSnapshot, snapshotAge,
   findBusByOrgId, refreshOrgIds, clusterPoints, SPEED_BANDS, CITY_FRESH_MS,
@@ -1161,6 +1162,9 @@ export default {
   },
   mounted() {
     this.initFromProps()
+    // 恢复详情窗上次拖动过的位置（车辆窗 / 站点窗共用同一套浮窗与位置）
+    // 此刻浮窗还没渲染，先按估算尺寸夹一次；开窗后 bindSheetDrag 会用实际尺寸再夹
+    if (!this.sheetPos) this.sheetPos = clampPanelPos(readPanelPos('bus-sheet'), 320, 360)
     // #ifdef H5
     this._onWinResize = () => {
       this.syncCanvasSize()
@@ -3219,6 +3223,7 @@ export default {
       if (d && d.moved) {
         this._suppressSheetClick = true
         setTimeout(() => { this._suppressSheetClick = false }, 120)
+        if (this.sheetPos) writePanelPos('bus-sheet', this.sheetPos)
       }
       if (typeof document !== 'undefined') {
         document.removeEventListener('mousemove', this.sheetMove)
@@ -3236,6 +3241,8 @@ export default {
       this._sheetHead = head
       head.style.touchAction = 'none'
       head.addEventListener('mousedown', this.sheetDown)
+      // 恢复的位置此刻才有真实 DOM 尺寸，再夹一次确保整个窗口都在视口内
+      if (this.sheetPos) this.$nextTick(() => this.clampSheetPos())
     },
     unbindSheetDrag() {
       if (this._sheetHead) this._sheetHead.removeEventListener('mousedown', this.sheetDown)
@@ -3486,6 +3493,7 @@ export default {
         text: blocks.join('\n'), // 文本模式保留原有的上行/下行分段格式
         toast: `已复制 ${total} 辆车信息`,
         imageToast: `已复制 ${total} 辆车信息为图片`,
+        excelToast: `已复制 ${total} 辆车信息为 Excel 表格`,
       })
     },
     formatGpsTime(t) {

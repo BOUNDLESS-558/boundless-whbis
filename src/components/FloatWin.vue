@@ -32,6 +32,7 @@
 
 <script>
 import { createResizable } from '../utils/panelResize.js'
+import { readPanelPos, writePanelPos, clampPanelPos } from '../utils/panelPos.js'
 
 // 夹在视口内的最小边距（px），免得拖远后窗口找不回来
 const PAD = 6
@@ -67,6 +68,10 @@ export default {
     }
   },
   computed: {
+    // 位置记忆键：优先用 resizeKey（各面板稳定唯一），没传时退回标题
+    posKey() {
+      return this.resizeKey || this.title || ''
+    },
     widthPx() {
       return Math.round(uni.upx2px(this.widthRpx))
     },
@@ -93,9 +98,10 @@ export default {
     this.bindDrag()
     // 先挂缩放（会同步应用记忆尺寸到 el.style），再量默认位置，center() 才能量到实际宽度
     this.attachResize()
-    // 默认位置由 JS 量完实体再写死：根节点上不能留 transform，
-    // 否则窗口会变成内部 fixed 后代（线路库详情弹层 / 刷新下拉遮罩）的包含块，弹层就被锁在窗口里
-    this.center()
+    // 有上次拖动过的位置就恢复（先过 clamp，换窗口大小也不会飘到屏幕外）；
+    // 没有才居中。center() 里同样不能留 transform：根节点带 transform 会把内部
+    // fixed 后代（线路库详情弹层 / 刷新下拉遮罩）的包含块锁进窗口里
+    if (!this.restorePos()) this.center()
     if (typeof window !== 'undefined') window.addEventListener('resize', this.reclamp)
   },
   beforeUnmount() {
@@ -172,6 +178,8 @@ export default {
       if (d && d.moved) {
         this._suppress = true
         setTimeout(() => { this._suppress = false }, 120)
+        // 真的移动过才落盘：默认居中 / 贴底态不写，免得把内容异步变高的窗口固化住
+        if (this.pos && this.pos.y != null) writePanelPos(this.posKey, this.pos)
       }
       if (typeof document !== 'undefined') {
         document.removeEventListener('mousemove', this.move)
@@ -198,6 +206,14 @@ export default {
         document.removeEventListener('mousemove', this.move)
         document.removeEventListener('mouseup', this.up)
       }
+    },
+    // 恢复上次拖动过的位置；返回是否成功（没记忆 / 取不到实体就交回 center 居中）
+    restorePos() {
+      const saved = readPanelPos(this.posKey)
+      if (!saved || !this._rootEl || !this._rootEl.getBoundingClientRect) return false
+      const r = this._rootEl.getBoundingClientRect()
+      this.pos = clampPanelPos(saved, r.width, r.height)
+      return true
     },
     // 首次打开：只水平居中（纵向仍由 CSS 贴底），高度交给内容自己长
     center() {

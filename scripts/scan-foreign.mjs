@@ -26,6 +26,7 @@
  *   node scripts/scan-foreign.mjs --dry             # 预览命中，不落盘
  *   node scripts/scan-foreign.mjs                  # 全量（C/P + 汉奇）
  *   node scripts/scan-foreign.mjs --hanqi-only     # 只跑汉奇（linename 配额耗尽时用）
+ *   node scripts/scan-foreign.mjs --hanqi-deep     # 汉奇追加数字/K/定制号段枚举（发现更多漏线，请求更多）
  *   node scripts/scan-foreign.mjs --only C1,P2     # 只采指定号（C/P 链路）
  */
 import fs from 'node:fs'
@@ -50,6 +51,7 @@ const argv = process.argv.slice(2)
 const argOf = (n, d) => { const i = argv.indexOf('--' + n); return i >= 0 && argv[i + 1] && !argv[i + 1].startsWith('--') ? argv[i + 1] : d }
 const DRY = argv.includes('--dry')
 const HANQI_ONLY = argv.includes('--hanqi-only')
+const HANQI_DEEP = argv.includes('--hanqi-deep')
 const ONLY = String(argOf('only', '')).split(',').map((s) => s.trim()).filter(Boolean)
 const DELAY = Math.max(0, Number(argOf('delay', 1200)))
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
@@ -147,13 +149,31 @@ const fmtTime = (t) => {
   return s.length === 4 ? `${s.slice(0, 2)}:${s.slice(2)}` : ''
 }
 
-// 汉奇线路名种子：这些是 /v3/assistant/inputtips?datatype=busline 实测确认存在的线路名。
-// 用「线路名」而非「线路号」当关键词，是汉奇能被查到的关键（写「汉奇1」会查无此线）。
+// 汉奇「已知线路名」：inputtips 实测能命中的完整线路名，作为保底种子。
+// ⚠ 只靠这张手工清单是收不全的：高德里还有 汉奇6路 等未列名线路（用户 2026-11-09 指出）。
+// 因此另加「宽泛发现词」（hanqiKeywords）：用「汉奇」这种前缀让 inputtips 把同类线路一次带出来，
+// 再对回来的 POI 名过滤 /汉奇/ → lineid 取详情，新线路无需预先知道名字就能入库。
 const HANQI_SEEDS = [
-  '汉奇K6路', '汉奇12路', '汉奇22号线',
+  '汉奇K6路', '汉奇6路', '汉奇12路', '汉奇22号线',
   '汉奇定制公交1号线', '汉奇定制公交2号线', '汉奇定制公交3号线', '汉奇定制公交4号线',
   '汉奇景景有约巴士',
 ]
+
+/** 汉奇关键词：保底种子 + 宽泛前缀；--hanqi-deep 再按数字 / K / 定制号段枚举 */
+function hanqiKeywords() {
+  const ks = [
+    // 宽泛词一次能带出一批同类 POI，是「发现未知线路」的关键
+    '汉奇', '汉奇公交', '汉奇路', '汉奇号线', '汉奇定制公交', '汉奇景景有约',
+    ...HANQI_SEEDS,
+  ]
+  if (HANQI_DEEP) {
+    for (let i = 1; i <= 30; i++) {
+      ks.push(`汉奇${i}路`, `汉奇${i}号线`)
+      if (i <= 12) ks.push(`汉奇K${i}路`, `汉奇定制公交${i}号线`)
+    }
+  }
+  return [...new Set(ks)]
+}
 
 /** C/P 号段关键词（--only 可覆盖） */
 function keywords() {
@@ -185,13 +205,14 @@ if (!HANQI_ONLY) {
 }
 
 // 2) 汉奇链路（inputtips → lineid）
-console.log(`[汉奇] 线路 POI + lineid：${HANQI_SEEDS.length} 个线路名，限速 ${DELAY}ms`)
+const HANQI_KW = hanqiKeywords()
+console.log(`[汉奇] 线路 POI + lineid：${HANQI_KW.length} 个关键词${HANQI_DEEP ? '（深度枚举）' : ''}，限速 ${DELAY}ms`)
 const ids = new Map()
-for (let i = 0; i < HANQI_SEEDS.length; i++) {
-  const arr = await queryLineIds(HANQI_SEEDS[i])
+for (let i = 0; i < HANQI_KW.length; i++) {
+  const arr = await queryLineIds(HANQI_KW[i])
   if (arr === null) { console.log('  [汉奇] inputtips 配额耗尽，停止'); break }
   for (const t of arr) if (/汉奇/.test(t.name)) ids.set(t.id, t)
-  console.log(`  ${HANQI_SEEDS[i]} → ${arr.length} 个方向，累计 ${ids.size}`)
+  console.log(`  ${HANQI_KW[i]} → ${arr.length} 个方向，累计 ${ids.size}`)
   if (DELAY) await sleep(DELAY)
 }
 console.log(`[汉奇] 待取详情的线路 POI：${ids.size} 个`)

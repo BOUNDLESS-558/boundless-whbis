@@ -6,13 +6,15 @@
  * （⚠ 站点列表为空不算不存在，见 probe() 里的注释）。
  * 无人值守、可分批、可断点续扫（--merge 累加），结果落盘为前端可直接读取的 JSON。
  *
- * ⚠ 前缀只有 4 种：电 / BRT / K / D。其余字母（J、P、T、V、G、H、Z…）不是本集团线路，
- *   即使接口能返回数据也一律剔除；--prefix 传了白名单外的值会直接报错退出，别再扫字母表。
+ * ⚠ 前缀白名单：电 / BRT / K / D / YX（YX = 集团夜行公交）。
+ *   其余字母（J、P、T、V、G、H、Z…）不是本集团线路，即使接口能返回数据也一律剔除；
+ *   --prefix 传了白名单外的值会直接报错退出，别再扫字母表。
  *
  * 用法：
  *   node scripts/scan-lines.mjs                     # 默认扫 1~999（含反向复核）
  *   node scripts/scan-lines.mjs --from 1 --to 60    # 小样本试跑
- *   node scripts/scan-lines.mjs --prefix 电,BRT,K,D  # 追加带前缀的线路号（对 1~to 每个前缀各试一遍）
+ *   node scripts/scan-lines.mjs --prefix 电,BRT,K,D,YX # 追加带前缀的线路号（含集团夜行 YX 线）
+ *   node scripts/scan-lines.mjs --codes YX9,YX10,YX518 --merge  # 只扫指定候选（跳过默认数字/前缀枚举）
  *   node scripts/scan-lines.mjs --merge             # 与现有 JSON 合并（分批扫描累加）
  *   node scripts/scan-lines.mjs --no-dir1           # 跳过反向复核（请求量减半，dirs 只记 [0]）
  *   node scripts/scan-lines.mjs --out other.json    # 改输出路径
@@ -53,9 +55,12 @@ const TO = Number(argOf('to', 999))
 const CONCURRENCY = Math.max(1, Number(argOf('concurrency', 4)))
 const DELAY = Math.max(0, Number(argOf('delay', 120)))
 const PREFIXES = String(argOf('prefix', '')).split(',').map((s) => s.trim()).filter(Boolean)
-// 线路号形态白名单（用户确认）：只有 纯数字 / 电 / BRT / K / D 是本集团营运线路。
+// 精确候选：给 YX 这类「内部编码与线路名不同」的号段补录用，避免为了几条线把 1~999 全扫一遍
+const CODES = String(argOf('codes', '')).split(',').map((s) => s.trim()).filter(Boolean)
+// 线路号形态白名单：纯数字 / 电 / BRT / K / D / YX 是本集团营运线路。
+// YX = 集团夜行公交（用户 2026-11-09 要求并入线路库）。
 // 其余字母前缀（J、P、T、V、G、H、Z…）即使接口能返回数据也不是本集团线路，扫了纯属浪费请求。
-const PREFIX_OK = ['电', 'BRT', 'K', 'D']
+const PREFIX_OK = ['电', 'BRT', 'K', 'D', 'YX']
 const BAD_PREFIX = PREFIXES.filter((p) => !PREFIX_OK.includes(p))
 if (BAD_PREFIX.length) {
   console.error(`前缀 ${BAD_PREFIX.join(', ')} 不是本集团线路，已拒绝执行。可用前缀只有：${PREFIX_OK.join(' / ')}`)
@@ -219,6 +224,9 @@ if (NORMALIZE_ONLY) {
   if (!MERGE) { console.error('--normalize-only 必须配合 --merge（否则无数据可算）'); process.exit(1) }
   if (!fs.existsSync(OUT)) { console.error('找不到已有 JSON：' + OUT); process.exit(1) }
   console.log('仅重算已有 JSON（不联网）')
+} else if (CODES.length) {
+  candidates.push(...CODES)
+  console.log(`精确候选 ${candidates.length} 条（${CODES.join(', ')}），并发 ${CONCURRENCY}，间隔 ${DELAY}ms`)
 } else {
   for (let n = FROM; n <= TO; n++) candidates.push(String(n))
   for (const p of PREFIXES) for (let n = FROM; n <= TO; n++) candidates.push(p + n)
@@ -340,8 +348,9 @@ if (MERGE && oldDoc) {
 // ⚠ 后端 lineCode 是内部编码，lineName 才是真实线路号：1001→电1、2001→J1、81→H81。
 // 若只按 lineCode 判断，J/H 线会以数字编号溜进库里，还会和「电1」重复。
 const isLegalNo = (no) => /^\d+$/.test(no) || PREFIX_OK.some((p) => no.startsWith(p))
-const NAME_OK = new RegExp('^(\\d+|电\\d+|BRT\\d+|K\\d+|D\\d+)$')
-const FOREIGN = /^(?!BRT|K|D)([A-Za-z]+)\d/ // H81 / J1：字母前缀不在白名单 → 非本集团
+const NAME_OK = new RegExp('^(\\d+|电\\d+|BRT\\d+|K\\d+|D\\d+|YX\\d+)$')
+// H81 / J1：字母前缀不在白名单 → 非本集团；YX 是集团夜行线，必须放行
+const FOREIGN = /^(?!BRT|K|D|YX)([A-Za-z]+)\d/
 const JUNK = /测试|内部/
 const kept = []
 const dropped = []
