@@ -24,12 +24,12 @@
         </view>
 
         <view class="plan-row" v-for="(p, i) in sortedByDir[d]" :key="p.busId || i">
-          <!-- 发车时间（主视觉，与车辆面板自编号同色）在左，车辆车牌 chip 在右 -->
-          <text class="plan-time" :title="timeHint(p.planStartTime)">{{ p.planStartTime || '--' }}</text>
+          <!-- 左：车辆自编号 chip；右：发车时间（主视觉，与车辆面板自编号同色，右对齐） -->
           <view class="plan-org-chip" v-if="p.bus">
             <text class="plan-org-icon">🚌</text>
             <text class="plan-org">{{ p.bus }}</text>
           </view>
+          <text class="plan-time">{{ p.planStartTime || '--' }}</text>
         </view>
 
         <view class="plan-empty" v-if="!sortedByDir[d].length">
@@ -138,23 +138,6 @@ export default {
         imageToast: `已复制 ${rows.length} 班时刻为图片`,
         excelToast: `已复制 ${rows.length} 班时刻为 Excel 表格`,
       })
-    },
-    // 把 HH:MM 字符串解析成距当前分钟数（负=未来，正=已过），忽略秒
-    _planMinutesFromNow(when) {
-      if (!when || when.length < 5) return null
-      const [h, m] = when.slice(0, 5).split(':').map(Number)
-      if (isNaN(h) || isNaN(m)) return null
-      const now = new Date()
-      const target = new Date(now); target.setHours(h, m, 0, 0)
-      return Math.round((target - now) / 60000)
-    },
-    // 鼠标 hover 时的 tooltip 提示文案
-    timeHint(when) {
-      const diff = this._planMinutesFromNow(when)
-      if (diff == null) return null
-      if (diff < -15) return null
-      if (diff < 0) return `将在 ${Math.abs(diff)} 分钟后发车`
-      return `已发出 ${diff} 分钟`
     },
   },
 }
@@ -325,7 +308,9 @@ export default {
 /* 主数据：发车时间 — 与车辆面板 .bus-org 同色（var(--ac-hi)）、同字重，
    tabular-nums 保证数字对齐不跳动 */
 .plan-time {
-  flex: 0 0 auto;
+  flex: 1;
+  min-width: 0;
+  text-align: right;
   font-size: 42rpx;
   font-weight: 800;
   color: var(--ac-hi);
