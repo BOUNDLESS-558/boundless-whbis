@@ -22,6 +22,8 @@ const ACCENT_KEY = 'whbis:accent'
 const REFRESH_KEY = 'whbis:refresh-default'
 const PROFILE_KEY = 'whbis:profile'
 const MAPSRC_KEY = 'whbis:map-source'
+// 复制方式：所有「复制」按钮统一按此档执行（文本 TSV / 画成图片）
+const COPY_MODE_KEY = 'whbis:copy-mode'
 
 export const SKIN_OPTS = [
   { key: 'dark', label: '黑色' },
@@ -257,6 +259,26 @@ export function setMapSource(key) {
   }
   return getMapSource()
 }
+
+// ── 复制方式（全站统一）──
+// text = 复制 TSV 纯文本；image = 把表格画成 PNG 写进系统剪贴板（H5 安全上下文）
+export const COPY_MODE_OPTS = [
+  { key: 'text', label: '复制为文本', note: 'TSV 表格，可粘进 Excel' },
+  { key: 'image', label: '复制为图片', note: 'PNG 图片，可直接粘贴发送' },
+]
+
+export function getCopyMode() {
+  const v = readRaw(COPY_MODE_KEY, 'text')
+  return COPY_MODE_OPTS.some((o) => o.key === v) ? v : 'text'
+}
+
+export function setCopyMode(key) {
+  if (COPY_MODE_OPTS.some((o) => o.key === key)) writeRaw(COPY_MODE_KEY, key)
+  return getCopyMode()
+}
+
+// 说明：非集团线路（蔡城 / 木兰 / 汉奇）已并入全站线路库，默认全部可查询搜索，
+// 不再提供「其它公交公司」开关；相关存储键与设置订阅机制已移除。
 
 // ── 用户名（展示名）：账号名是登录主键不可改，用户名只是本地展示层 ──
 

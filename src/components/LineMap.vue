@@ -274,6 +274,7 @@
             <!-- 已筛选某条线：芯片整体可点 = 正式打开这条线路；✕ 才是看回全市 -->
             <view class="cc-chip" v-if="cityFilterNo" :title="'只看 ' + cityFilterNo + ' 路 · 点卡片打开线路，✕ 看回全市'" @click="openFilteredLine">
               <text class="chip-txt">已筛选 {{ cityFilterNo }}</text>
+              <FavStar :line="cityFavLine" small />
               <text class="chip-x" @click.stop="clearCityQuery" title="清除筛选，看回全市">✕</text>
             </view>
           </view>
@@ -323,7 +324,13 @@
       <view class="panel" :class="{ collapsed: panelCollapsed, 'menu-open': refreshMenu }">
         <view class="panel-header">
           <view class="panel-title">实时车辆（{{ shownBuses.length }}辆 · {{ dirFilterLabel }}）</view>
+          <FavStar v-if="lineNo && !cityOn" :line="favLine" small />
           <view class="collapse-btn" :class="{ folded: panelCollapsed }" @click="panelCollapsed = !panelCollapsed" :title="panelCollapsed ? '展开' : '折叠'">▾</view>
+        </view>
+        <!-- 非集团线路：高德只提供静态站点与走向，没有实时车辆，明确标注避免误以为是故障 -->
+        <view class="foreign-note" v-if="isForeignLine && !cityOn">
+          <image v-if="foreignCompany" class="fn-logo" :src="companyLogo" mode="aspectFit" />
+          <text>{{ foreignCompany ? foreignCompany.label : '其它公交' }} · 高德静态数据：含站点与走向，无实时车辆/发车计划</text>
         </view>
         <!-- 刷新行：左半 ↻ 立即拉一次；右半显示当前间隔，单击展开 手动 / 15秒 / 20秒 / 30秒 -->
         <view class="panel-tools">
@@ -542,6 +549,9 @@ import { getRefreshDefault, getMapSource, accentRgba, getAccent } from '../utils
 import { cleanStops, pointsOf, fromFlat } from '../utils/routeClean.js'
 import { loadLineAsset, assetDir } from '../utils/lineAsset.js'
 import { orgCompanyOf, routeOf } from '../utils/speedRank.js'
+import { copyTable } from '../utils/clipboard.js'
+import { orgInfo, COMPANIES, companyKeyOfNo } from '../utils/companies.js'
+import FavStar from './FavStar.vue'
 
 // —— 方向配色（全站统一）：上行 = 青蓝，下行 = 玫红 ——
 // 色相相隔约 150°，在浅色高德底图与深色自绘画布上都清晰；不依赖红绿对比，色盲用户也能分辨。
@@ -662,7 +672,7 @@ function smoothPath(pts, snapped) {
 }
 
 export default {
-  components: { LinePlan, SpeedRank },
+  components: { LinePlan, SpeedRank, FavStar },
   props: {
     lineCodeProp: { type: String, default: '' },
     initDirection: { type: Number, default: 0 },
@@ -784,6 +794,38 @@ export default {
     }
   },
   computed: {
+    // 当前线路是否为「非集团线路」（高德静态数据源，无实时车辆）
+    isForeignLine() {
+      return companyKeyOfNo(this.lineName || this.lineNo) !== 'JT'
+    },
+    // 非集团线路的公司信息（Logo / 名称 / 颜色），供控制卡徽标与收藏按钮使用
+    foreignCompany() {
+      if (!this.isForeignLine) return null
+      const no = this.lineName || this.lineNo
+      return orgInfo({ no, companyKey: companyKeyOfNo(no) }) ||
+        { key: '', label: '其它公交', color: COMPANIES.JT.color, logo: COMPANIES.JT.logo }
+    },
+    companyLogo() {
+      const c = this.foreignCompany
+      return c && c.logo ? assetUrl(c.logo) : ''
+    },
+    // 全市公交「已筛选」芯片的收藏摘要
+    cityFavLine() {
+      const no = String(this.cityFilterNo || '').trim()
+      return { no, code: no, name: no, companyKey: companyKeyOfNo(no) }
+    },
+    // 收藏按钮的线路摘要（起讫站从当前方向的站点序列首末取）
+    favLine() {
+      const no = this.lineName || this.lineNo
+      const stops = this.stopsByDir[this.direction] || []
+      return {
+        no, code: this.lineNo || no, name: no,
+        start: stops.length ? (stops[0].stopName || '') : '',
+        end: stops.length ? (stops[stops.length - 1].stopName || '') : '',
+        companyKey: this.isForeignLine ? companyKeyOfNo(no) : 'JT',
+        org: this.foreignCompany ? this.foreignCompany.full : '',
+      }
+    },
     // 宿主是否注入了 top 插槽
     hasTopSlot() {
       return !!this.$slots.top
@@ -1605,6 +1647,13 @@ export default {
     // silent = 自动刷新触发：不关详情弹层、不改地图中心（沿用用户当前视野）
     async loadLive(silent) {
       if (!this.lineNo) return
+      // 非集团线路来自高德静态数据：没有实时车辆接口，跳过无意义的 /detailData 请求。
+      // 站点与走向已由 loadAllStops 从公司分片资产加载。
+      if (this.isForeignLine) {
+        this.busesByDir = { 0: [], 1: [] }
+        this.loading = false
+        return
+      }
       this.loading = true
       // 先清空上一批车辆，让地图移除旧标记，避免旧位置气泡残留叠加
       this.busesByDir = { 0: [], 1: [] }
@@ -3403,37 +3452,40 @@ export default {
       }
       const dirs = this.dirFilter === 2 ? [0, 1] : [this.dirFilter]
       const blocks = []
+      const allRows = []
       let total = 0
       for (const dir of dirs) {
         const buses = this.busesByDir[dir] || []
         if (!buses.length) continue
-        const rows = buses.map((b) =>
-          [
-            b.orgId || b.busNo || '?',
-            companyOf(b),
-            nearStop(b),
-            String(b.time || '--').slice(0, 5),
-            `${b.gpsSpeed}km/h`,
-            b.arrived === '1' ? '到站' : '行驶',
-            `${b.lat},${b.lng}`,
-          ].join('\t')
-        )
-        total += rows.length
         const dirName = dir === 0 ? '上行' : '下行'
+        const cells = buses.map((b) => [
+          b.orgId || b.busNo || '?',
+          companyOf(b),
+          nearStop(b),
+          String(b.time || '--').slice(0, 5),
+          `${b.gpsSpeed}km/h`,
+          b.arrived === '1' ? '到站' : '行驶',
+          `${b.lat},${b.lng}`,
+        ])
+        cells.forEach((c) => allRows.push([dirName, ...c]))
+        total += cells.length
         blocks.push(
-          `${this.lineName || this.lineNo}（${dirName}） 在线 ${rows.length} 辆\n` +
+          `${this.lineName || this.lineNo}（${dirName}） 在线 ${cells.length} 辆\n` +
             '编号\t营运公司\t所在站点\t时间\t速度\t状态\t经纬度\n' +
-            rows.join('\n')
+            cells.map((c) => c.join('\t')).join('\n')
         )
       }
       if (!total) {
         uni.showToast({ title: '当前无在线车辆', icon: 'none' })
         return
       }
-      uni.setClipboardData({
-        data: blocks.join('\n'),
-        success: () => uni.showToast({ title: `已复制 ${total} 辆车信息`, icon: 'none' }),
-        fail: () => uni.showToast({ title: '复制失败', icon: 'none' }),
+      copyTable({
+        title: `${this.lineName || this.lineNo} 在线车辆（共 ${total} 辆）`,
+        columns: ['方向', '编号', '营运公司', '所在站点', '时间', '速度', '状态', '经纬度'],
+        rows: allRows,
+        text: blocks.join('\n'), // 文本模式保留原有的上行/下行分段格式
+        toast: `已复制 ${total} 辆车信息`,
+        imageToast: `已复制 ${total} 辆车信息为图片`,
       })
     },
     formatGpsTime(t) {
@@ -4025,8 +4077,25 @@ export default {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: 10rpx;
   margin-bottom: 18rpx;
 }
+/* 非集团线路的数据来源说明条 */
+.foreign-note {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 10rpx;
+  margin-bottom: 16rpx;
+  padding: 12rpx 14rpx;
+  border-radius: 14rpx;
+  font-size: 20rpx;
+  line-height: 1.4;
+  color: rgba(255, 255, 255, 0.62);
+  background: rgba(255, 255, 255, 0.05);
+  border: 2rpx solid rgba(255, 255, 255, 0.08);
+}
+.fn-logo { flex: 0 0 auto; width: 34rpx; height: 34rpx; border-radius: 8rpx; }
 /* 复制按钮：与刷新胶囊同高（56rpx）同字号（24rpx）的幽灵小圆角，hover 提到靛蓝 */
 .copy-btn {
   height: 56rpx;

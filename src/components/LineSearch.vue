@@ -59,6 +59,7 @@
           <text class="sug-head-s">线路库 {{ lineCount }} 条 · 本地匹配</text>
         </view>
         <view class="sug-item" v-for="s in suggestList" :key="s.code || s.no" @click="pickSuggest(s)">
+          <image v-if="orgLogo(s)" class="sug-logo" :src="orgLogo(s)" mode="aspectFit" />
           <text class="sug-no">{{ s.no }}</text>
           <view class="sug-body">
             <view class="sug-route">
@@ -68,9 +69,10 @@
               <text class="rt-tag rt-end">终</text>
               <text class="rt-name">{{ s.end || '终点未知' }}</text>
             </view>
-            <text class="sug-meta">{{ sugMeta(s) }}</text>
+            <text class="sug-meta">{{ orgLabel(s) ? orgLabel(s) + ' · ' : '' }}{{ sugMeta(s) }}{{ s.realtime === false ? ' · 静态数据' : '' }}</text>
           </view>
           <text class="st-badge" :class="'st-' + statusOf(s).key">{{ statusOf(s).label }}</text>
+          <FavStar :line="s" small />
           <text class="sug-go">›</text>
         </view>
       </view>
@@ -99,10 +101,13 @@
 <script>
 import { buildLineCode } from '../config.js'
 import { assetUrl } from '../utils/asset.js'
-import { suggestLines, countMatches, normNo, lineStatus, LINE_COUNT } from '../utils/lineIndex.js'
+import { suggestLines, countMatches, normNo, lineStatus, lineCount as getLineCount } from '../utils/lineIndex.js'
+import { companyOf } from '../utils/companies.js'
+import FavStar from './FavStar.vue'
 
 export default {
   name: 'LineSearch',
+  components: { FavStar },
   props: {
     // 顶栏视图分段：[{ key, label }]，为空则整行不渲染（详情页可复用本组件的搜索行）
     views: { type: Array, default: () => [] },
@@ -132,10 +137,12 @@ export default {
       quickLines: ['337', '59', '61', '538', '706', '901', '718', '792'],
       // 联想面板开关（点选 / 查询 / 点外部都关闭）
       suggestOpen: false,
-      lineCount: LINE_COUNT,
     }
   },
   computed: {
+    lineCount() {
+      return getLineCount()
+    },
     logoUrl() {
       return assetUrl('/static/logo.png')
     },
@@ -172,6 +179,12 @@ export default {
     statusOf(item) {
       return lineStatus(item)
     },
+    orgLogo(s) {
+      return assetUrl(companyOf(s).logo)
+    },
+    orgLabel(s) {
+      return companyOf(s).label
+    },
     // 联想项副标题：武汉公交显「N 站 · 双向」
     sugMeta(s) {
       const dir = s.dirs && s.dirs.length > 1 ? '双向' : '单向'
@@ -196,7 +209,10 @@ export default {
       this.suggestOpen = false
       this.lineNo = s.no
       // 库里的 no 是真实线路号，code 才是后端 lineCode（电1 的 code 是 1001）
-      this.$emit('pick', this.buildPick(s.code || s.no, s.no, s.start, s.end))
+      const p = this.buildPick(s.code || s.no, s.no, s.start, s.end)
+      // 非集团线路带公司归属与静态数据标记，供实时/地图视图跳过无效实时请求
+      if (s.companyKey) { p.companyKey = s.companyKey; p.realtime = s.realtime !== false }
+      this.$emit('pick', p)
     },
     doSearch() {
       this.suggestOpen = false
@@ -565,6 +581,12 @@ export default {
 }
 .sug-item:hover {
   background: rgba(255, 255, 255, 0.08);
+}
+.sug-logo {
+  flex: 0 0 auto;
+  width: 40rpx;
+  height: 40rpx;
+  border-radius: 10rpx;
 }
 .sug-no {
   flex: 0 0 auto;

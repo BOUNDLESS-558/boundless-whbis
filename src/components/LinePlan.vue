@@ -36,6 +36,7 @@
 <script>
 import { fetchPlanTime, decryptBusId, onBusIdReady, isBusIdReady } from '../utils/api.js'
 import { buildLineCode } from '../config.js'
+import { copyTable } from '../utils/clipboard.js'
 
 // 方向常量：0 上行 / 1 下行（两方向同屏，顺序与地图控制卡一致）
 const DIRS = [0, 1]
@@ -111,21 +112,22 @@ export default {
       uni.showToast({ title: `${dir === 0 ? '上行' : '下行'}时刻表加载失败：${e.message}`, icon: 'none' })
       return []
     },
-    // 一键复制全部班次时刻（TSV：方向/班次/发车时间/车辆），交互与车辆面板的复制一致
+    // 一键复制全部班次时刻：文本/图片由「设置 → 复制方式」统一决定
     copyPlans() {
-      const rows = ['方向\t班次\t发车时间\t车辆']
-      let total = 0
+      const rows = []
       DIRS.forEach((d) => {
         const name = d === 0 ? '上行' : '下行'
         this.sortedByDir[d].forEach((p, i) => {
-          rows.push(`${name}\t第 ${i + 1} 班\t${p.planStartTime || '--'}\t${p.bus || '--'}`)
-          total++
+          rows.push([name, `第 ${i + 1} 班`, p.planStartTime || '--', p.bus || '--'])
         })
       })
-      uni.setClipboardData({
-        data: rows.join('\n'),
-        success: () => uni.showToast({ title: `已复制 ${total} 班时刻`, icon: 'none' }),
-        fail: () => uni.showToast({ title: '复制失败', icon: 'none' }),
+      if (!rows.length) { uni.showToast({ title: '暂无可复制班次', icon: 'none' }); return }
+      copyTable({
+        title: `${this.lineNo || ''} 发车时刻（共 ${rows.length} 班）`,
+        columns: ['方向', '班次', '发车时间', '车辆'],
+        rows,
+        toast: `已复制 ${rows.length} 班时刻`,
+        imageToast: `已复制 ${rows.length} 班时刻为图片`,
       })
     },
   },

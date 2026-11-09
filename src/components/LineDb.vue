@@ -4,7 +4,7 @@
     <view class="db-row db-head">
       <view class="db-head-text">
         <view class="db-title">线路数据库</view>
-        <view class="db-sub">集团全量线路 · 本地摘要 · 含已停运历史线</view>
+        <view class="db-sub">全市线路 · 集团 / 蔡城 / 木兰 / 汉奇 · 本地摘要 · 含已停运历史线</view>
       </view>
       <text class="db-count">共 {{ total }} 条</text>
     </view>
@@ -31,16 +31,32 @@
       <text class="db-search-clear" v-if="kw" @click="kw = ''">✕</text>
     </view>
 
+    <!-- 公司筛选：按营运主体归并。集团下属各分公司、org 未收录的历史线，
+         以及 数字 / 电 / BRT / K / D 等号段统一归「公交集团」，不再裸露成看似独立的分类 -->
     <view class="db-filter">
-      <text class="db-fl">线路</text>
+      <text class="db-fl">公司</text>
       <view class="db-chips">
         <view
-          v-for="p in prefixes"
-          :key="p"
+          v-for="o in orgOpts"
+          :key="o.key"
           class="db-chip"
-          :class="{ on: prefix === p }"
-          @click="prefix = p"
-        >{{ p }}</view>
+          :class="{ on: org === o.key }"
+          @click="org = o.key"
+        >{{ o.label }}</view>
+      </view>
+    </view>
+
+    <!-- 选中「公交集团」后才展开集团内部的线路号段细分 -->
+    <view class="db-filter" v-if="org === 'JT'">
+      <text class="db-fl">号段</text>
+      <view class="db-chips">
+        <view
+          v-for="p in groupPrefixes"
+          :key="p.key"
+          class="db-chip"
+          :class="{ on: prefix === p.key }"
+          @click="prefix = p.key"
+        >{{ p.label }}</view>
       </view>
     </view>
 
@@ -57,20 +73,6 @@
       </view>
     </view>
 
-    <!-- 营运公司（org 由 scan-org.mjs 自 8684 采集）：数据未入库时只剩「全部」一档，整行隐藏 -->
-    <view class="db-filter" v-if="orgOpts.length > 1">
-      <text class="db-fl">公司</text>
-      <view class="db-chips">
-        <view
-          v-for="o in orgOpts"
-          :key="o.key"
-          class="db-chip"
-          :class="{ on: org === o.key }"
-          @click="org = o.key"
-        >{{ o.label }}</view>
-      </view>
-    </view>
-
     <!-- 结果列表 -->
     <view class="db-mod db-list" :class="{ plain: plain }">
       <view class="db-row db-lhead">
@@ -81,6 +83,7 @@
       <view class="db-div"></view>
 
       <view class="db-item" v-for="l in visibleLines" :key="l.no" @click="openDetail(l)">
+        <image class="db-org-logo" :src="orgLogo(l)" mode="aspectFit" />
         <text class="db-no">{{ l.no }}</text>
         <view class="db-item-body">
           <view class="db-route">
@@ -90,9 +93,10 @@
             <text class="rt-tag rt-end">终</text>
             <text class="rt-name">{{ l.end || '终点未知' }}</text>
           </view>
-          <text class="db-meta">{{ l.stops ? l.stops + ' 站' : '站数未知' }} · {{ l.dirs.length > 1 ? '双向' : '单向' }} · {{ l.price ? '¥' + l.price : '票价未知' }}</text>
+          <text class="db-meta">{{ orgLabel(l) ? orgLabel(l) + ' · ' : '' }}{{ l.stops ? l.stops + ' 站' : '站数未知' }} · {{ l.dirs.length > 1 ? '双向' : '单向' }} · {{ l.price ? '¥' + l.price : '票价未知' }}{{ l.realtime === false ? ' · 静态数据' : '' }}</text>
         </view>
         <text class="db-badge" :class="'db-badge-' + statusOf(l).key">{{ statusOf(l).label }}</text>
+        <FavStar :line="l" small />
         <text class="db-go">›</text>
       </view>
 
@@ -126,12 +130,16 @@
         <view class="db-cell"><text class="db-k">站数</text><text class="db-v">{{ detail.stops ? detail.stops + ' 站' : '未知' }}</text></view>
         <view class="db-cell"><text class="db-k">方向</text><text class="db-v">{{ detail.dirs.length > 1 ? '双向' : '单向' }}</text></view>
         <view class="db-cell"><text class="db-k">名称</text><text class="db-v">{{ detail.name || detail.no }}</text></view>
-        <view class="db-cell"><text class="db-k">营运公司</text><text class="db-v">{{ detail.org || '未知' }}</text></view>
+        <view class="db-cell"><text class="db-k">营运公司</text><text class="db-v">{{ companyFull(detail) }}</text></view>
       </view>
       <view class="db-pop-note" v-if="statusOf(detail).key === 'off'">
         {{ offNote(detail) }}
       </view>
+      <view class="db-pop-note" v-if="detail.realtime === false">
+        该线路来自高德公交数据，提供站点与走向，但不含实时车辆与发车计划。
+      </view>
       <view class="db-pop-btns">
+        <FavStar v-if="detail" :line="detail" />
         <view class="db-pbtn" @click="closeDetail">关闭</view>
         <view class="db-pbtn primary" v-if="detail.status !== '停运'" @click="openLive">在实时查询中打开 ›</view>
       </view>
@@ -140,14 +148,19 @@
 </template>
 
 <script>
-import { allLines, linePrefix, lineStatus, orgOf } from '../utils/lineIndex.js'
+import { allLines, linePrefix, lineStatus } from '../utils/lineIndex.js'
+import { companyOf } from '../utils/companies.js'
 import { buildLineCode } from '../config.js'
+import { copyTable } from '../utils/clipboard.js'
+import { assetUrl } from '../utils/asset.js'
+import FavStar from './FavStar.vue'
 
 // 窗口化渲染：一次只挂 80 条，避免 1137 行全量 DOM 拖慢 H5 滚动
 const PAGE = 80
 
 export default {
   name: 'LineDb',
+  components: { FavStar },
   props: {
     // 裸形态：挂在地图悬浮窗（FloatWin）里时，窗壳只有一张，头卡与列表卡不再各自套玻璃卡
     plain: { type: Boolean, default: false },
@@ -156,10 +169,18 @@ export default {
     return {
       all: [],
       kw: '',
+      // 集团内部号段细分：仅在公司选「公交集团」时出现，不再与营运公司并排裸露
       prefix: '全部',
+      groupPrefixes: [
+        { key: '全部', label: '全部' },
+        { key: '数字', label: '数字' },
+        { key: '电', label: '电' },
+        { key: 'BRT', label: 'BRT' },
+        { key: 'K', label: 'K' },
+        { key: 'D', label: 'D' },
+      ],
       status: '全部',
       org: '全部',
-      prefixes: ['全部', '数字', '电', 'BRT', 'K', 'D'],
       statusOpts: [
         { key: '全部', label: '全部' },
         { key: 'live', label: '营运中' },
@@ -180,34 +201,31 @@ export default {
       for (const l of this.all) s[lineStatus(l).key]++
       return s
     },
-    // 公司筛选项：按全库实际收录动态生成（一…九公司按序 + 其他 + 未收录），无数据时只剩「全部」
+    // 公司筛选项：按营运主体归并。集团下属一…九公司、org 未收录的历史线，
+    // 以及 数字 / 电 / BRT / K / D 等集团号段，全部归入「公交集团」一档；
+    // 只把实际独立营运的蔡城 / 木兰 / 汉奇单列，避免把分公司误解成不同公司。
     orgOpts() {
-      const CN = ['一', '二', '三', '四', '五', '六', '七', '八', '九']
       const cnt = {}
-      let none = 0
       for (const l of this.all) {
-        const o = orgOf(l)
-        if (!o) { none++; continue }
-        cnt[o.key] = (cnt[o.key] || 0) + 1
+        const k = companyOf(l).key
+        cnt[k] = (cnt[k] || 0) + 1
       }
-      const opts = [{ key: '全部', label: '全部' }]
-      for (const c of CN) {
-        const k = '第' + c + '公司'
-        if (cnt[k]) opts.push({ key: k, label: c + '公司' })
-      }
-      if (cnt['其他']) opts.push({ key: '其他', label: '其他公司' })
-      if (none) opts.push({ key: '未收录', label: '未收录' })
-      return opts
+      const defs = [
+        { key: 'JT', label: '公交集团' },
+        { key: 'CC', label: '蔡城公交' },
+        { key: 'ML', label: '木兰公交' },
+        { key: 'HQ', label: '汉奇公交' },
+      ]
+      return [{ key: '全部', label: '全部' }, ...defs.filter((d) => cnt[d.key])]
     },
     filtered() {
       const q = this.kw.trim().toUpperCase()
       return this.all.filter((l) => {
-        if (this.prefix !== '全部' && linePrefix(l.no) !== this.prefix) return false
+        const company = companyOf(l).key
+        if (this.org !== '全部' && company !== this.org) return false
+        // 号段细分只在「公交集团」档生效（其它公司线路本就按号段归属，无需再分）
+        if (company === 'JT' && this.prefix !== '全部' && linePrefix(l.no) !== this.prefix) return false
         if (this.status !== '全部' && lineStatus(l).key !== this.status) return false
-        if (this.org !== '全部') {
-          const o = orgOf(l)
-          if ((o ? o.key : '未收录') !== this.org) return false
-        }
         if (q) {
           const hay = `${l.no} ${l.name || ''} ${l.start || ''} ${l.end || ''}`.toUpperCase()
           if (!hay.includes(q)) return false
@@ -223,7 +241,10 @@ export default {
     kw() { this.shown = PAGE },
     prefix() { this.shown = PAGE },
     status() { this.shown = PAGE },
-    org() { this.shown = PAGE },
+    org() {
+      this.prefix = '全部' // 换公司时清掉集团号段细分，避免回到「公交集团」时沿用旧条件
+      this.shown = PAGE
+    },
   },
   // ⚠ 组件不触发页面生命周期：原来写成 onLoad 会永远不执行，列表恒空
   created() {
@@ -232,6 +253,16 @@ export default {
   methods: {
     statusOf(l) {
       return lineStatus(l)
+    },
+    // 公司 Logo / 名称：按号段统一判定，org「未收录」的集团历史线也有集团徽标
+    orgLogo(l) {
+      return assetUrl(companyOf(l).logo)
+    },
+    orgLabel(l) {
+      return companyOf(l).label
+    },
+    companyFull(l) {
+      return companyOf(l).full
     },
     // 停运说明按依据分级：公告 / 人工确认 / 接口推断 / 待复核，别把四者说成同一件事
     offNote(l) {
@@ -263,30 +294,26 @@ export default {
         uni.showToast({ title: '没有符合条件的线路', icon: 'none' })
         return
       }
-      const rows = list.map((l) =>
-        [
-          l.no,
-          l.start || '未知',
-          l.end || '未知',
-          l.stops ? l.stops + ' 站' : '未知',
-          l.dirs && l.dirs.length > 1 ? '双向' : '单向',
-          l.price ? '¥' + l.price : '未知',
-          l.early || '未知',
-          l.last || '未知',
-          this.statusOf(l).label,
-          l.code || l.no,
-          l.org || '未知',
-          l.statusSource ? l.statusSource + (l.stopDate ? '(' + l.stopDate + ')' : '') : '',
-        ].join('\t')
-      )
-      const data =
-        `线路库匹配 ${list.length} 条\n` +
-        '编号\t起点\t终点\t站数\t方向\t票价\t首班\t末班\t状态\tlineCode\t营运公司\t停运依据\n' +
-        rows.join('\n')
-      uni.setClipboardData({
-        data,
-        success: () => uni.showToast({ title: `已复制 ${list.length} 条线路`, icon: 'none' }),
-        fail: () => uni.showToast({ title: '复制失败', icon: 'none' }),
+      const rows = list.map((l) => [
+        l.no,
+        l.start || '未知',
+        l.end || '未知',
+        l.stops ? l.stops + ' 站' : '未知',
+        l.dirs && l.dirs.length > 1 ? '双向' : '单向',
+        l.price ? '¥' + l.price : '未知',
+        l.early || '未知',
+        l.last || '未知',
+        this.statusOf(l).label,
+        l.code || l.no,
+        this.companyFull(l),
+        l.statusSource ? l.statusSource + (l.stopDate ? '(' + l.stopDate + ')' : '') : '',
+      ])
+      copyTable({
+        title: `线路库匹配 ${list.length} 条`,
+        columns: ['编号', '起点', '终点', '站数', '方向', '票价', '首班', '末班', '状态', 'lineCode', '营运公司', '停运依据'],
+        rows,
+        toast: `已复制 ${list.length} 条线路`,
+        imageToast: `已复制 ${list.length} 条线路为图片`,
       })
     },
     loadMore() {
@@ -308,6 +335,8 @@ export default {
         direction: 0,
         startStop: l.start || '',
         endStop: l.end || '',
+        companyKey: l.companyKey || '',
+        realtime: l.realtime !== false,
       })
       this.closeDetail()
     },
@@ -329,6 +358,13 @@ export default {
 }
 .db-list {
   overflow: hidden;
+}
+/* 公司 Logo：紧贴线路号左侧，用小尺寸色块区分不同营运主体 */
+.db-org-logo {
+  flex: 0 0 auto;
+  width: 40rpx;
+  height: 40rpx;
+  border-radius: 10rpx;
 }
 /* 裸形态：只去掉卡壳，内边距与细线分区照旧（窗体自己留边） */
 .db-mod.plain {

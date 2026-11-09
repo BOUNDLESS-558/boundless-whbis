@@ -20,6 +20,8 @@
             </view>
           </view>
         </view>
+        <!-- 收藏当前线路：与搜索联想 / 线路库 / 地图面板共用同一份收藏夹 -->
+        <FavStar v-if="lineNo" :line="favLine" />
       </view>
 
       <view class="mod-div"></view>
@@ -46,6 +48,11 @@
           <text class="ops-value online">{{ onlineCount }}</text>
           <text class="ops-label online-label">在线</text>
         </view>
+      </view>
+      <!-- 非集团线路：数据来自高德静态采集，不提供实时车辆 -->
+      <view class="st-foreign" v-if="isForeignLine">
+        <image v-if="companyLogo" class="st-foreign-logo" :src="companyLogo" mode="aspectFit" />
+        <text>{{ foreignCompany ? foreignCompany.label : '其它公交' }} · 静态站点与走向（高德），无实时车辆与发车计划</text>
       </view>
     </view>
 
@@ -158,6 +165,10 @@ import { buildLineCode } from '../config.js'
 import { getRefreshDefault } from '../utils/settings.js'
 import { cleanStops } from '../utils/routeClean.js'
 import { loadLineAsset, assetDir } from '../utils/lineAsset.js'
+import { copyTable } from '../utils/clipboard.js'
+import { companyKeyOfNo, orgInfo } from '../utils/companies.js'
+import { assetUrl } from '../utils/asset.js'
+import FavStar from './FavStar.vue'
 
 // 自动刷新间隔（秒）：0 = 手动。与地图页各存一份（地图页是 whbis:map-refresh-sec），
 // 两个视图的使用节奏不同，共用反而互相干扰；线路带默认 15 秒（旧详情页行为）。
@@ -166,6 +177,7 @@ const REFRESH_OPTS = [0, 15, 20, 30]
 
 export default {
   name: 'LineStops',
+  components: { FavStar },
   props: {
     lineNo: { type: String, default: '' },
     lineName: { type: String, default: '' },
@@ -191,6 +203,29 @@ export default {
     }
   },
   computed: {
+    // 非集团线路（高德静态数据源）：站点与走向可用，但没有实时车辆
+    isForeignLine() {
+      return companyKeyOfNo(this.lineName || this.lineNo) !== 'JT'
+    },
+    foreignCompany() {
+      if (!this.isForeignLine) return null
+      const no = this.lineName || this.lineNo
+      return orgInfo({ no, companyKey: companyKeyOfNo(no) })
+    },
+    companyLogo() {
+      const c = this.foreignCompany
+      return c && c.logo ? assetUrl(c.logo) : ''
+    },
+    // 收藏按钮需要的线路摘要（起讫站优先用实时返回的 base，回退宿主传入值）
+    favLine() {
+      return {
+        no: this.lineName || this.lineNo,
+        code: this.lineNo,
+        name: this.lineName || this.lineNo,
+        start: this.activeBase.startStop || this.startStop,
+        end: this.activeBase.endStop || this.endStop,
+      }
+    },
     activeBase() {
       return this.diagram[this.dir].base || {}
     },
@@ -375,13 +410,12 @@ export default {
         return
       }
       const dirName = this.dir === 0 ? '上行' : '下行'
-      const header = `${this.lineName || this.lineNo}（${dirName}） 在线 ${lines.length} 辆`
-      const cols = '编号\t营运公司\t所在站点\t时间\t速度\t状态\t经纬度'
-      const data = `${header}\n${cols}\n${lines.join('\n')}`
-      uni.setClipboardData({
-        data,
-        success: () => uni.showToast({ title: `已复制 ${lines.length} 辆车信息`, icon: 'none' }),
-        fail: () => uni.showToast({ title: '复制失败', icon: 'none' }),
+      copyTable({
+        title: `${this.lineName || this.lineNo}（${dirName}） 在线 ${lines.length} 辆`,
+        columns: ['编号', '营运公司', '所在站点', '时间', '速度', '状态', '经纬度'],
+        rows: lines.map((s) => s.split('\t')),
+        toast: `已复制 ${lines.length} 辆车信息`,
+        imageToast: `已复制 ${lines.length} 辆车信息为图片`,
       })
     },
     // H5：为线路带绑定鼠标拖拽 + 滚轮横向滚动（PC 端可用）
@@ -467,6 +501,12 @@ export default {
     // 加载两个方向实时车辆
     async loadLive(silent = false) {
       if (!this.lineNo) return
+      // 非集团线路是静态资产：不发 /detailData（接口无此线路），把已有站点原样保留
+      if (this.isForeignLine) {
+        this.$emit('updated', this.currentTime())
+        this.loading = false
+        return
+      }
       if (!silent) this.loading = true
       try {
         const [up, down] = await Promise.all([this.fetchDirBuses(0), this.fetchDirBuses(1)])
@@ -524,6 +564,21 @@ export default {
 </script>
 
 <style scoped>
+/* 非集团线路的数据来源说明条 */
+.st-foreign {
+  display: flex;
+  align-items: center;
+  gap: 10rpx;
+  margin: 0 20rpx 18rpx;
+  padding: 12rpx 16rpx;
+  border-radius: 14rpx;
+  font-size: 21rpx;
+  line-height: 1.4;
+  color: rgba(255, 255, 255, 0.62);
+  background: rgba(255, 255, 255, 0.05);
+  border: 2rpx solid rgba(255, 255, 255, 0.08);
+}
+.st-foreign-logo { flex: 0 0 auto; width: 36rpx; height: 36rpx; border-radius: 8rpx; }
 /* 模块卡：整卡包裹（背景/圆角/描边/阴影），内部只靠 .mod-row + .mod-div 分块 */
 .mod {
   position: relative;

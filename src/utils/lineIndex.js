@@ -1,16 +1,25 @@
 /**
  * 线路号本地索引
  *
- * 数据来源：`scripts/scan-lines.mjs` 枚举官方 /line 接口生成（src/static/lines.json）。
- * 白名单口径：纯数字 + 电 / BRT / K / D 四种前缀（本集团营运线路）。
- * 库里的 `no` 是按 lineName 归一后的**真实线路号**，`code` 才是后端 lineCode
- * （两者偶尔不同：电1 的 lineCode 是 1001）。查询用 code，展示用 no。
+ * 数据来源：
+ *   - src/static/lines.json         集团线路，由 scripts/scan-lines.mjs 枚举官方 /line 生成
+ *   - src/static/foreign-lines.json 非集团线路（蔡城 C / 木兰 P / 汉奇），
+ *                                   由 scripts/scan-foreign.mjs 经高德公交接口离线采集
+ * 两者恒定合并进检索池（不设开关，默认全部可查询搜索）。
+ * 非集团线路只有静态站点与走向，realtime=false。
+ *
+ * 库里的 `no` 是**真实线路号**，`code` 才是后端 lineCode（电1 的 lineCode 是 1001）。
+ * 查询用 code，展示用 no。
  */
 import DB from '../static/lines.json'
+import FDB from '../static/foreign-lines.json'
+import { companyKeyOfNo } from './companies.js'
 
 /** 线路库总条数 / 生成时间（页面可直接展示） */
 export const LINE_COUNT = DB.count
 export const LINE_UPDATED = DB.updated
+/** 当前生效的线路总数（开关开启时含非集团线路），随设置变化 */
+export function lineCount() { return pool().length }
 
 /** 全角数字/字母 → 半角，并统一大写、去掉空白与连接符（"电 1" / "ｋ１" / "K-1" 都能命中） */
 const FW = '０１２３４５６７８９ＡＢＣＤＥＦＧＨＩＪＫＬＭＮＯＰＱＲＳＴＵＶＷＸＹＺ'
@@ -50,8 +59,36 @@ const INDEX = DB.lines.map((l) => ({
   order: /^\d+$/.test(l.no) ? Number(l.no) : Number((l.no.match(/\d+$/) || [0])[0]) + 100000,
 }))
 
-// 联想检索池 = 武汉公交全量（只喂 suggestLines / countMatches；allLines 仍只回武汉公交）
-const SEARCH_INDEX = INDEX
+// 非集团线路：字段与 INDEX 对齐，另带 companyKey / sourceType / realtime 供 UI 区分
+const FOREIGN_INDEX = ((FDB && FDB.lines) || []).map((l) => ({
+  no: l.no,
+  code: l.code || l.no,
+  name: l.name || l.no,
+  key: normNo(l.no),
+  alt: normNo(l.name === l.no ? '' : l.name),
+  start: l.start || '',
+  end: l.end || '',
+  stops: l.stops || 0,
+  dirs: l.dirs || [0],
+  price: l.price || '',
+  status: l.status || '营运',
+  statusSource: '',
+  stopDate: '',
+  statusNote: '',
+  early: l.early || '',
+  last: l.last || '',
+  org: l.org || '',
+  companyKey: l.companyKey || companyKeyOfNo(l.no),
+  sourceType: l.sourceType || 'amap',
+  realtime: l.realtime === true,
+  order: 200000 + Number((String(l.no).match(/\d+/) || [0])[0]),
+}))
+
+// 全站检索池：集团全量 + 非集团线路，恒定合并（不再有开关）
+const POOL = INDEX.concat(FOREIGN_INDEX)
+function pool() {
+  return POOL
+}
 
 const toMin = (t) => {
   const m = /^(\d{1,2}):(\d{2})/.exec(String(t == null ? '' : t).trim())
@@ -92,7 +129,7 @@ export function suggestLines(kw, limit = 8) {
   const q = normNo(kw)
   if (!q) return []
   const hits = []
-  for (const l of SEARCH_INDEX) {
+  for (const l of pool()) {
     let score = 0
     if (l.key === q) score = 1000
     else if (l.key.startsWith(q)) score = 800 - Math.min(60, l.key.length - q.length)
@@ -110,16 +147,23 @@ export function countMatches(kw) {
   const q = normNo(kw)
   if (!q) return 0
   let n = 0
-  for (const l of SEARCH_INDEX) if (l.key.includes(q) || (l.alt && l.alt.includes(q))) n++
+  for (const l of pool()) if (l.key.includes(q) || (l.alt && l.alt.includes(q))) n++
   return n
 }
 
-/** 精确查一条武汉公交（用于校验用户输入是否在库内） */
+/** 精确查一条线路（集团 + 开关开启时的非集团线路） */
 export function findLine(no) {
   const q = normNo(no)
   if (!q) return null
-  const hit = INDEX.find((l) => l.key === q)
+  const hit = pool().find((l) => l.key === q)
   return hit || null
+}
+
+/** 非集团线路信息（供实时视图判断是否只展示静态站点） */
+export function foreignLineOf(no) {
+  const q = normNo(no)
+  if (!q) return null
+  return FOREIGN_INDEX.find((l) => l.key === q) || null
 }
 
 /**
@@ -127,22 +171,12 @@ export function findLine(no) {
  * 每项含 no/code/name/start/end/stops/dirs/status/early/last 及停运依据 statusSource/stopDate/statusNote。
  */
 export function allLines() {
-  return INDEX
+  return pool()
 }
 
-/** 线路号前缀归类：电 / BRT / K / D / 数字（白名单四前缀之外均为纯数字线） */
+/** 线路号前缀归类：电 / BRT / K / D / C / P / 汉奇 / 数字 */
 export function linePrefix(no) {
-  const m = /^(电|BRT|K|D)/.exec(String(no == null ? '' : no))
-  return m ? m[1] : '数字'
+  const m = /^(电|BRT|K|D|C|P|汉奇)/i.exec(String(no == null ? '' : no))
+  return m ? m[1].toUpperCase() : '数字'
 }
 
-/**
- * 营运公司归类（仅武汉公交）：org 全名 → 筛选键/短标签；无 org（D 线、未收录）返回 null。
- * 集团线归为「第一公司」…「第九公司」，其余公司归「其他」，供线路库按公司筛选。
- */
-export function orgOf(line) {
-  const full = String((line && line.org) || '').trim()
-  if (!full) return null
-  const m = full.match(/第([一二三四五六七八九])营运公司/)
-  return m ? { key: '第' + m[1] + '公司', label: m[1] + '公司', full } : { key: '其他', label: '其他公司', full }
-}

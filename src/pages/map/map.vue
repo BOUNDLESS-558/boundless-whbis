@@ -297,6 +297,39 @@
             <view class="acct-tip">底图瓦片源，线路走向 / 车辆 / 站点不受影响，改完即时生效</view>
           </view>
 
+          <view class="acct-div"></view>
+
+          <!-- 复制方式：全站所有复制按钮统一按此档执行，改完即时生效（无需重启） -->
+          <view class="acct-sec-head" @click="toggleAcctSection('copy')">
+            <text class="acct-sec-title">复制方式</text>
+            <text class="acct-sec-sum" v-if="!acctSec.copy">{{ acctSecSummary.copy }}</text>
+            <text class="acct-sec-chev" :class="{ folded: !acctSec.copy }">▾</text>
+          </view>
+          <view v-show="acctSec.copy" class="acct-sec-body">
+            <view class="acct-seg">
+              <view
+                class="acct-seg-item"
+                v-for="o in copyModeOpts"
+                :key="o.key"
+                :class="{ on: copyMode === o.key }"
+                @click="onCopyMode(o.key)"
+              >{{ o.label }}</view>
+            </view>
+            <view class="acct-tip">{{ copyModeTip }}</view>
+          </view>
+
+          <view class="acct-div"></view>
+
+          <!-- 线路收藏夹：最多 10 条，点一条直接查询实时公交 -->
+          <view class="acct-sec-head" @click="toggleAcctSection('fav')">
+            <text class="acct-sec-title">线路收藏夹</text>
+            <text class="acct-sec-sum" v-if="!acctSec.fav">{{ favCount }} / 10</text>
+            <text class="acct-sec-chev" :class="{ folded: !acctSec.fav }">▾</text>
+          </view>
+          <view v-show="acctSec.fav" class="acct-sec-body">
+            <FavPanel @pick="onFavPick" />
+          </view>
+
           <view class="acct-tip">注销后回到登录页，本机账号保留，下次可直接登录</view>
           <view class="acct-logout" @click="acctConfirm = true">注销登录</view>
         </view>
@@ -375,6 +408,9 @@ import {
   setSessionDays,
 } from '../../utils/settings.js'
 import { getAvatar, removeAvatar, pickAvatar } from '../../utils/avatar.js'
+import { COPY_MODE_OPTS, getCopyMode, setCopyMode } from '../../utils/settings.js'
+import { favCount, onFavoritesChange } from '../../utils/favorites.js'
+import FavPanel from '../../components/FavPanel.vue'
 
 // 上次查过的线路：下次进来直接落在地图上，省掉「每次都要搜一遍」
 const HOME_LINE_KEY = 'whbis:home-line'
@@ -387,16 +423,17 @@ const CITY_ACT_KEY = 'whbis:city-activated'
 const CITY_ACT_CODE = 'BOUNDLESS_558'
 // 「账号与设置」各分区的展开态：本机记忆，避免每次开窗都要重新点开
 const ACCT_SECTIONS_KEY = 'whbis:acct-sections'
-const ACCT_SECTION_KEYS = ['session', 'pwd', 'refresh', 'skin', 'accent', 'font', 'map']
+const ACCT_SECTION_KEYS = ['session', 'pwd', 'refresh', 'skin', 'accent', 'font', 'map', 'copy', 'fav']
 // 默认：常用的小分区展开，字体（13 档）与密码表单这类长分区默认收起，
 // 让面板首屏就能看到全部设置项，不用一路滚到底
 const ACCT_SECTIONS_DEFAULT = {
-  session: true, pwd: false, refresh: true, skin: true, accent: true, font: false, map: true,
+  session: true, pwd: false, refresh: true, skin: true, accent: true, font: false,
+  map: true, copy: true, fav: false,
 }
 
 export default {
   name: 'HomePage',
-  components: { LineMap, LineSearch, LineStops, LineDb, FloatWin },
+  components: { LineMap, LineSearch, LineStops, LineDb, FloatWin, FavPanel },
   data() {
     return {
       view: 'db',
@@ -434,6 +471,11 @@ export default {
       // 界面字体：当前生效档 + 档位列表（preview = 选项卡预览用的 family 串）
       uiFont: 'system',
       fontOpts: FONT_OPTS.map((o) => ({ ...o, preview: o.family ? o.family + ', sans-serif' : 'inherit' })),
+      // 复制方式：全站复制按钮统一按此档执行
+      copyMode: 'text',
+      copyModeOpts: COPY_MODE_OPTS,
+      // 收藏夹条数（面板标题摘要用）
+      favCount: 0,
       // 设置分区展开态（本机记忆，见 ACCT_SECTIONS_DEFAULT）
       acctSec: { ...ACCT_SECTIONS_DEFAULT },
       sessionOpts: [
@@ -484,7 +526,9 @@ export default {
       const map = this.mapSourceOpts.find((o) => o.key === this.mapSource)
       const accent = this.accentPresets.find((p) => p.hex === this.accent)
       const days = this.sessionOpts.find((o) => o.days === this.sessionDays)
+      const copy = this.copyModeOpts.find((o) => o.key === this.copyMode)
       return {
+        copy: copy ? copy.label : '复制为文本',
         session: days ? days.label : `${this.sessionDays} 天`,
         pwd: this.pwdCustom ? '自定义密码' : '预置口令',
         refresh: this.refreshDefault === 0 ? '手动刷新' : `${this.refreshDefault} 秒`,
@@ -493,6 +537,11 @@ export default {
         font: font ? font.label : '系统默认',
         map: map ? map.label : '高德地图',
       }
+    },
+    copyModeTip() {
+      return this.copyMode === 'image'
+        ? '所有复制按钮将把表格画成 PNG 图片写入剪贴板；当前环境不支持时自动回退为文本'
+        : '所有复制按钮将复制 TSV 纯文本，可直接粘贴进 Excel / 表格'
     },
     // 是否所有分区都已展开（决定快捷按钮文案与方向）
     acctAllOpen() {
@@ -528,6 +577,10 @@ export default {
       this.view = 'map'
     }
   },
+  created() {
+    // 收藏夹条数用于设置面板标题摘要
+    this._offFav = onFavoritesChange((list) => { this.favCount = list.length })
+  },
   onShow() {
     // 组件不触发页面生命周期：自动刷新定时器统一由宿主转发（只在 onLoad 建会叠出多个）
     this.fire(['onShow', 'restartAutoRefresh'])
@@ -541,6 +594,7 @@ export default {
   },
   onUnload() {
     this.fire(['cleanup', 'stopAutoRefresh'])
+    if (this._offFav) this._offFav()
   },
   methods: {
     // 分区展开态：本机记忆（只认已知的 key，脏数据自动回退默认值）
@@ -598,11 +652,16 @@ export default {
       this.startStop = p.startStop || ''
       this.endStop = p.endStop || ''
     },
+    // 收藏夹选线：先收起设置窗（否则窗会盖在刚切换的地图上），再走统一选线出口
+    onFavPick(p) {
+      this.accountShow = false
+      this.onPickLine(p)
+    },
     // 顶栏搜索与线路库窗共用的选线出口
     onPickLine(p) {
       // 全市公交态：顶栏搜索是全站唯一的线路号查询入口 → 就地筛选全市视图（面板不再另设查询框）；
       // 带 fromCity 的来自全市内部的「打开线路」出口（车辆详情 / 已筛选芯片），仍走换线
-      if (this.view === 'city' && !p.fromCity) {
+      if (this.view === 'city' && !p.fromCity && !p.fromFav) {
         const c = this.$refs.mapC
         if (c) c.cityFilterByNo(p.lineName || p.lineNo || '')
         return
@@ -719,6 +778,8 @@ export default {
       this.mapSource = getMapSource()
       this.sessionDays = getSessionDays()
       this.uiFont = getFont()
+      this.copyMode = getCopyMode()
+      this.favCount = favCount()
       this.loadAcctSections()
       // 预载各档 CSS：让「界面字体」选项卡用真字体渲染当预览
       ensureFontPreviews()
@@ -807,6 +868,12 @@ export default {
       this.uiFont = setFont(key)
       const opt = this.fontOpts.find((o) => o.key === key)
       uni.showToast({ title: `字体已切换：${opt ? opt.label : key}`, icon: 'none' })
+    },
+    // 复制方式：设置落库后所有复制按钮下次点击即按新档执行（工具函数每次点击都读设置）
+    onCopyMode(key) {
+      this.copyMode = setCopyMode(key)
+      const opt = this.copyModeOpts.find((o) => o.key === key)
+      uni.showToast({ title: `复制方式：${opt ? opt.label : key}`, icon: 'none' })
     },
     // 全局默认刷新：实时线路 / 实时车辆未手动选过间隔时采用；已打开的视图即时跟随
     onRefreshDefault(sec) {

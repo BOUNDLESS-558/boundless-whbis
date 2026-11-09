@@ -38,12 +38,79 @@ const WARN_KEY = 'whbis:city-warned'
 // ────────────── 线网底图（静态资产）──────────────
 
 /** 底图里只留内存，不进 localStorage：文件本身已被 HTTP 缓存，重复落盘只会顶满配额 */
-let NET = null
+let BASE_NET = null   // 集团主线网（network.json 原样解析）
+let NET = null        // 当前生效线网（开关开启时 = 主线网 + 非集团补充，同步可读）
 let NET_PROMISE = null
+let FOREIGN_BODY = null
+let FOREIGN_PROMISE = null
 
 /** 已加载好的线网（未加载返回 null）：{ updated, bbox, count, dirCount, dirs, byNo } */
 export function cityNet() {
   return NET
+}
+
+/** 非集团线网补充资产（蔡城/木兰/汉奇），仅在开关开启时按需拉取 */
+function loadForeignNet() {
+  if (FOREIGN_PROMISE) return FOREIGN_PROMISE
+  FOREIGN_PROMISE = new Promise((resolve) => {
+    uni.request({
+      url: assetUrl('/static/network-foreign.json'),
+      method: 'GET',
+      timeout: 20000,
+      success: (res) => {
+        const body = res && res.statusCode === 200 ? res.data : null
+        FOREIGN_BODY = body && typeof body === 'string' ? safeJson(body) : body
+        resolve(FOREIGN_BODY)
+      },
+      fail: () => resolve(null),
+    })
+  })
+  return FOREIGN_PROMISE
+}
+
+/**
+ * 把补充线网的方向条目转成与主线网同构的 dirs / byNo 增量，返回新的线网对象。
+ * 开关关闭 / 资产缺失时返回主线网本身，保证集团视图行为逐点不变。
+ * 合并结果是同步对象，cityNet() / netSearchLines() 等既有调用方无需改成异步。
+ */
+function mergeForeignNet(base, foreign) {
+  if (!foreign || !Array.isArray(foreign.lines) || !foreign.lines.length) return base
+  const dirs = base.dirs.slice()
+  const byNo = new Map(base.byNo)
+  for (const l of foreign.lines) {
+    const entry = { no: l.no, code: l.code, dirs: [] }
+    for (const d of l.dirs || []) {
+      const raw = d.p
+      if (!Array.isArray(raw) || raw.length < 4) continue
+      let minLng = Infinity, minLat = Infinity, maxLng = -Infinity, maxLat = -Infinity
+      const p = []
+      for (let i = 0; i + 1 < raw.length; i += 2) {
+        const ln = Number(raw[i]), la = Number(raw[i + 1])
+        if (!(ln > 73 && ln < 135) || !(la > 24 && la < 54)) continue
+        p.push(ln, la)
+        if (ln < minLng) minLng = ln
+        if (ln > maxLng) maxLng = ln
+        if (la < minLat) minLat = la
+        if (la > maxLat) maxLat = la
+      }
+      if (p.length < 4) continue
+      const dd = { no: l.no, code: l.code, dir: Number(d.d) || 0, p, n: p.length / 2, bb: [minLng, minLat, maxLng, maxLat] }
+      entry.dirs.push(dd)
+      dirs.push(dd)
+    }
+    if (entry.dirs.length) {
+      entry.stops = entry.dirs.reduce((m, x) => Math.max(m, x.n), 0)
+      byNo.set(String(l.no), entry)
+    }
+  }
+  return { ...base, dirs, byNo, count: byNo.size, dirCount: dirs.length }
+}
+
+/** 重建生效线网：非集团补充资产恒定并入，不再有开关 */
+async function rebuildNet() {
+  if (!BASE_NET) return
+  if (!FOREIGN_BODY) await loadForeignNet()
+  NET = mergeForeignNet(BASE_NET, FOREIGN_BODY)
 }
 
 /**
@@ -58,12 +125,14 @@ export function loadCityNet() {
       url: assetUrl('/static/network.json'),
       method: 'GET',
       timeout: 30000,
-      success: (res) => {
+      success: async (res) => {
         const body = res && res.statusCode === 200 ? res.data : null
         const net = normalizeNet(body && typeof body === 'string' ? safeJson(body) : body)
         if (!net) { NET_PROMISE = null; resolve(null); return }
+        BASE_NET = net
         NET = net
-        resolve(net)
+        await rebuildNet()
+        resolve(NET)
       },
       fail: () => { NET_PROMISE = null; resolve(null) },
     })

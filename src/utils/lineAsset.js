@@ -11,9 +11,20 @@
  */
 import { assetUrl } from './asset.js'
 import { shardOf } from './routeClean.js'
+import { companyKeyOfNo, foreignShardOf } from './companies.js'
 
 const ASSET_DIR = '/static/lines/'
 const SHARDS = new Map()
+
+/**
+ * 分片名：集团线路沿用 bNN.json（64 桶哈希）；
+ * 非集团线路（蔡城 C / 木兰 P / 汉奇）走「公司缩写 + B + 数字」的独立分片，
+ * 与集团资产互不干扰，站点 stopId 也带公司前缀。
+ */
+function shardName(no) {
+  const abbr = companyKeyOfNo(no)
+  return abbr === 'JT' ? shardOf(no) : foreignShardOf(no, abbr)
+}
 
 function safeJson(s) {
   try { return JSON.parse(s) } catch (e) { return null }
@@ -21,7 +32,7 @@ function safeJson(s) {
 
 /** 取一个分片；并发调用同一分片只发一次请求 */
 export function loadShard(no) {
-  const key = shardOf(no)
+  const key = shardName(no)
   if (SHARDS.has(key)) return SHARDS.get(key)
   const p = new Promise((resolve) => {
     uni.request({
