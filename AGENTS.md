@@ -2,7 +2,56 @@
 
 uni-app（Vue 3 + Vite 5）跨端应用：H5 网页版 + Android App，查询武汉公交线路、站点、时刻表、实时车辆。
 Git 仓库 main 存源码、pages 分支只存 H5 构建产物（远端 `origin` = `BOUNDLESS-558/boundless-whbis`）。**没有 CI / lint / typecheck**，唯一可执行的验证手段是下面两个 Node 测试和一组 CDP 探针。
+**分支推送铁律（用户明确要求）**：远端 `origin` 只接收 `pages` 分支——它仅存放 H5 构建产物，供 GitHub Pages 部署。`main` / `beta` / 任何源码分支**严禁推送远端**；源码改动保留在本地分支即可，无需、也不应上远端。`pages` 由 `scripts/deploy-pages.mjs` 以孤立提交方式强推（只含 `dist/build/h5`，与源码历史彻底隔离）。若不慎把源码分支推到远端，立即 `git push origin --delete <分支>` 撤回（本次曾误推 `BETA`，已删除）。
+
 提交前注意：`src/config.js` 的 openId 是占位值、`apiProxy`（Cloudflare Worker 地址）均不涉密，可入库；若将来填入真实密钥，先加 `.gitignore` 或改为环境注入。
+
+## 其它公交公司 / 数据源（2026-11-09 起）
+
+武汉公交不止公交集团，还有**蔡城（C 线）/ 木兰（P 线）/ 汉奇**等独立营运主体。用户明确要求
+**统一通过高德获取**这些线路（不再用历史「汉奇智慧出行」小程序接口：该接口现已要求签名，返回 401）。
+
+- `scripts/scan-foreign.mjs`（`npm run scan:foreign`）→ `src/static/foreign-lines.json`（摘要）
+  + `src/static/lines/CCB01.json` / `MLB01.json` / `HQB01.json` …（站点 + 走向资产）。
+  - **两条高德链路**（配额池互相独立，一条耗尽不影响另一条）：
+    - 蔡城 `C*` / 木兰 `P*`：`/v3/bus/linename?keywords=线路号` 按号段枚举。
+    - **汉奇线路号是中文前缀**：`汉奇K6路`、`汉奇12路`、`汉奇22号线`、`汉奇定制公交1~4号线`、
+      `汉奇景景有约巴士`。用「汉奇1」这种编号当关键词会查无此线；正确姿势是
+      `/v3/assistant/inputtips?datatype=busline` 拿线路 POI id → `/v3/bus/lineid?id=...`
+      取完整站点与走向。`lineid` 与 `linename` 的日配额分开计算，
+      `linename` 返回 10044 时仍可用 `--hanqi-only` 只采汉奇。
+    - 采集器「只补强不降级」：先读回已有摘要/分片再合并，本次零命中不写盘，不会冲掉已采数据。
+  - **分片命名**：集团仍 `bNN.json`（64 桶哈希）；非集团按「公司缩写 + B + 数字」（`CCB` / `MLB` / `HQB`），
+    由 `utils/companies.js` 的 `foreignShardOf()` 定位，`utils/lineAsset.js` 的 `shardName()` 分流。
+  - **站点 stopId**：高德原 ID 为 `BV...`；落盘改写为 `${abbr}B${序号}`（如 `CCB0001`），原值存 `originId`。
+  - 高德只给静态站点 / polyline / 首末班 / 票价，**没有实时车辆与发车计划**。所有非集团线路
+    `realtime:false`，`LineMap.loadLive()` / `LineStops.loadLive()` 直接跳过 `/detailData`，
+    UI 明确标注「静态数据」，不要伪装成实时。
+  - 汉奇 **8 条已实测采集完成**（`汉奇K6` 双向 11/10 站带走向，落 `HQB01` 等分片）。
+    2026-11-09 曾误判「高德不收录汉奇」，原因是关键词写成「汉奇1」且解析正则只认字母数字；
+    已修正为中文前缀解析 + `inputtips`/`lineid` 链路，不要再退回旧结论。
+- `scripts/build-foreign-net.mjs`（`npm run build:foreign-net`）→ `src/static/network-foreign.json`，
+  单独成文件，不并进 `network.json`（`scan:net` 重跑不会覆盖）。
+- `utils/companies.js` 是**公司字典唯一真源**（缩写 / Logo / 颜色 / 号段正则 / 分片名）。
+  `companyOf(line)` 是公司判定与徽标展示的**统一出口，永不返回 null**：集团线路即使 `org`
+  字段缺失（停运/历史线）也返回集团徽标，保证每一行都有图标。
+- **不设开关**（用户明确要求）：非集团线路恒定并入 `lineIndex` 检索池、`cityBus` 全市线网、
+  线路库、搜索联想与实时视图，默认全部可查询搜索。设置面板里没有、也不应有
+  「其它公交公司」开关；历史存储键 `whbis:show-foreign` 与 `settings.onSettingsChange` 已移除。
+- **线路库筛选按营运主体归并**（用户明确要求）：公司行只有
+  `全部 / 公交集团 / 蔡城公交 / 木兰公交 / 汉奇公交`。集团下属第一…第九营运公司、
+  `org` 未收录的历史线、以及 `数字 / 电 / BRT / K / D` 等号段线路**全部归入「公交集团」**，
+  不要把「一公司 / 二公司」或 `C / P` 裸露成看似独立公司的分类。
+  集团内部号段细分放在选中「公交集团」后才出现的「号段」二级行里。
+  `companyOf(line).label` 对集团一律返回「公交集团」，分公司全名保留在 `.full`
+  （详情弹层与 TSV 导出用）。旧的 `lineIndex.orgOf()` 已删除，别再引入。
+- 设置项「复制方式」（`whbis:copy-mode`，默认 text）：**所有**复制按钮统一走
+  `utils/clipboard.js` 的 `copyTable({title, columns, rows, text})`，不要再直接调
+  `uni.setClipboardData`。image 档用离屏 canvas 画 PNG → `ClipboardItem` 写剪贴板，
+  不支持的环境自动回退文本。新增复制入口必须复用它。
+- 线路收藏夹：`utils/favorites.js`（`whbis:fav-lines:v1`，**上限 10 条**）+ `FavStar.vue`（星标，
+  订阅变更同步高亮）+ `FavPanel.vue`（挂在设置窗分区）。收藏按钮已铺到搜索联想、实时线路、
+  地图车辆面板、全市筛选芯片、线路库列表与详情弹层。
 
 ## 命令（已实测）
 
@@ -17,6 +66,8 @@ npm run scan:lines   # 枚举探测线路网，合并写入 src/static/lines.jso
 npm run scan:org     # 从 buspedia.top 采集营运公司填充 lines.json 的 org 字段（会写文件）
 npm run scan:routes:stops # 只拉站点→清洗→落 src/static/lines/（不调 OSRM，快）
 npm run scan:routes  # 在上面的基础上补算 OSRM 贴路几何（免 Key，慢，可断点续跑）
+npm run scan:foreign # 高德采集非集团线路（蔡城/木兰/汉奇），需 AMAP_KEY 环境变量
+npm run build:foreign-net # 由非集团资产生成 network-foreign.json（跑完 scan:foreign 执行）
 npm run deploy:pages # 构建 + 强推 origin/pages（GitHub Pages）
 ```
 
