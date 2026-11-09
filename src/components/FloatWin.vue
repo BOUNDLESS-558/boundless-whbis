@@ -15,11 +15,13 @@
       <text class="fw-title">{{ title }}</text>
       <text class="fw-sub" v-if="sub">{{ sub }}</text>
       <view class="fw-actions">
+        <!-- 宿主注入的窗口级动作（如实时线路的「站牌」切换），排在 📌 / ✕ 左侧 -->
+        <slot name="actions" />
         <view
           class="fw-pin"
           :class="{ on: pinned }"
           @click.stop="togglePin"
-          :title="pinned ? '取消固定（恢复拖动）' : '固定位置（锁定拖动）'"
+          :title="pinned ? '取消固定（恢复原拖动）' : '固定位置（锁定拖动）'"
         >📌</view>
         <view class="fw-close" @click.stop="close" title="关闭">✕</view>
       </view>
@@ -235,18 +237,22 @@ export default {
         y: this.pos.y == null ? null : this.clampY(this.pos.y, r.height),
       }
     },
-    // 挂右下角缩放手柄（仅 H5、仅传了 resizeKey、且非窄屏）；createResizable 会先应用记忆尺寸
+    // 挂缩放手柄（仅 H5、仅传了 resizeKey、且非窄屏）；createResizable 会先应用记忆尺寸
+    // resizeAxis：'x' 只调宽（右边手柄，高度由内容 + maxHeight 定）／
+    //             'y' 只调高（底边手柄，宽度固定）／'both' 宽高一起（右下角）
     attachResize() {
       if (!this.resizeKey || typeof document === 'undefined' || typeof window === 'undefined') return
       if (window.matchMedia && window.matchMedia('(max-width: 720px)').matches) return
       const el = this._rootEl || document.getElementById(this.domId)
       if (!el) return
       this._rootEl = el
-      const wide = this.resizeAxis === 'x' // 只调宽：右边横向手柄
+      const axis = this.resizeAxis === 'x' ? 'x' : (this.resizeAxis === 'y' ? 'y' : 'both')
+      const edge = axis === 'x' ? 'right' : (axis === 'y' ? 'bottom' : 'corner')
       this._resizer = createResizable(el, {
         key: this.resizeKey,
-        axis: this.resizeAxis === 'x' ? 'x' : 'both',
-        edge: wide ? 'right' : 'corner',
+        axis,
+        edge,
+        heightProp: 'height',
         minW: 320,
         maxW: (window.innerWidth || 1280) - 40,
         minH: 160,
@@ -254,12 +260,12 @@ export default {
         onResize: () => this._syncResize(),
       })
     },
-    // 把当前实际尺寸回写进 data，交给 winStyle 固定（否则下次因 pos 变化重渲染会用 widthPx 把宽度刷回去）
-    // 只调宽（resizeAxis='x'）时不写 rsH，让高度继续由内容 + maxHeight 决定
+    // 把当前实际尺寸回写进 data，交给 winStyle 固定（否则下次因 pos 变化重渲染会用默认值把尺寸刷回去）
+    // 只调宽（'x'）不写 rsH（高度继续由内容 + maxHeight 决定）；只调高（'y'）不写 rsW（宽度固定）
     _syncResize() {
       if (!this._rootEl) return
       const r = this._rootEl.getBoundingClientRect()
-      this.rsW = Math.round(r.width)
+      if (this.resizeAxis !== 'y') this.rsW = Math.round(r.width)
       if (this.resizeAxis !== 'x') this.rsH = Math.round(r.height)
       this.reclamp()
     },

@@ -58,22 +58,24 @@
           <text class="sug-head-t">相关线路 {{ suggestTotal }} 条</text>
           <text class="sug-head-s">线路库 {{ lineCount }} 条 · 本地匹配</text>
         </view>
-        <view class="sug-item" v-for="s in suggestList" :key="s.code || s.no" @click="pickSuggest(s)">
-          <image v-if="orgLogo(s)" class="sug-logo" :src="orgLogo(s)" mode="aspectFit" />
-          <text class="sug-no">{{ s.no }}</text>
-          <view class="sug-body">
-            <view class="sug-route">
-              <text class="rt-tag rt-start">起</text>
-              <text class="rt-name">{{ s.start || '起点未知' }}</text>
-              <text class="rt-arrow">→</text>
-              <text class="rt-tag rt-end">终</text>
-              <text class="rt-name">{{ s.end || '终点未知' }}</text>
-            </view>
-            <text class="sug-meta">{{ orgLabel(s) ? orgLabel(s) + ' · ' : '' }}{{ sugMeta(s) }}{{ s.realtime === false ? ' · 静态数据' : '' }}</text>
+        <!-- 紧凑单行 + 自适应多列：宽面板一行排 2~3 条，结果再多也不必竖着滚 -->
+        <view class="sug-grid">
+          <view
+            class="sug-item"
+            v-for="s in suggestList"
+            :key="s.code || s.no"
+            :title="sugTitle(s)"
+            @click="pickSuggest(s)"
+          >
+            <image v-if="orgLogo(s)" class="sug-logo" :src="orgLogo(s)" mode="aspectFit" />
+            <text class="sug-no">{{ s.no }}</text>
+            <text class="sug-route">{{ (s.start || '起点未知') + ' → ' + (s.end || '终点未知') }}</text>
+            <FavStar :line="s" small />
+            <text class="sug-dot" :class="'sd-' + statusOf(s).key"></text>
           </view>
-          <text class="st-badge" :class="'st-' + statusOf(s).key">{{ statusOf(s).label }}</text>
-          <FavStar :line="s" small />
-          <text class="sug-go">›</text>
+        </view>
+        <view class="sug-foot" v-if="suggestTotal > suggestList.length">
+          仅显示前 {{ suggestList.length }} 条 · 继续输入可缩小范围
         </view>
       </view>
       <view class="sug-panel sug-none" v-else-if="suggestEmpty">
@@ -147,8 +149,9 @@ export default {
       return assetUrl('/static/logo.png')
     },
     // 线路库联想（本地 JSON，输入即出；不请求接口）
+    // 上限 24：配合多列网格，常见输入基本一屏看全；超出时面板底部提示继续细化
     suggestList() {
-      return suggestLines(this.lineNo, 6)
+      return suggestLines(this.lineNo, 24)
     },
     suggestTotal() {
       return countMatches(this.lineNo)
@@ -184,6 +187,11 @@ export default {
     },
     orgLabel(s) {
       return companyOf(s).label
+    },
+    // 紧凑条目把细节收进悬停提示：线路号 + 起讫站 + 公司 + 运行状态
+    sugTitle(s) {
+      const st = this.statusOf(s)
+      return `${s.no} · ${s.start || '起点未知'} → ${s.end || '终点未知'} · ${this.orgLabel(s) || '—'} · ${st.label}`
     },
     // 联想项副标题：武汉公交显「N 站 · 双向」
     sugMeta(s) {
@@ -283,14 +291,14 @@ export default {
 .mod-main.is-plain .view-row {
   padding-right: 0;
 }
-/* 裸形态里胶囊再压一档，保证 .ctrl（720rpx）内方向行不溢出 */
+/* 裸形态里胶囊跟随放大（头像 46rpx 需要胶囊 ≥46rpx），仍限制宽度避免撑爆 .ctrl */
 .mod-main.is-plain .vr-acct {
-  height: 40rpx;
-  padding: 0 10rpx;
+  height: 52rpx;
+  padding: 0 14rpx;
   max-width: 150rpx;
 }
 .mod-main.is-plain .vr-acct-t {
-  font-size: 19rpx;
+  font-size: 21rpx;
 }
 .mod-main.is-plain .seg-tab {
   height: 48rpx;
@@ -437,37 +445,40 @@ export default {
   min-width: 0;
   display: inline-flex;
   align-items: center;
-  gap: 6rpx;
-  height: 44rpx;
-  padding: 0 14rpx;
+  gap: 8rpx;
+  height: 52rpx;
+  padding: 0 16rpx;
   box-sizing: border-box;
   border-radius: 999rpx;
   background: rgba(255, 255, 255, 0.06);
   border: 2rpx solid rgba(255, 255, 255, 0.12);
   cursor: pointer;
-  transition: background 0.18s, border-color 0.18s;
+  transition: background 0.18s, border-color 0.18s, transform 0.15s;
 }
 .vr-acct:hover {
   background: rgba(var(--ac-rgb), 0.16);
   border-color: rgba(var(--ac-rgb), 0.45);
+  transform: scale(1.03);
 }
 .vr-acct-ico {
   flex: 0 0 auto;
-  font-size: 20rpx;
+  font-size: 22rpx;
   opacity: 0.75;
 }
-/* 自定义头像：小圆脸嵌在胶囊里 */
+/* 自定义头像：放大到 46rpx，加强调色描边 + 投影，让上传的图在控制卡顶栏成为视觉焦点 */
 .vr-acct-avatar {
   flex: 0 0 auto;
-  width: 30rpx;
-  height: 30rpx;
+  width: 46rpx;
+  height: 46rpx;
   border-radius: 50%;
   overflow: hidden;
   background: rgba(255, 255, 255, 0.1);
+  border: 2rpx solid rgba(var(--ac-rgb), 0.55);
+  box-shadow: 0 0 0 3rpx rgba(var(--ac-rgb), 0.14), 0 3rpx 10rpx rgba(0, 0, 0, 0.4);
 }
 .vr-acct-t {
   min-width: 0;
-  font-size: 20rpx;
+  font-size: 21rpx;
   line-height: 1;
   font-weight: 600;
   color: rgba(255, 255, 255, 0.78);
@@ -552,7 +563,8 @@ export default {
   -webkit-backdrop-filter: blur(26px) saturate(170%);
   border: 2rpx solid rgba(255, 255, 255, 0.16);
   box-shadow: 0 24rpx 56rpx rgba(0, 0, 0, 0.55), inset 0 1rpx 0 rgba(255, 255, 255, 0.12);
-  max-height: 58vh;
+  /* 上限从 58vh 抬到 72vh：多列网格铺开后，常见输入（≤12 条）已能一屏看全，不必滚 */
+  max-height: 72vh;
   overflow-y: auto;
 }
 .sug-head {
@@ -570,81 +582,72 @@ export default {
   font-size: 19rpx;
   color: rgba(255, 255, 255, 0.32);
 }
+/* 联想条目：紧凑单行 + 自适应多列网格——宽面板一行可放 2~3 条，避免结果多时只能竖着滚 */
+.sug-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300rpx, 1fr));
+  gap: 10rpx;
+  padding: 2rpx 0 4rpx;
+}
 .sug-item {
   display: flex;
   align-items: center;
-  gap: 16rpx;
-  padding: 16rpx 14rpx;
-  border-radius: 18rpx;
+  gap: 10rpx;
+  min-width: 0;
+  height: 56rpx;
+  padding: 0 14rpx;
+  box-sizing: border-box;
+  border-radius: 14rpx;
+  background: rgba(255, 255, 255, 0.05);
+  border: 2rpx solid rgba(255, 255, 255, 0.08);
   cursor: pointer;
-  transition: background 0.16s;
+  transition: background 0.16s, border-color 0.16s, transform 0.12s;
 }
 .sug-item:hover {
-  background: rgba(255, 255, 255, 0.08);
+  background: rgba(34, 211, 238, 0.14);
+  border-color: rgba(34, 211, 238, 0.45);
+}
+.sug-item:active {
+  transform: scale(0.97);
 }
 .sug-logo {
   flex: 0 0 auto;
-  width: 40rpx;
-  height: 40rpx;
-  border-radius: 10rpx;
+  width: 28rpx;
+  height: 28rpx;
+  border-radius: 8rpx;
 }
 .sug-no {
   flex: 0 0 auto;
-  min-width: 92rpx;
-  text-align: center;
-  padding: 6rpx 14rpx;
-  border-radius: 12rpx;
-  font-size: 24rpx;
+  font-size: 23rpx;
   font-weight: 800;
-  color: #062a33;
-  background: linear-gradient(135deg, #67e8f9, #06b6d4);
+  color: #a5f3fc;
   font-variant-numeric: tabular-nums;
-}
-.sug-body {
-  flex: 1;
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 6rpx;
+  white-space: nowrap;
 }
 .sug-route {
-  display: flex;
-  align-items: center;
-  gap: 6rpx;
-  font-size: 22rpx;
-  color: rgba(255, 255, 255, 0.86);
-  overflow: hidden;
-  white-space: nowrap;
-}
-/* 起讫站共用：起点绿 / 终点琥珀，与站点条 / 地图同语义 */
-.rt-tag {
-  flex: 0 0 auto;
-  padding: 1rpx 8rpx;
-  border-radius: 6rpx;
-  font-size: 17rpx;
-  font-weight: 800;
-  color: #0b1020;
-}
-.rt-start { background: #22c55e; }
-.rt-end { background: #f59e0b; }
-.rt-name {
-  flex: 0 1 auto;
+  flex: 1;
   min-width: 0;
-  overflow: hidden;
+  font-size: 19rpx;
+  color: rgba(255, 255, 255, 0.5);
   white-space: nowrap;
+  overflow: hidden;
   text-overflow: ellipsis;
 }
-.rt-arrow {
+/* 运行状态色点：营运中（翠绿）/ 已收班（琥珀）/ 已停运（石板灰） */
+.sug-dot {
   flex: 0 0 auto;
-  color: rgba(255, 255, 255, 0.42);
+  width: 12rpx;
+  height: 12rpx;
+  border-radius: 50%;
 }
-.sug-meta {
+.sd-live { background: #34d399; box-shadow: 0 0 8rpx rgba(52, 211, 153, 0.55); }
+.sd-ended { background: #fbbf24; }
+.sd-off { background: #94a3b8; }
+/* 超出上限时的收窄提示 */
+.sug-foot {
+  padding: 8rpx 14rpx 4rpx;
   font-size: 19rpx;
-  color: rgba(255, 255, 255, 0.4);
-}
-.sug-go {
-  color: rgba(255, 255, 255, 0.3);
-  font-size: 26rpx;
+  color: rgba(255, 255, 255, 0.34);
 }
 .sug-none {
   padding: 0;

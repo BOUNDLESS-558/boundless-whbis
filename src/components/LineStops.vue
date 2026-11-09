@@ -40,11 +40,11 @@
           <text class="ops-value">¥{{ activeBase.price || '--' }}</text>
           <text class="ops-label">票价</text>
         </view>
-        <view class="ops-item">
+        <view class="ops-item ops-click" @dblclick="copyStopsInfo" title="双击复制当前线路走向的全部站点信息">
           <text class="ops-value">{{ activeCols.length }}</text>
           <text class="ops-label">站点</text>
         </view>
-        <view class="ops-item ops-click" @click="copyOnlineBuses">
+        <view class="ops-item ops-click" @click="copyOnlineBuses" :title="`在线 ${onlineCount} 辆 · 点击复制当前方向在线车辆明细`">
           <text class="ops-value online">{{ onlineCount }}</text>
           <text class="ops-label online-label">在线</text>
         </view>
@@ -165,7 +165,7 @@ import { buildLineCode } from '../config.js'
 import { getRefreshDefault } from '../utils/settings.js'
 import { cleanStops } from '../utils/routeClean.js'
 import { loadLineAsset, assetDir } from '../utils/lineAsset.js'
-import { copyTable } from '../utils/clipboard.js'
+import { copyTable, renderRoutePng } from '../utils/clipboard.js'
 import { companyKeyOfNo, orgInfo } from '../utils/companies.js'
 import { assetUrl } from '../utils/asset.js'
 import FavStar from './FavStar.vue'
@@ -418,6 +418,77 @@ export default {
         imageToast: `已复制 ${lines.length} 辆车信息为图片`,
         excelToast: `已复制 ${lines.length} 辆车信息为 Excel 表格`,
       })
+    },
+    // 双击「站点」统计块 → 复制当前线路走向的全部站点信息（序号 / 站名 / 站号 / 换乘 / 起终标记）
+    copyStopsInfo() {
+      const cols = this.activeCols
+      if (!cols || !cols.length) {
+        uni.showToast({ title: '当前方向无站点数据', icon: 'none' })
+        return
+      }
+      const dirName = this.dir === 0 ? '上行' : '下行'
+      const rows = cols.map((s, i) => {
+        const transfer = (s.transferInfos || [])
+          .map((t) => (t && t.subwayLineNo ? t.subwayLineNo + '号线' : ''))
+          .filter(Boolean)
+          .join('/')
+        const mark = i === 0 ? '起点站' : i === cols.length - 1 ? '终点站' : ''
+        return [String(i + 1), s.stopName || '未知站点', String(s.stopNo || ''), transfer || '—', mark || '—']
+      })
+      copyTable({
+        title: `${this.lineName || this.lineNo}（${dirName}） 沿线 ${cols.length} 站`,
+        columns: ['序号', '站名', '站号', '换乘', '标记'],
+        rows,
+        toast: `已复制 ${cols.length} 站信息`,
+        imageToast: `已复制 ${cols.length} 站信息为图片`,
+        excelToast: `已复制 ${cols.length} 站信息为 Excel 表格`,
+      })
+    },
+    // 复制当前方向的仿真线路走向图为 PNG（上行走上行、下行走下行），写入剪贴板
+    copyRouteImage() {
+      const dirName = this.dir === 0 ? '上行' : '下行'
+      const cols = this.activeCols
+      if (!cols || !cols.length) {
+        uni.showToast({ title: '当前方向无站点数据', icon: 'none' })
+        return
+      }
+      const png = renderRoutePng({
+        lineName: this.lineName || this.lineNo,
+        lineNo: this.lineNo,
+        dirName,
+        startStop: this.activeBase.startStop || this.startStop || '起点',
+        endStop: this.activeBase.endStop || this.endStop || '终点',
+        earlyHour: this.activeBase.earlyHour || '',
+        lastHour: this.activeBase.lastHour || '',
+        price: this.activeBase.price || '',
+        cols: cols.map((c) => ({
+          stopName: c.stopName,
+          hasSubway: !!(c.transferInfos && c.transferInfos.length),
+        })),
+      })
+      if (!png) {
+        uni.showToast({ title: '生成走向图失败', icon: 'none' })
+        return
+      }
+      // H5：把 base64 dataURL 写入剪贴板
+      if (typeof document !== 'undefined' && navigator.clipboard) {
+        // 将 dataURL 转为 Blob 再写入剪贴板（clipboard.writeText 只能写文本）
+        const arr = png.split(',')
+        const mime = arr[0].match(/:(.*?);/)[1]
+        const bstr = atob(arr[1])
+        let n = bstr.length
+        const u8arr = new Uint8Array(n)
+        while (n--) u8arr[n] = bstr.charCodeAt(n)
+        const blob = new Blob([u8arr], { type: mime })
+        const item = new ClipboardItem({ [mime]: blob })
+        navigator.clipboard.write([item]).then(() => {
+          uni.showToast({ title: `已复制${dirName}走向图为图片`, icon: 'none' })
+        }).catch(() => {
+          uni.showToast({ title: '复制失败，请重试', icon: 'none' })
+        })
+      } else {
+        uni.showToast({ title: '当前环境不支持图片复制', icon: 'none' })
+      }
     },
     // H5：为线路带绑定鼠标拖拽 + 滚轮横向滚动（PC 端可用）
     // ⚠ .route-strip 在 v-if 内且依赖异步站点数据：mounted 时通常还不存在（$refs.strip 为空），

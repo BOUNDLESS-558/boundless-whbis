@@ -93,7 +93,8 @@ function makeGrip(edge) {
 /**
  * @param {Element} el    目标面板的真实 DOM 节点
  * @param {Object}  opts  { key, axis:'x'|'y'|'both', edge:'right'|'left'|'bottom'|'corner',
- *                          minW, maxW, minH, maxH, heightProp:'height'|'maxHeight', onResize }
+ *                          minW, maxW, minH, maxH, heightProp:'height'|'maxHeight', onResize,
+ *                          clip:false 时不给容器加 overflow（避免把宿主内绝对定位的浮层裁掉） }
  * @returns {{ destroy:Function, reset:Function }}
  */
 export function createResizable(el, opts = {}) {
@@ -112,10 +113,12 @@ export function createResizable(el, opts = {}) {
   const onResize = typeof opts.onResize === 'function' ? opts.onResize : null
   const rw = axis === 'x' || axis === 'both'
   const rh = axis === 'y' || axis === 'both'
+  const clip = opts.clip !== false
 
-  // 设了显式高度（非 max-height）时给容器加滚动，避免内容被裁
+  // 设了显式高度（非 max-height）时给容器加滚动，避免内容被裁；
+  // 但宿主内若有绝对定位浮层（如控制卡里的联想面板），clip:false 时不加，否则浮层被裁
   function ensureClip() {
-    if (rh && heightProp === 'height') el.style.overflow = 'auto'
+    if (clip && rh && heightProp === 'height') el.style.overflow = 'auto'
   }
 
   function applyStored() {
@@ -127,8 +130,10 @@ export function createResizable(el, opts = {}) {
     ensureClip()
   }
   applyStored()
-  // 记忆尺寸改变了占位，通知宿主重排（控制卡/侧栏要重新量 fitRect）
-  if (onResize) requestAnimationFrame(() => onResize())
+  // 记忆尺寸改变了占位，通知宿主重排（控制卡/侧栏要重新量 fitRect）。
+  // 必须同步调用：FloatWin 的 winStyle 用 rsW || 默认宽，若等 rAF 则首渲染
+  // 已用默认宽把 applyStored 写进去的记忆尺寸覆盖掉，下次开窗就又回到默认宽度
+  if (onResize) onResize()
 
   const grip = makeGrip(edge)
   el.appendChild(grip)

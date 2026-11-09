@@ -58,6 +58,10 @@
         resize-key="stops"
         @close="view = 'map'"
       >
+        <!-- 仿真站牌开关：原先在「账号与设置」里，挪到实时线路窗头，随当前方向区分上下行 -->
+        <template #actions>
+          <view class="fw-act" @click.stop="onCopyRouteImg" title="复制线路仿真走向图（按当前方向区分上下行）">📷</view>
+        </template>
         <LineStops
           ref="stopsC"
           plain
@@ -76,8 +80,9 @@
         title="线路库"
         sub="本地全量摘要 · 点一条直达"
         :width-rpx="1200"
-        max-height="78vh"
+        max-height="76vh"
         resize-key="db"
+        resize-axis="y"
         @close="view = 'map'"
       >
         <LineDb plain @pick="onPickLine" />
@@ -314,22 +319,6 @@
 
           <view class="acct-div"></view>
 
-          <!-- 仿真站牌设计：启用后实时线路的「线路走向」改用公交站牌风格（站点横排 + 首末站高亮） -->
-          <view class="acct-sec-head" @click="toggleAcctSection('signboard')">
-            <text class="acct-sec-title">仿真站牌设计</text>
-            <text class="acct-sec-sum" v-if="!acctSec.signboard">{{ acctSecSummary.signboard }}</text>
-            <text class="acct-sec-chev" :class="{ folded: !acctSec.signboard }">▾</text>
-          </view>
-          <view v-show="acctSec.signboard" class="acct-sec-body">
-            <view class="acct-seg">
-              <view class="acct-seg-item" :class="{ on: !simSignboard }" @click="onSimSignboard(false)">关闭</view>
-              <view class="acct-seg-item" :class="{ on: simSignboard }" @click="onSimSignboard(true)">开启</view>
-            </view>
-            <view class="acct-tip">启用后，实时线路的线路走向改用公交站牌风格呈现（站点横排、连线与首末站高亮），不影响车辆与站点交互</view>
-          </view>
-
-          <view class="acct-div"></view>
-
           <!-- 复制方式：全站所有复制按钮统一按此档执行，改完即时生效（无需重启） -->
           <view class="acct-sec-head" @click="toggleAcctSection('copy')">
             <text class="acct-sec-title">复制方式</text>
@@ -446,12 +435,12 @@ const CITY_ACT_KEY = 'whbis:city-activated'
 const CITY_ACT_CODE = 'BOUNDLESS_558'
 // 「账号与设置」各分区的展开态：本机记忆，避免每次开窗都要重新点开
 const ACCT_SECTIONS_KEY = 'whbis:acct-sections'
-const ACCT_SECTION_KEYS = ['session', 'pwd', 'refresh', 'skin', 'accent', 'font', 'map', 'signboard', 'copy']
+const ACCT_SECTION_KEYS = ['session', 'pwd', 'refresh', 'skin', 'accent', 'font', 'map', 'copy']
 // 默认：常用的小分区展开，字体（13 档）与密码表单这类长分区默认收起，
 // 让面板首屏就能看到全部设置项，不用一路滚到底
 const ACCT_SECTIONS_DEFAULT = {
   session: true, pwd: false, refresh: true, skin: true, accent: true, font: false,
-  map: true, signboard: true, copy: true,
+  map: true, copy: true,
 }
 
 export default {
@@ -561,7 +550,6 @@ export default {
         accent: accent ? accent.label : '自定义',
         font: font ? font.label : '系统默认',
         map: map ? map.label : '高德地图',
-        signboard: this.simSignboard ? '已开启' : '关闭',
       }
     },
     copyModeTip() {
@@ -888,6 +876,15 @@ export default {
       this.simSignboard = setSimSignboard(!!on)
       uni.showToast({ title: this.simSignboard ? '已启用仿真站牌设计' : '已关闭仿真站牌设计', icon: 'none' })
     },
+    // 复制线路走向图（仿真）：按当前方向渲染路线图为 PNG 再写入剪贴板
+    onCopyRouteImg() {
+      const c = this.$refs.stopsC
+      if (c && typeof c.copyRouteImage === 'function') {
+        c.copyRouteImage()
+      } else {
+        uni.showToast({ title: '走向图不可用', icon: 'none' })
+      }
+    },
     // 界面字体：写 <html> --app-font 全站即时跟随；本机持久化，启动自动恢复
     onFont(key) {
       this.uiFont = setFont(key)
@@ -1198,53 +1195,72 @@ export default {
   transform: scale(0.97);
 }
 /* ── 身份区：头像（点击更换）+ 用户名输入 + 只读账号名 ── */
+/* 身份区：头像 + 用户名 + 账号名，头像作为视觉重心放大到 176rpx */
 .acct-id {
   display: flex;
   align-items: center;
-  gap: 24rpx;
-  padding: 6rpx 0 18rpx;
+  gap: 28rpx;
+  padding: 10rpx 0 22rpx;
 }
+/* 自定义头像：比原 120rpx 明显放大，多层光晕 + 渐变描边，让上传的图成为面板里最抢眼的一块 */
 .acct-avatar {
   position: relative;
   flex: 0 0 auto;
-  width: 120rpx;
-  height: 120rpx;
+  width: 176rpx;
+  height: 176rpx;
   border-radius: 50%;
   overflow: hidden;
   display: flex;
   align-items: center;
   justify-content: center;
-  background: linear-gradient(135deg, rgba(var(--ac-rgb), 0.35), rgba(var(--ac2-rgb), 0.3));
-  border: 3rpx solid rgba(var(--ac-rgb), 0.5);
+  background: linear-gradient(135deg, rgba(var(--ac-rgb), 0.45), rgba(var(--ac2-rgb), 0.32));
+  border: 4rpx solid rgba(255, 255, 255, 0.18);
+  box-shadow:
+    0 0 0 6rpx rgba(var(--ac-rgb), 0.18),
+    0 0 0 12rpx rgba(var(--ac-rgb), 0.10),
+    0 18rpx 44rpx rgba(0, 0, 0, 0.45),
+    inset 0 2rpx 0 rgba(255, 255, 255, 0.28);
   cursor: pointer;
-  transition: filter 0.18s;
+  transition: transform 0.2s ease, filter 0.2s ease, box-shadow 0.2s ease;
 }
 .acct-avatar:hover {
-  filter: brightness(1.15);
+  transform: scale(1.04);
+  filter: brightness(1.08);
+  box-shadow:
+    0 0 0 6rpx rgba(var(--ac-rgb), 0.28),
+    0 0 0 14rpx rgba(var(--ac-rgb), 0.14),
+    0 22rpx 52rpx rgba(0, 0, 0, 0.55),
+    inset 0 2rpx 0 rgba(255, 255, 255, 0.32);
+}
+.acct-avatar:active {
+  transform: scale(0.97);
 }
 .acct-avatar-img {
   width: 100%;
   height: 100%;
+  object-fit: cover;
 }
 .acct-avatar-txt {
-  font-size: 52rpx;
+  font-size: 72rpx;
   font-weight: 800;
   color: #eef1ff;
+  text-shadow: 0 2rpx 12rpx rgba(0, 0, 0, 0.4);
 }
-/* 悬浮相机角标：暗示「可点更换」 */
+/* 悬浮相机角标：暗示「可点更换」，随头像一起放大 */
 .acct-avatar-cam {
   position: absolute;
-  right: -2rpx;
-  bottom: -2rpx;
-  width: 44rpx;
-  height: 44rpx;
-  line-height: 44rpx;
+  right: -4rpx;
+  bottom: -4rpx;
+  width: 56rpx;
+  height: 56rpx;
+  line-height: 56rpx;
   text-align: center;
-  font-size: 22rpx;
+  font-size: 26rpx;
   border-radius: 50%;
   color: #fff;
-  background: rgba(var(--ac-rgb), 0.92);
-  border: 3rpx solid rgba(11, 16, 32, 0.9);
+  background: linear-gradient(135deg, rgba(var(--ac-rgb), 0.98), rgba(var(--ac2-rgb), 0.85));
+  border: 4rpx solid rgba(11, 16, 32, 0.92);
+  box-shadow: 0 4rpx 14rpx rgba(0, 0, 0, 0.45);
 }
 .acct-id-main {
   flex: 1;
@@ -1586,5 +1602,28 @@ export default {
 }
 .acct-btn.save:hover {
   filter: brightness(1.08);
+}
+/* 实时线路窗头的「站牌」切换按钮：与 📌/✕ 同高，胶囊描边，激活态用青蓝实心 */
+.fw-act {
+  height: 52rpx;
+  line-height: 52rpx;
+  padding: 0 20rpx;
+  border-radius: 999rpx;
+  font-size: 22rpx;
+  font-weight: 700;
+  color: rgba(255, 255, 255, 0.72);
+  background: rgba(255, 255, 255, 0.08);
+  border: 2rpx solid rgba(255, 255, 255, 0.14);
+  cursor: pointer;
+  transition: background 0.18s, color 0.18s, border-color 0.18s, transform 0.12s;
+}
+.fw-act.on {
+  color: #06121f;
+  background: linear-gradient(135deg, #67e8f9, #22d3ee);
+  border-color: transparent;
+  box-shadow: 0 6rpx 18rpx rgba(34, 211, 238, 0.4);
+}
+.fw-act:active {
+  transform: scale(0.94);
 }
 </style>

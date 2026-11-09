@@ -2458,13 +2458,12 @@ export default {
       const vw = window.innerWidth || 1280
       const vh = window.innerHeight || 800
       const upx = (r) => { try { return uni.upx2px(r) } catch (e) { return Math.round(r / 2) } }
-      // 四个面板统一记忆「宽 + 高」：右下角双向手柄（corner），双击恢复默认。
-      // 之前 .panel / .plan-side 只挂了高度轴，宽度改不了也记不住；这里统一放开双向。
+      // 宽度固定（CSS 里定死，避免拖窄把文字挤扁），只开放「调高度」并记忆：
+      // 底部手柄改高，控制卡用 height（自身滚动），两张卡用 maxHeight（保留内部列表滚动）。
       const specs = [
-        { sel: '.ctrl', opts: { key: 'ctrl', axis: 'both', edge: 'corner', minW: upx(560), maxW: Math.min(upx(1200), vw - 48), minH: 120, maxH: vh - 48, onResize: () => this.measureUi() } },
-        { sel: '.side-col', opts: { key: 'side', axis: 'both', edge: 'corner', minW: upx(520), maxW: Math.round(vw * 0.6), minH: 120, maxH: vh - 48, onResize: () => this.measureUi() } },
-        { sel: '.panel', opts: { key: 'panel', axis: 'both', edge: 'corner', heightProp: 'maxHeight', minW: upx(320), maxW: Math.round(vw * 0.6), minH: 120, maxH: vh - 48, onResize: () => this.measureUi() } },
-        { sel: '.plan-side', opts: { key: 'plan', axis: 'both', edge: 'corner', heightProp: 'maxHeight', minW: upx(320), maxW: Math.round(vw * 0.6), minH: 120, maxH: vh - 48, onResize: () => this.measureUi() } },
+        { sel: '.ctrl', opts: { key: 'ctrl', axis: 'y', edge: 'bottom', heightProp: 'height', clip: false, minH: upx(240), maxH: vh - 48, onResize: () => this.measureUi() } },
+        { sel: '.panel', opts: { key: 'panel', axis: 'y', edge: 'bottom', heightProp: 'maxHeight', minH: 120, maxH: vh - 48, onResize: () => this.measureUi() } },
+        { sel: '.plan-side', opts: { key: 'plan', axis: 'y', edge: 'bottom', heightProp: 'maxHeight', minH: 120, maxH: vh - 48, onResize: () => this.measureUi() } },
       ]
       specs.forEach((sp) => {
         const el = document.querySelector(sp.sel)

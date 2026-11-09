@@ -95,11 +95,14 @@ export function companyOf(line) {
   }
   const jt = COMPANIES.JT
   const full = String(l.org || l.company || '').trim()
+  // 从 org 全名里提取集团下属具体营运公司（第一…第九营运公司），让收藏夹/列表能区分
+  const m = full.match(/第([一二三四五六七八九])营运公司/)
+  const specific = m ? m[1] + '营运公司' : ''
   return {
     key: 'JT',
-    // 对外一律显示「公交集团」：第一…第九营运公司只是集团内部分工，
-    // 在列表里裸露成「七公司」会被误解为独立公司；分公司全名仍保留在 full 供详情/导出使用
-    label: jt.short,
+    // 集团线默认显示「公交集团」；若 org 里带具体营运公司（如「第三营运公司」）则一并显示，
+    // 免得收藏夹里一堆 JT 线全挤在同一个「公交集团」标签下无法区分
+    label: specific ? jt.short + '·' + specific : jt.short,
     full: full || jt.name,
     color: jt.color,
     logo: jt.logo,

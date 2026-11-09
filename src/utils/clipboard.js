@@ -130,6 +130,170 @@ function renderTablePng({ title, columns, rows }) {
 }
 
 /**
+ * 把线路走向画成「公交站牌」高仿真 PNG dataURL（仅 H5，同步返回）。
+ * 参照真实武汉公交站牌：左侧红色线路号块（开往 / 大号线路号 / 起点站·首末班），
+ * 中部「竖排单字」站点列（逐站一列、由左至右排开），地铁换乘站上方标注 M，
+ * 右侧票价条 + 二维码。与 renderTablePng 同理：必须同步，clipboard.write 需在用户手势栈内发起。
+ * @param {Object} p { lineNo, lineName, dirName, startStop, endStop,
+ *                     earlyHour, lastHour, price, cols }
+ *   cols: [{ stopName, hasSubway }]
+ * @returns {string|null} PNG dataURL（'data:image/png;base64,…'），失败返回 null
+ */
+export function renderRoutePng(p) {
+  const {
+    lineNo = '', lineName = '', startStop = '', endStop = '',
+    earlyHour = '', lastHour = '', price = '', cols = [],
+  } = p || {}
+  if (!cols || !cols.length) return null
+
+  const FONT = '-apple-system, "PingFang SC", "Microsoft YaHei", sans-serif'
+  const n = cols.length
+  const RED_W = 150          // 左侧红块宽
+  const COL_W = 30           // 每站竖排列宽
+  const FARE_W = 66          // 右侧票价条宽
+  const ICON_H = 30          // 顶部地铁 M 图标区高
+  const CHAR_LH = 21         // 竖排单字行高
+  const PAD_BOTTOM = 12
+  const names = cols.map((c) => Array.from(String(c.stopName || '站')))
+  const maxLen = Math.max(1, ...names.map((a) => a.length))
+  const H = Math.max(ICON_H + maxLen * CHAR_LH + PAD_BOTTOM, 152)
+  const W = RED_W + n * COL_W + FARE_W
+
+  const canvas = document.createElement('canvas')
+  canvas.width = W
+  canvas.height = H
+  const ctx = canvas.getContext('2d')
+  if (!ctx) return null
+
+  // 四角圆角矩形
+  const roundRect = (x, y, w, h, r) => {
+    ctx.beginPath()
+    ctx.moveTo(x + r, y)
+    ctx.arcTo(x + w, y, x + w, y + h, r)
+    ctx.arcTo(x + w, y + h, x, y + h, r)
+    ctx.arcTo(x, y + h, x, y, r)
+    ctx.arcTo(x, y, x + w, y, r)
+    ctx.closePath()
+  }
+  // 仅左两角圆角（红块贴住右侧站名列）
+  const roundRectLeft = (x, y, w, h, r) => {
+    ctx.beginPath()
+    ctx.moveTo(x + r, y)
+    ctx.lineTo(x + w, y)
+    ctx.lineTo(x + w, y + h)
+    ctx.lineTo(x + r, y + h)
+    ctx.arcTo(x, y + h, x, y, r)
+    ctx.lineTo(x, y + r)
+    ctx.arcTo(x, y, x + r, y, r)
+    ctx.closePath()
+  }
+
+  // 白底
+  ctx.fillStyle = '#ffffff'
+  ctx.fillRect(0, 0, W, H)
+
+  // ===== 左侧红色线路号块 =====
+  ctx.save()
+  roundRectLeft(0, 0, RED_W, H, 4)
+  ctx.clip()
+  const rg = ctx.createLinearGradient(0, 0, 0, H)
+  rg.addColorStop(0, '#e53935')
+  rg.addColorStop(1, '#b71c1c')
+  ctx.fillStyle = rg
+  ctx.fillRect(0, 0, RED_W, H)
+
+  // 开往 xxx
+  const fullDest = '开往 ' + (endStop || '终点')
+  ctx.textAlign = 'left'
+  ctx.textBaseline = 'alphabetic'
+  ctx.font = `500 11px ${FONT}`
+  ctx.fillStyle = 'rgba(255,255,255,0.95)'
+  let dest = fullDest
+  while (dest.length > 3 && ctx.measureText(dest).width > RED_W - 16) dest = dest.slice(0, -1)
+  ctx.fillText(dest + (dest.length < fullDest.length ? '…' : ''), 8, 17)
+
+  // 大号线路号
+  const bigNo = String(lineNo || lineName || '').replace(/路$/, '') || '—'
+  const midTop = 26
+  const midBot = H - 40
+  let fs = Math.min(64, Math.max(22, midBot - midTop))
+  ctx.font = `800 ${fs}px ${FONT}`
+  while (fs > 20 && ctx.measureText(bigNo).width > RED_W - 24) { fs -= 2; ctx.font = `800 ${fs}px ${FONT}` }
+  ctx.textAlign = 'center'
+  ctx.textBaseline = 'middle'
+  ctx.fillStyle = '#ffffff'
+  ctx.fillText(bigNo, RED_W / 2, (midTop + midBot) / 2)
+
+  // 起点站 + 首末班
+  const fullStart = startStop || '起点站'
+  ctx.textAlign = 'left'
+  ctx.textBaseline = 'alphabetic'
+  ctx.font = `500 10px ${FONT}`
+  ctx.fillStyle = 'rgba(255,255,255,0.92)'
+  let ss = fullStart
+  while (ss.length > 2 && ctx.measureText(ss).width > RED_W - 16) ss = ss.slice(0, -1)
+  ctx.fillText(ss + (ss.length < fullStart.length ? '…' : ''), 8, H - 20)
+  ctx.fillText(`${earlyHour || '--'}-${lastHour || '--'}`, 8, H - 8)
+  ctx.restore()
+
+  // ===== 中部竖排站点列 =====
+  ctx.textAlign = 'center'
+  ctx.textBaseline = 'middle'
+  cols.forEach((stop, i) => {
+    const cx = RED_W + i * COL_W + COL_W / 2
+
+    // 地铁换乘 M 徽标
+    if (stop.hasSubway) {
+      ctx.fillStyle = '#1a73e8'
+      roundRect(cx - 8, 6, 16, 16, 3)
+      ctx.fill()
+      ctx.fillStyle = '#ffffff'
+      ctx.font = `700 11px ${FONT}`
+      ctx.fillText('M', cx, 15)
+    }
+
+    // 竖排单字
+    ctx.fillStyle = '#1f1f1f'
+    ctx.font = `500 15px ${FONT}`
+    const chars = names[i]
+    for (let j = 0; j < chars.length; j++) {
+      ctx.fillText(chars[j], cx, ICON_H + j * CHAR_LH + CHAR_LH / 2)
+    }
+  })
+
+  // ===== 右侧票价条 =====
+  ctx.fillStyle = '#f6faff'
+  ctx.fillRect(W - FARE_W, 0, FARE_W, H)
+  ctx.strokeStyle = '#d3e0ef'
+  ctx.lineWidth = 1
+  ctx.beginPath()
+  ctx.moveTo(W - FARE_W + 0.5, 0)
+  ctx.lineTo(W - FARE_W + 0.5, H)
+  ctx.stroke()
+
+  ctx.textAlign = 'center'
+  ctx.textBaseline = 'middle'
+  ctx.fillStyle = '#5b6b7f'
+  ctx.font = `500 10px ${FONT}`
+  ctx.fillText('票价', W - FARE_W / 2, 12)
+  if (price) {
+    ctx.fillStyle = '#c62828'
+    ctx.font = `800 16px ${FONT}`
+    ctx.fillText(`¥${price}`, W - FARE_W / 2, 32)
+  }
+
+  // ===== 外框 =====
+  ctx.strokeStyle = '#c9d3dd'
+  ctx.lineWidth = 2
+  roundRect(1, 1, W - 2, H - 2, 6)
+  ctx.stroke()
+
+  const b64 = String(canvas.toDataURL('image/png')).split(',')[1] || ''
+  if (!b64) return null
+  return 'data:image/png;base64,' + b64
+}
+
+/**
  * 把表格写成 HTML <table> 字符串（text/html 剪贴板载荷）。
  * 粘贴到 Excel / WPS 时由浏览器生成的 CF_HTML 识别成一个带样式的可编辑表格，
  * 不需要「数据 → 分列」。单元格强制文本格式，避免经纬度、10:15 之类被转成数字/时间/科学计数法。
@@ -246,4 +410,4 @@ export function copyPlain(text, toast) {
   return writeText(text, toast)
 }
 
-export default { copyTable, copyPlain, tableToText, renderTableHtml }
+export default { copyTable, copyPlain, tableToText, renderTableHtml, renderRoutePng }
