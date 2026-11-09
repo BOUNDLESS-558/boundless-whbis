@@ -24,11 +24,8 @@
         </view>
 
         <view class="plan-row" v-for="(p, i) in sortedByDir[d]" :key="p.busId || i">
-          <!-- 左：车辆自编号 chip；右：发车时间（主视觉，与车辆面板自编号同色，右对齐） -->
-          <view class="plan-org-chip" v-if="p.bus">
-            <text class="plan-org-icon">🚌</text>
-            <text class="plan-org">{{ p.bus }}</text>
-          </view>
+          <!-- 左：车辆自编号（沿用车辆面板 .bus-org 字体：主色 800 等宽数字，无图标无胶囊）；右：发车时间 -->
+          <text class="plan-org" v-if="p.bus">{{ p.bus }}</text>
           <text class="plan-time">{{ p.planStartTime || '--' }}</text>
         </view>
 
@@ -318,21 +315,15 @@ export default {
   letter-spacing: 1rpx;
   line-height: 1;
 }
-/* 车辆车牌：次要信息，灰阶与车辆面板 .bus-hash 对齐（0.55 灰），不抢时间主色 */
-.plan-org-chip {
+/* 车辆自编号：直接沿用车辆面板 .bus-org 的字体风格（34rpx / 800 / 主色 / 等宽数字），
+   去掉胶囊底与图标，纯文字与右侧时间共用同一套字体语言 */
+.plan-org {
   flex: 0 0 auto;
-  display: inline-flex;
-  align-items: center;
-  gap: 6rpx;
-  padding: 6rpx 12rpx;
-  background: rgba(255, 255, 255, 0.06);
-  border: 1rpx solid rgba(255, 255, 255, 0.12);
-  border-radius: 999rpx;
-  font-size: 22rpx;
-  color: rgba(255, 255, 255, 0.55);
+  font-size: 34rpx;
+  font-weight: 800;
+  color: var(--ac-hi);
   font-variant-numeric: tabular-nums;
 }
-.plan-org-icon { font-size: 20rpx; }
 /* 空态（该方向无班次 / 加载中）：图标 + 文字双行居中 */
 .plan-empty {
   display: flex;

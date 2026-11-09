@@ -460,3 +460,18 @@ export function ensureFontPreviews() {
   } catch (e) { /* 忽略 */ }
   // #endif
 }
+
+// ── 仿真站牌设计 ──
+// 启用后，实时线路的「线路走向」改用公交站牌风格呈现（站点横排 + 连线 + 首末站高亮）。
+// 纯展示开关，不改动数据链路；默认关闭，本机记忆。
+const SIGNBOARD_KEY = 'whbis:sim-signboard'
+
+export function getSimSignboard() {
+  const v = readRaw(SIGNBOARD_KEY, false)
+  return v === true || v === 'true' || v === 1 || v === '1'
+}
+
+export function setSimSignboard(on) {
+  writeRaw(SIGNBOARD_KEY, !!on)
+  return getSimSignboard()
+}

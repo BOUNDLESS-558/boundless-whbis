@@ -25,6 +25,7 @@
         :line-name-prop="lineName"
         :init-direction="direction"
         :city-mode="view === 'city'"
+        :sim-signboard="simSignboard"
         :embedded="true"
         :fs-enabled="false"
         @pick-line="onPickLine"
@@ -313,6 +314,22 @@
 
           <view class="acct-div"></view>
 
+          <!-- 仿真站牌设计：启用后实时线路的「线路走向」改用公交站牌风格（站点横排 + 首末站高亮） -->
+          <view class="acct-sec-head" @click="toggleAcctSection('signboard')">
+            <text class="acct-sec-title">仿真站牌设计</text>
+            <text class="acct-sec-sum" v-if="!acctSec.signboard">{{ acctSecSummary.signboard }}</text>
+            <text class="acct-sec-chev" :class="{ folded: !acctSec.signboard }">▾</text>
+          </view>
+          <view v-show="acctSec.signboard" class="acct-sec-body">
+            <view class="acct-seg">
+              <view class="acct-seg-item" :class="{ on: !simSignboard }" @click="onSimSignboard(false)">关闭</view>
+              <view class="acct-seg-item" :class="{ on: simSignboard }" @click="onSimSignboard(true)">开启</view>
+            </view>
+            <view class="acct-tip">启用后，实时线路的线路走向改用公交站牌风格呈现（站点横排、连线与首末站高亮），不影响车辆与站点交互</view>
+          </view>
+
+          <view class="acct-div"></view>
+
           <!-- 复制方式：全站所有复制按钮统一按此档执行，改完即时生效（无需重启） -->
           <view class="acct-sec-head" @click="toggleAcctSection('copy')">
             <text class="acct-sec-title">复制方式</text>
@@ -403,6 +420,8 @@ import {
   setRefreshDefault,
   getMapSource,
   setMapSource,
+  getSimSignboard,
+  setSimSignboard,
   FONT_OPTS,
   getFont,
   setFont,
@@ -427,12 +446,12 @@ const CITY_ACT_KEY = 'whbis:city-activated'
 const CITY_ACT_CODE = 'BOUNDLESS_558'
 // 「账号与设置」各分区的展开态：本机记忆，避免每次开窗都要重新点开
 const ACCT_SECTIONS_KEY = 'whbis:acct-sections'
-const ACCT_SECTION_KEYS = ['session', 'pwd', 'refresh', 'skin', 'accent', 'font', 'map', 'copy']
+const ACCT_SECTION_KEYS = ['session', 'pwd', 'refresh', 'skin', 'accent', 'font', 'map', 'signboard', 'copy']
 // 默认：常用的小分区展开，字体（13 档）与密码表单这类长分区默认收起，
 // 让面板首屏就能看到全部设置项，不用一路滚到底
 const ACCT_SECTIONS_DEFAULT = {
   session: true, pwd: false, refresh: true, skin: true, accent: true, font: false,
-  map: true, copy: true,
+  map: true, signboard: true, copy: true,
 }
 
 export default {
@@ -472,6 +491,8 @@ export default {
       // 地图来源：自绘走向图底图瓦片源
       mapSource: 'amap',
       mapSourceOpts: MAP_SOURCE_OPTS,
+      // 仿真站牌设计：实时线路走向改用站牌风格（本机记忆）
+      simSignboard: false,
       // 界面字体：当前生效档 + 档位列表（preview = 选项卡预览用的 family 串）
       uiFont: 'system',
       fontOpts: FONT_OPTS.map((o) => ({ ...o, preview: o.family ? o.family + ', sans-serif' : 'inherit' })),
@@ -540,6 +561,7 @@ export default {
         accent: accent ? accent.label : '自定义',
         font: font ? font.label : '系统默认',
         map: map ? map.label : '高德地图',
+        signboard: this.simSignboard ? '已开启' : '关闭',
       }
     },
     copyModeTip() {
@@ -777,6 +799,7 @@ export default {
       this.sessionDays = getSessionDays()
       this.uiFont = getFont()
       this.copyMode = getCopyMode()
+      this.simSignboard = getSimSignboard()
       this.loadAcctSections()
       // 预载各档 CSS：让「界面字体」选项卡用真字体渲染当预览
       ensureFontPreviews()
@@ -859,6 +882,11 @@ export default {
       const c = this.$refs.mapC
       if (c && typeof c.onMapSourceChange === 'function') c.onMapSourceChange()
       uni.showToast({ title: `地图来源：${key === 'tencent' ? '腾讯地图' : '高德地图'}`, icon: 'none' })
+    },
+    // 仿真站牌设计：纯展示开关，落库后由 prop 下发给 LineMap 即时切换
+    onSimSignboard(on) {
+      this.simSignboard = setSimSignboard(!!on)
+      uni.showToast({ title: this.simSignboard ? '已启用仿真站牌设计' : '已关闭仿真站牌设计', icon: 'none' })
     },
     // 界面字体：写 <html> --app-font 全站即时跟随；本机持久化，启动自动恢复
     onFont(key) {

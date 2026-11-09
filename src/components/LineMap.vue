@@ -17,7 +17,11 @@
 
     <!-- 无地图 Key：自绘线路走向图（Web Mercator 投影，全屏可拖动缩放，不依赖任何 Key） -->
     <!-- 手势在 mounted 里用原生监听绑定（uni-app 对 view 的 wheel/mouse 事件支持不可靠） -->
-    <view v-else class="schematic" :class="{ 'has-tiles': showBaseMap }">
+    <view v-else class="schematic" :class="{ 'has-tiles': showBaseMap, 'sim-board': simSignboard }">
+      <!-- 仿真站牌模式：线路走向改用公交站牌风格（不渲染地理走向 / 车辆点）；
+           全市视图不是单线路、无 lineNo 时回退原画布 -->
+      <Signboard v-if="simSignboard && !cityOn && lineNo" :line="signboardLine" :groups="signboardGroups" />
+      <template v-else>
       <!-- 底图：高德标准瓦片（免 Key；GCJ-02 与武汉接口同源，零纠偏） -->
       <view class="tile-layer" v-if="showBaseMap">
         <image
@@ -180,6 +184,7 @@
         <text class="legend-item"><text class="ln down"></text>下行走向</text>
         <text class="legend-item"><text class="dot stop"></text>站点 / 车辆</text>
       </view>
+      </template>
     </view>
 
     <!-- 鼠标悬停车辆图标的浮标：只显示自编号数字本身，鼠标离开即消失（不常驻遮挡）；
@@ -539,7 +544,7 @@ import { fetchRoadRoute } from '../utils/osrm.js'
 import { APP_CONFIG, buildLineCode, useNativeMap } from '../config.js'
 import { assetUrl } from '../utils/asset.js'
 import { distance } from '../utils/geo.js'
-import { allLines } from '../utils/lineIndex.js'
+import { allLines, findLine } from '../utils/lineIndex.js'
 import { createResizable } from '../utils/panelResize.js'
 import { readPanelPos, writePanelPos, clampPanelPos } from '../utils/panelPos.js'
 import {
@@ -548,6 +553,7 @@ import {
   cityWarned, markCityWarned, loadCityNet, netSearchLines, bboxIntersects,
 } from '../utils/cityBus.js'
 import LinePlan from './LinePlan.vue'
+import Signboard from './Signboard.vue'
 import SpeedRank from './SpeedRank.vue'
 import { getRefreshDefault, getMapSource, accentRgba, getAccent } from '../utils/settings.js'
 import { cleanStops, pointsOf, fromFlat } from '../utils/routeClean.js'
@@ -676,7 +682,7 @@ function smoothPath(pts, snapped) {
 }
 
 export default {
-  components: { LinePlan, SpeedRank, FavStar },
+  components: { LinePlan, Signboard, SpeedRank, FavStar },
   props: {
     lineCodeProp: { type: String, default: '' },
     initDirection: { type: Number, default: 0 },
@@ -686,6 +692,8 @@ export default {
     fsEnabled: { type: Boolean, default: true },
     // 全市公交视图由宿主顶部分段驱动（判据只留在宿主一处，组件不再自带开关）
     cityMode: { type: Boolean, default: false },
+    // 仿真站牌设计：为真时线路走向改用站牌风格呈现（只影响自绘画布）
+    simSignboard: { type: Boolean, default: false },
   },
   data() {
     return {
@@ -829,6 +837,40 @@ export default {
         companyKey: this.isForeignLine ? companyKeyOfNo(no) : 'JT',
         org: this.foreignCompany ? this.foreignCompany.full : '',
       }
+    },
+    // 仿真站牌：线路元数据（首末班 / 票价 / 终点优先取线路库索引，取不到回退站点序列）
+    signboardLine() {
+      const meta = findLine(this.lineNo) || {}
+      const stops = this.stopsByDir[this.direction] || []
+      return {
+        no: this.lineNo || meta.no || '',
+        name: this.lineName || meta.name || '',
+        early: meta.early || '',
+        last: meta.last || '',
+        price: meta.price || '',
+        start: meta.start || (stops[0] && stops[0].stopName) || '',
+        end: meta.end || (stops[stops.length - 1] && stops[stops.length - 1].stopName) || '',
+      }
+    },
+    // 仿真站牌：按当前视角方向分组（全部 = 上行 + 下行两组），空组不渲染
+    signboardGroups() {
+      const dirs = this.dirFilter === 2 ? [0, 1] : [this.dirFilter]
+      return dirs
+        .map((d) => {
+          const arr = this.stopsByDir[d] || []
+          const stops = arr.map((s, i) => ({
+            name: s.stopName || '',
+            terminal: i === 0 || i === arr.length - 1,
+          }))
+          return {
+            dir: d,
+            dirName: d === 0 ? '上行' : '下行',
+            from: (arr[0] && arr[0].stopName) || '',
+            to: (arr[arr.length - 1] && arr[arr.length - 1].stopName) || '',
+            stops,
+          }
+        })
+        .filter((g) => g.stops.length)
     },
     // 宿主是否注入了 top 插槽
     hasTopSlot() {
@@ -1150,6 +1192,19 @@ export default {
     // 地图重建（刷新 / 换方向 / 定位）会换掉 DOM，悬停监听要重新挂到新节点上
     mapKey() {
       this.$nextTick(() => this.bindHover())
+    },
+    // 仿真站牌开关：切换时重新决定是否接管地图手势（站牌层自带横向滚动）
+    simSignboard(on) {
+      this.$nextTick(() => {
+        const el = document.querySelector('.schematic')
+        if (!el) return
+        if (on) {
+          this.unbindGestures()
+          el.style.touchAction = 'auto'
+        } else {
+          this.bindGestures()
+        }
+      })
     },
     // 宿主页顶部「上行/下行」切换 → 地图视角单向跟随（地图内仍可用「全部 / ⇄」自由查看）
     initDirection(v) {
@@ -2398,11 +2453,13 @@ export default {
       const vw = window.innerWidth || 1280
       const vh = window.innerHeight || 800
       const upx = (r) => { try { return uni.upx2px(r) } catch (e) { return Math.round(r / 2) } }
+      // 四个面板统一记忆「宽 + 高」：右下角双向手柄（corner），双击恢复默认。
+      // 之前 .panel / .plan-side 只挂了高度轴，宽度改不了也记不住；这里统一放开双向。
       const specs = [
-        { sel: '.ctrl', opts: { key: 'ctrl', axis: 'x', edge: 'right', minW: upx(560), maxW: Math.min(upx(1200), vw - 48), onResize: () => this.measureUi() } },
-        { sel: '.side-col', opts: { key: 'side', axis: 'x', edge: 'left', minW: upx(520), maxW: Math.round(vw * 0.6), onResize: () => this.measureUi() } },
-        { sel: '.panel', opts: { key: 'panel', axis: 'y', edge: 'bottom', heightProp: 'maxHeight', minH: 120, maxH: vh - 48, onResize: () => this.measureUi() } },
-        { sel: '.plan-side', opts: { key: 'plan', axis: 'y', edge: 'bottom', heightProp: 'maxHeight', minH: 120, maxH: vh - 48, onResize: () => this.measureUi() } },
+        { sel: '.ctrl', opts: { key: 'ctrl', axis: 'both', edge: 'corner', minW: upx(560), maxW: Math.min(upx(1200), vw - 48), minH: 120, maxH: vh - 48, onResize: () => this.measureUi() } },
+        { sel: '.side-col', opts: { key: 'side', axis: 'both', edge: 'corner', minW: upx(520), maxW: Math.round(vw * 0.6), minH: 120, maxH: vh - 48, onResize: () => this.measureUi() } },
+        { sel: '.panel', opts: { key: 'panel', axis: 'both', edge: 'corner', heightProp: 'maxHeight', minW: upx(320), maxW: Math.round(vw * 0.6), minH: 120, maxH: vh - 48, onResize: () => this.measureUi() } },
+        { sel: '.plan-side', opts: { key: 'plan', axis: 'both', edge: 'corner', heightProp: 'maxHeight', minW: upx(320), maxW: Math.round(vw * 0.6), minH: 120, maxH: vh - 48, onResize: () => this.measureUi() } },
       ]
       specs.forEach((sp) => {
         const el = document.querySelector(sp.sel)
@@ -2610,7 +2667,14 @@ export default {
     // 原生手势监听：uni-app H5 对 view 的 wheel / mouse 事件绑定不可靠，直接绑定 DOM
     bindGestures() {
       const el = document.querySelector('.schematic')
-      if (!el || this._boundEl === el) return
+      if (!el) return
+      // 仿真站牌模式：站牌层自己滚动，不绑定地图手势（拖动 / 滚轮 / 触摸都不接管）
+      if (this.simSignboard) {
+        this.unbindGestures()
+        el.style.touchAction = 'auto'
+        return
+      }
+      if (this._boundEl === el) return
       this.unbindGestures()
       this._boundEl = el
       el.style.touchAction = 'none'
@@ -3583,6 +3647,11 @@ export default {
 }
 .schematic:active {
   cursor: grabbing;
+}
+/* 仿真站牌模式：画布不再抓取拖动，触摸滚动交还给站牌层 */
+.schematic.sim-board {
+  cursor: default;
+  touch-action: auto;
 }
 /* 底图瓦片层（高德标准图，免 Key）：在 SVG 与站名层之下 */
 .tile-layer {
