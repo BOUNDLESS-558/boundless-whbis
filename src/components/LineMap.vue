@@ -1239,6 +1239,8 @@ export default {
     // #ifdef H5
     this._onWinResize = () => {
       this.syncCanvasSize()
+      // 宽度变化会改变折行，记忆高度可能不够高；先按内容撑高再量占位
+      if (this._resizers) this._resizers.forEach((r) => { if (r && r.refit) r.refit() })
       this.measureUi()
       // 窗口变小/旋转后详情窗可能跑到屏幕外，重新收进视口
       this.clampSheetPos()
@@ -2467,7 +2469,10 @@ export default {
       ]
       specs.forEach((sp) => {
         const el = document.querySelector(sp.sel)
-        if (!el || el.__rs) return
+        if (!el) return
+        // 节点已挂手柄时只需再校正一次高度：单线路/全市切换后内容变高，
+        // 记忆里较小的旧高度要把卡片撑到内容高，否则底部按钮会溢到卡片外
+        if (el.__rs) { if (el.__rs.refit) el.__rs.refit(); return }
         el.__rs = createResizable(el, sp.opts)
         ;(this._resizers || (this._resizers = [])).push(el.__rs)
       })

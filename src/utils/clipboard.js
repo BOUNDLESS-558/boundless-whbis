@@ -133,7 +133,7 @@ function renderTablePng({ title, columns, rows }) {
  * 把线路走向画成「公交站牌」高仿真 PNG dataURL（仅 H5，同步返回）。
  * 参照真实武汉公交站牌：左侧红色线路号块（开往 / 大号线路号 / 起点站·首末班），
  * 中部「竖排单字」站点列（逐站一列、由左至右排开），地铁换乘站上方标注 M，
- * 右侧票价条 + 二维码。与 renderTablePng 同理：必须同步，clipboard.write 需在用户手势栈内发起。
+ * 右侧票价条（票价 / 元）。与 renderTablePng 同理：必须同步，clipboard.write 需在用户手势栈内发起。
  * @param {Object} p { lineNo, lineName, dirName, startStop, endStop,
  *                     earlyHour, lastHour, price, cols }
  *   cols: [{ stopName, hasSubway }]

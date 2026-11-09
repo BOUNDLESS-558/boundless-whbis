@@ -121,6 +121,20 @@ export function createResizable(el, opts = {}) {
     if (clip && rh && heightProp === 'height') el.style.overflow = 'auto'
   }
 
+  // clip:false + height 时不会加 overflow，若记忆/拖拽出的高度比内容矮，
+  // 内容（如全市态底部「重扫 / 自动跟随 / 自编号 / 车速榜」）就会溢出到卡片之外。
+  // 这里把高度抬到内容真实高度（上限 maxH），保证内容永远被卡片包裹；
+  // 因为它只放大不缩小、且加 overflow 会裁掉绝对定位的联想下拉，故沿用 overflow:visible。
+  function refit() {
+    if (clip || !rh || heightProp !== 'height') return
+    if (!el.style.height) return
+    // scrollHeight 含内边距但不含边框，补上边框再 +1 防亚像素，宁可略高也不溢出
+    const border = Math.max(0, el.offsetHeight - el.clientHeight)
+    const need = el.scrollHeight + border + 1
+    const cur = el.getBoundingClientRect().height
+    if (need > cur + 1) el.style.height = Math.round(clamp(need, minH, maxH)) + 'px'
+  }
+
   function applyStored() {
     if (isNarrow()) return
     const s = readSize(key)
@@ -128,6 +142,7 @@ export function createResizable(el, opts = {}) {
     if (rw && s.w) el.style.width = Math.round(clamp(s.w, minW, maxW)) + 'px'
     if (rh && s.h) el.style[heightProp] = Math.round(clamp(s.h, minH, maxH)) + 'px'
     ensureClip()
+    refit()
   }
   applyStored()
   // 记忆尺寸改变了占位，通知宿主重排（控制卡/侧栏要重新量 fitRect）。
@@ -172,6 +187,7 @@ export function createResizable(el, opts = {}) {
         const raw = drag.h + dy
         el.style[heightProp] = Math.round(clamp(raw, minH, Math.min(maxH, vh - 16))) + 'px'
         ensureClip()
+        refit()
       }
       if (onResize) onResize()
     })
@@ -216,5 +232,5 @@ export function createResizable(el, opts = {}) {
     if (grip.parentNode) grip.parentNode.removeChild(grip)
   }
 
-  return { destroy, reset }
+  return { destroy, reset, refit }
 }
