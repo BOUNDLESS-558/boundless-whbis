@@ -15,17 +15,28 @@
       <view class="plan-group" v-for="d in DIRS" :key="'g' + d">
         <!-- 分组头：方向徽标（与车辆列表的 .bus-dir 同一尺寸与着色） + 该方向班次数 -->
         <view class="pg-head">
-          <text class="pg-dir" :class="'d' + d">{{ d === 0 ? '上行' : '下行' }}</text>
+          <text class="pg-dir" :class="'d' + d">{{ d === 0 ? '↑ 上行' : '↓ 下行' }}</text>
           <text class="pg-count">{{ sortedByDir[d].length }} 班</text>
         </view>
 
         <view class="plan-row" v-for="(p, i) in sortedByDir[d]" :key="p.busId || i">
-          <text class="plan-order">第 {{ i + 1 }} 班</text>
-          <text class="plan-time">{{ p.planStartTime || '--' }}</text>
-          <text class="plan-org">车辆 {{ p.bus || '--' }}</text>
+          <!-- 主数据：发车时间，最大号加粗，tabular-nums 保证数字对齐不动 -->
+          <text class="plan-time" :class="timeState(p.planStartTime)" :title="timeHint(p.planStartTime)">
+            {{ p.planStartTime || '--' }}
+          </text>
+          <!-- 状态徽标：距目标时间 15min 内 / 已过 → 让候车的人一眼看到要等的车 -->
+          <text v-if="timeBadge(p.planStartTime)" class="plan-badge" :class="timeBadgeClass(p.planStartTime)">
+            {{ timeBadge(p.planStartTime) }}
+          </text>
+          <!-- 车辆车牌：次要信息，用胶囊 chip 区隔，不抢时间的视觉权重 -->
+          <view class="plan-org-chip" v-if="p.bus">
+            <text class="plan-org-icon">🚌</text>
+            <text class="plan-org">{{ p.bus }}</text>
+          </view>
         </view>
 
         <view class="plan-empty" v-if="!sortedByDir[d].length">
+          <view class="empty-icon">{{ loading ? '⏳' : '🚏' }}</view>
           <text class="empty-text">{{ loading ? '时刻表加载中…' : '暂无' + (d === 0 ? '上行' : '下行') + '计划发车数据' }}</text>
         </view>
       </view>
@@ -118,18 +129,60 @@ export default {
       DIRS.forEach((d) => {
         const name = d === 0 ? '上行' : '下行'
         this.sortedByDir[d].forEach((p, i) => {
-          rows.push([name, `第 ${i + 1} 班`, p.planStartTime || '--', p.bus || '--'])
+          rows.push([name, p.planStartTime || '--', p.bus || '--'])
         })
       })
       if (!rows.length) { uni.showToast({ title: '暂无可复制班次', icon: 'none' }); return }
       copyTable({
         title: `${this.lineNo || ''} 发车时刻（共 ${rows.length} 班）`,
-        columns: ['方向', '班次', '发车时间', '车辆'],
+        columns: ['方向', '发车时间', '车辆'],
         rows,
         toast: `已复制 ${rows.length} 班时刻`,
         imageToast: `已复制 ${rows.length} 班时刻为图片`,
         excelToast: `已复制 ${rows.length} 班时刻为 Excel 表格`,
       })
+    },
+    // 把 HH:MM 字符串解析成距当前分钟数（负=未来，正=已过），忽略秒
+    _planMinutesFromNow(when) {
+      if (!when || when.length < 5) return null
+      const [h, m] = when.slice(0, 5).split(':').map(Number)
+      if (isNaN(h) || isNaN(m)) return null
+      const now = new Date()
+      const target = new Date(now); target.setHours(h, m, 0, 0)
+      return Math.round((target - now) / 60000)
+    },
+    // 时间视觉状态类名：'soon'（15min 内）、'past'（已过）、''（正常）
+    timeState(when) {
+      const diff = this._planMinutesFromNow(when)
+      if (diff == null) return ''
+      if (diff < 0 && diff > -15) return 'soon'
+      if (diff >= 0 && diff <= 15) return 'soon'
+      if (diff > 15) return 'past'
+      return ''
+    },
+    // 状态徽标文案（15min 窗口 + 刚过 15min）
+    timeBadge(when) {
+      const diff = this._planMinutesFromNow(when)
+      if (diff == null) return null
+      if (diff < -15) return null
+      if (diff < 0) return '即将'
+      if (diff <= 15) return '已到'
+      return null
+    },
+    // 状态徽标样式类名
+    timeBadgeClass(when) {
+      const diff = this._planMinutesFromNow(when)
+      if (diff == null) return ''
+      if (diff < 0) return 'badge-soon'
+      return 'badge-past'
+    },
+    // 鼠标 hover 时的 tooltip 提示文案
+    timeHint(when) {
+      const diff = this._planMinutesFromNow(when)
+      if (diff == null) return null
+      if (diff < -15) return null
+      if (diff < 0) return `将在 ${Math.abs(diff)} 分钟后发车`
+      return `已发出 ${diff} 分钟`
     },
   },
 }
@@ -274,36 +327,75 @@ export default {
 .plan-row {
   display: flex;
   align-items: center;
-  gap: 14rpx;
+  gap: 16rpx;
   padding: 22rpx 0;
   border-top: 2rpx solid rgba(255, 255, 255, 0.08);
 }
-.plan-order {
-  flex: 0 0 auto;
-  width: 110rpx;
-  font-size: 24rpx;
-  color: rgba(255, 255, 255, 0.55);
-}
-/* 发车时间 = 这行的主数据，与车辆面板的自编号同号 */
+/* 主数据：发车时间 — 最大号加粗，tabular-nums 保证数字对齐；
+   soon（即将发车）用琥珀色脉冲感强调，past（已过）用偏灰降低权重 */
 .plan-time {
-  flex: 1;
-  min-width: 0;
-  font-size: 34rpx;
+  flex: 0 0 auto;
+  font-size: 42rpx;
   font-weight: 800;
   color: var(--ac-hi);
   font-variant-numeric: tabular-nums;
+  letter-spacing: 1rpx;
+  line-height: 1;
 }
-.plan-org {
+.plan-time.soon {
+  color: #fbbf24;
+  text-shadow: 0 0 12rpx rgba(251, 191, 36, 0.35);
+}
+.plan-time.past {
+  color: rgba(255, 255, 255, 0.38);
+}
+/* 时间状态徽标：仅 within ±15min 时显示，让用户一眼看到要等的车 */
+.plan-badge {
   flex: 0 0 auto;
-  font-size: 24rpx;
+  font-size: 18rpx;
+  font-weight: 700;
+  padding: 4rpx 12rpx;
+  border-radius: 999rpx;
+  white-space: nowrap;
+  letter-spacing: 1rpx;
+}
+.plan-badge.badge-soon {
+  color: #fef3c7;
+  background: rgba(245, 158, 11, 0.28);
+  border: 1rpx solid rgba(245, 158, 11, 0.5);
+}
+.plan-badge.badge-past {
+  color: rgba(255, 255, 255, 0.55);
+  background: rgba(255, 255, 255, 0.08);
+  border: 1rpx solid rgba(255, 255, 255, 0.12);
+}
+/* 车辆车牌：胶囊 chip 压在后，次要视觉权重 */
+.plan-org-chip {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 6rpx;
+  padding: 6rpx 12rpx;
+  background: rgba(255, 255, 255, 0.07);
+  border: 1rpx solid rgba(255, 255, 255, 0.14);
+  border-radius: 999rpx;
+  font-size: 22rpx;
   color: rgba(255, 255, 255, 0.6);
   font-variant-numeric: tabular-nums;
 }
-/* 空态（该方向无班次 / 加载中）：与车辆面板 .empty 同字号同留白 */
+.plan-org-icon { font-size: 20rpx; }
+/* 空态（该方向无班次 / 加载中）：图标 + 文字双行居中 */
 .plan-empty {
-  padding: 40rpx 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 48rpx 0;
   border-top: 2rpx solid rgba(255, 255, 255, 0.08);
-  text-align: center;
+}
+.empty-icon {
+  font-size: 72rpx;
+  margin-bottom: 12rpx;
+  opacity: 0.8;
 }
 .empty-text {
   color: rgba(255, 255, 255, 0.5);
