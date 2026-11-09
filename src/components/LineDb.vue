@@ -74,7 +74,7 @@
     </view>
 
     <!-- 结果列表 -->
-    <view class="db-mod db-list" :class="{ plain: plain }">
+    <view class="db-mod db-list" :class="{ plain: plain }" ref="listRoot">
       <view class="db-row db-lhead">
         <text class="db-lh-t">匹配 {{ filtered.length }} 条</text>
         <view class="db-copy" v-if="filtered.length" @click.stop="copyFiltered" title="一键复制当前筛选命中的全部线路信息（TSV，可直接粘贴进表格）">⧉ 复制</view>
@@ -103,8 +103,19 @@
       <view class="db-none" v-if="!filtered.length">
         <text class="db-none-t">没有符合条件的线路</text>
       </view>
-      <view class="db-more" v-if="filtered.length > shown" @click="loadMore">
-        加载更多（剩余 {{ filtered.length - shown }} 条）
+      <!-- 分页：替代「加载更多」；页码记忆到本机，下次打开回到同一页 -->
+      <view class="db-pager" v-if="pageCount > 1">
+        <view class="db-pg-arrow" :class="{ dis: page <= 1 }" @click="gotoPage(page - 1)">‹</view>
+        <view class="db-pg-nums">
+          <view
+            v-for="(p, i) in pageList"
+            :key="i"
+            class="db-pg-num"
+            :class="{ on: p === page, gap: p === '…' }"
+            @click="gotoPage(p)"
+          >{{ p }}</view>
+        </view>
+        <view class="db-pg-arrow" :class="{ dis: page >= pageCount }" @click="gotoPage(page + 1)">›</view>
       </view>
     </view>
 
@@ -155,8 +166,20 @@ import { copyTable } from '../utils/clipboard.js'
 import { assetUrl } from '../utils/asset.js'
 import FavStar from './FavStar.vue'
 
-// 窗口化渲染：一次只挂 80 条，避免 1137 行全量 DOM 拖慢 H5 滚动
+// 分页大小：一次只挂 80 条，避免 1300+ 行全量 DOM 拖慢 H5 滚动
 const PAGE = 80
+
+// 页码记忆：本地保存上次停留的页（用户要求下次打开仍从第 N 页开始）
+const PAGE_KEY = 'whbis:linedb-page'
+function readPage() {
+  try {
+    const n = Number(uni.getStorageSync(PAGE_KEY))
+    return n >= 1 ? Math.floor(n) : 1
+  } catch (e) { return 1 }
+}
+function writePage(n) {
+  try { uni.setStorageSync(PAGE_KEY, n) } catch (e) { /* 隐私模式写不进去就只影响记忆，不影响功能 */ }
+}
 
 export default {
   name: 'LineDb',
@@ -188,7 +211,7 @@ export default {
         { key: 'ended', label: '已收班' },
         { key: 'off', label: '已停运' },
       ],
-      shown: PAGE,
+      page: 1,
       detail: null,
     }
   },
@@ -234,22 +257,44 @@ export default {
         return true
       })
     },
+    // 总页数 / 当前页切片 / 页码按钮（首末页 + 当前页邻域，中间用 … 省略）
+    pageCount() {
+      return Math.max(1, Math.ceil(this.filtered.length / PAGE))
+    },
     visibleLines() {
-      return this.filtered.slice(0, this.shown)
+      const start = (this.page - 1) * PAGE
+      return this.filtered.slice(start, start + PAGE)
+    },
+    pageList() {
+      const n = this.pageCount
+      if (n <= 7) return Array.from({ length: n }, (_, i) => i + 1)
+      const cur = this.page
+      const out = [1]
+      const from = Math.max(2, cur - 1)
+      const to = Math.min(n - 1, cur + 1)
+      if (from > 2) out.push('…')
+      for (let i = from; i <= to; i++) out.push(i)
+      if (to < n - 1) out.push('…')
+      out.push(n)
+      return out
     },
   },
   watch: {
-    kw() { this.shown = PAGE },
-    prefix() { this.shown = PAGE },
-    status() { this.shown = PAGE },
+    // 换筛选条件回到第 1 页（避免停在越界页看到空列表）
+    kw() { this.page = 1 },
+    prefix() { this.page = 1 },
+    status() { this.page = 1 },
     org() {
       this.prefix = '全部' // 换公司时清掉集团号段细分，避免回到「公交集团」时沿用旧条件
-      this.shown = PAGE
+      this.page = 1
     },
+    // 结果变少导致当前页越界时，夹回最后一个有效页
+    pageCount() { this.clampPage() },
   },
   // ⚠ 组件不触发页面生命周期：原来写成 onLoad 会永远不执行，列表恒空
   created() {
     this.all = allLines()
+    this.page = readPage()
   },
   methods: {
     statusOf(l) {
@@ -287,8 +332,9 @@ export default {
       }
       return ['接口推断：双方向均无站点、车辆与发车计划，暂无停运公告佐证', base].join(' · ')
     },
-    // 一键复制当前筛选命中的全部线路（TSV：编号/起点/终点/站数/方向/票价/首班/末班/状态/lineCode/营运公司/停运依据），
-    // 复制的是 filtered 全量（不是窗口化渲染的 visibleLines），粘进表格即成清单
+    // 一键复制当前筛选命中的全部线路（TSV：编号/起点/终点/站数/方向/票价/首班/末班/状态/营运公司/停运依据）。
+    // 不含 lineCode：那是后端内部编码，对外清单里没有意义（用户 2026-11-09 要求去掉）。
+    // 复制的是 filtered 全量（不是当前分页的 visibleLines），粘进表格即成清单
     copyFiltered() {
       const list = this.filtered
       if (!list.length) {
@@ -305,21 +351,34 @@ export default {
         l.early || '未知',
         l.last || '未知',
         this.statusOf(l).label,
-        l.code || l.no,
         this.companyFull(l),
         l.statusSource ? l.statusSource + (l.stopDate ? '(' + l.stopDate + ')' : '') : '',
       ])
       copyTable({
         title: `线路库匹配 ${list.length} 条`,
-        columns: ['编号', '起点', '终点', '站数', '方向', '票价', '首班', '末班', '状态', 'lineCode', '营运公司', '停运依据'],
+        columns: ['编号', '起点', '终点', '站数', '方向', '票价', '首班', '末班', '状态', '营运公司', '停运依据'],
         rows,
         toast: `已复制 ${list.length} 条线路`,
         imageToast: `已复制 ${list.length} 条线路为图片`,
         excelToast: `已复制 ${list.length} 条线路为 Excel 表格`,
       })
     },
-    loadMore() {
-      this.shown += PAGE
+    // 翻页：夹到有效区间 → 记忆到本机 → 滚回列表顶部（落地页与浮窗共用）
+    gotoPage(p) {
+      if (p === '…' || p == null) return
+      const target = Math.min(Math.max(1, Number(p) || 1), this.pageCount)
+      if (target === this.page) return
+      this.page = target
+      writePage(target)
+      this.$nextTick(() => {
+        const el = this.$refs.listRoot
+        if (el && el.scrollIntoView) el.scrollIntoView({ block: 'start', behavior: 'smooth' })
+      })
+    },
+    // 结果变少（筛选/搜索）导致当前页越界时夹回最后一个有效页
+    clampPage() {
+      if (this.page > this.pageCount) this.page = this.pageCount
+      if (this.page < 1) this.page = 1
     },
     openDetail(l) {
       this.detail = l
@@ -627,19 +686,54 @@ export default {
   font-size: 26rpx;
   color: rgba(255, 255, 255, 0.5);
 }
-.db-more {
+/* 分页条：左右翻页 + 页码（当前页高亮），替代原来的「加载更多」 */
+.db-pager {
+  display: flex;
+  align-items: center;
+  gap: 10rpx;
   margin: 8rpx 26rpx 26rpx;
-  height: 76rpx;
-  line-height: 76rpx;
+}
+.db-pg-arrow {
+  flex: 0 0 auto;
+  width: 64rpx;
+  height: 64rpx;
+  line-height: 60rpx;
   text-align: center;
-  border-radius: 18rpx;
-  font-size: 25rpx;
-  font-weight: 600;
+  font-size: 34rpx;
   color: var(--ac-hi);
+  border-radius: 14rpx;
   background: rgba(var(--ac-rgb), 0.12);
   border: 2rpx solid rgba(var(--ac-rgb), 0.3);
   cursor: pointer;
 }
+.db-pg-arrow.dis { opacity: 0.3; pointer-events: none; }
+.db-pg-nums {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6rpx;
+}
+.db-pg-num {
+  min-width: 56rpx;
+  height: 56rpx;
+  line-height: 52rpx;
+  padding: 0 8rpx;
+  text-align: center;
+  font-size: 23rpx;
+  color: rgba(255, 255, 255, 0.62);
+  border-radius: 12rpx;
+  cursor: pointer;
+}
+.db-pg-num:hover { background: rgba(255, 255, 255, 0.07); color: #fff; }
+.db-pg-num.on {
+  color: #fff;
+  font-weight: 700;
+  background: rgba(var(--ac-rgb), 0.9);
+  box-shadow: 0 4rpx 12rpx rgba(var(--ac-rgb), 0.35);
+}
+.db-pg-num.gap { color: rgba(255, 255, 255, 0.3); cursor: default; background: none; }
 /* 状态徽标：营运中翠绿 / 已收班琥珀 / 已停运石板灰（避开上下行方向色） */
 .db-badge {
   flex: 0 0 auto;
