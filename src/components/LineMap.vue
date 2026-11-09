@@ -375,7 +375,7 @@
                 <text class="bus-dir" :class="'d' + g.dir">{{ g.name }}</text>
                 <text class="bus-group-count">{{ g.buses.length }} 辆</text>
               </view>
-              <view class="bus-item" v-for="(bus, i) in g.buses" :key="bus.dir + '-' + i" @click="selectBus(bus)">
+              <view class="bus-item" v-for="(bus, i) in g.buses" :key="bus.dir + '-' + i" @click="selectBus(bus)" :title="busTip(bus)">
                 <view class="bus-left">
                   <!-- ★ 自编号（由 MD5 加密值还原，如 3240） -->
                   <view class="bus-org">{{ bus.orgId || '未知' }}</view>
@@ -507,8 +507,10 @@
       <!-- 方向 / 所属线路 / 换乘条数合并成一行元信息，省掉两行左右分栏 -->
       <view class="sheet-sub">
         <text class="ss-tag">{{ selectedStop.dir === 0 ? '上行' : '下行' }} · {{ stopLineLabel }}</text>
-        <text class="ss-org">{{ stopLinesBusy ? '全市线网匹配中…' : stopLines.length + ' 条可换乘 · 点击直达' }}</text>
+        <text class="ss-org">{{ stopLinesBusy ? '全市线网匹配中…' : stopLines.length + ' 条可换乘 · 点击切换' }}</text>
       </view>
+      <!-- 换乘线路：两列卡片网格。10 条左右一屏看全，不必逐条滚动；
+           上排线路号（当前线路琥珀高亮 + 标记），下排「开往 终点站」，完整起讫站留在 title -->
       <view class="st-list">
         <view
           class="st-chip"
@@ -516,15 +518,19 @@
           :key="t.no"
           :class="{ cur: t.cur }"
           @click="openStopLine(t)"
-          :title="(t.cur ? '当前线路 · ' : '查看 ') + t.no + ' 路（' + (t.start || '?') + ' → ' + (t.end || '?') + '）'"
+          :title="(t.cur ? '当前线路 · ' : '点击切换至 ') + t.no + ' 路（' + (t.start || '?') + ' → ' + (t.end || '?') + '）'"
         >
-          <text class="st-no">{{ t.no }}</text>
-          <!-- 乘客看站牌只关心「往哪开」：只留终点站，单行完整显示；完整起讫站留在 title -->
-          <text class="st-route" :title="(t.start || '?') + ' → ' + (t.end || '?')">{{ t.end ? '开往 ' + t.end : '起讫站未知' }}</text>
-          <text class="st-cur" v-if="t.cur">当前</text>
-          <text class="st-go">›</text>
+          <view class="st-top">
+            <text class="st-no">{{ t.no }}</text>
+            <text class="st-cur" v-if="t.cur">当前</text>
+            <text class="st-go" v-else>↗</text>
+          </view>
+          <view class="st-end" :title="(t.start || '?') + ' → ' + (t.end || '?')">
+            <text class="st-to">开往</text>{{ t.end || '起讫站未知' }}
+          </view>
         </view>
-        <view class="st-none" v-if="!stopLinesBusy && !stopLines.length">
+        <view class="st-none" v-if="stopLinesBusy"><text>正在全市线网中匹配途经本站的线路…</text></view>
+        <view class="st-none" v-else-if="!stopLines.length">
           <text>全市线网中未找到其它途经该站的线路</text>
         </view>
       </view>
@@ -3520,26 +3526,39 @@ export default {
     busStateText(bus) {
       return busStateOf(bus)
     },
+    // 车辆距该方向站点序列中最近的一站（haversine，坐标均为 GCJ-02）：悬浮提示与复制的「所在站点」列共用
+    nearStopOf(b) {
+      let best = '未知站点'
+      let bestD = Infinity
+      ;(this.stopsByDir[b.dir] || []).forEach((s) => {
+        const la = parseFloat(s.latitude)
+        const ln = parseFloat(s.longitude)
+        if (isNaN(la) || isNaN(ln)) return
+        const d = distance(b.lat, b.lng, la, ln)
+        if (d < bestD) { bestD = d; best = s.stopName || '未知站点' }
+      })
+      return best
+    },
+    // 在线车辆悬浮提示：方向 / 编号 / 营运公司 / 所在站点 / 时间 / 速度 / 状态 / 经纬度
+    busTip(b) {
+      const dir = b.dir === 0 ? '上行' : '下行'
+      const state = b.arrived === '1' ? '已到站' : '行驶中'
+      const coord = b.lat != null && b.lng != null ? `${b.lat}, ${b.lng}` : '经纬度未知'
+      return (
+        `${dir} · ${b.orgId || b.busNo || '?'} · ${this.busCompanyText(b)}\n` +
+        `所在站点：${this.nearStopOf(b)}\n` +
+        `${String(b.time || '--').slice(0, 5)} · ${b.gpsSpeed}km/h · ${state}\n` +
+        coord
+      )
+    },
     // 一键复制在线车辆信息（TSV：编号/营运公司/所在站点/时间/速度/状态/经纬度），
     // 列格式与「实时线路」页的复制功能一致；「全部」视角按 上行/下行 分两段输出。
-    // 所在站点 = 车辆与该方向站点序列里 haversine 最近的一站（坐标均为 GCJ-02，直接算距离）
+    // 所在站点 = 车辆与该方向站点序列里 haversine 最近的一站（见 nearStopOf）
     copyOnlineBuses() {
       const CN = ['', '第一', '第二', '第三', '第四', '第五', '第六', '第七', '第八', '第九']
       const companyOf = (b) => {
         const d = String(b.orgId || '').charAt(0)
         return d >= '1' && d <= '9' ? `武汉公交集团${CN[Number(d)]}营运公司` : '营运公司未知'
-      }
-      const nearStop = (b) => {
-        let best = '未知站点'
-        let bestD = Infinity
-        ;(this.stopsByDir[b.dir] || []).forEach((s) => {
-          const la = parseFloat(s.latitude)
-          const ln = parseFloat(s.longitude)
-          if (isNaN(la) || isNaN(ln)) return
-          const d = distance(b.lat, b.lng, la, ln)
-          if (d < bestD) { bestD = d; best = s.stopName || '未知站点' }
-        })
-        return best
       }
       const dirs = this.dirFilter === 2 ? [0, 1] : [this.dirFilter]
       const blocks = []
@@ -3552,7 +3571,7 @@ export default {
         const cells = buses.map((b) => [
           b.orgId || b.busNo || '?',
           companyOf(b),
-          nearStop(b),
+          this.nearStopOf(b),
           String(b.time || '--').slice(0, 5),
           `${b.gpsSpeed}km/h`,
           b.arrived === '1' ? '到站' : '行驶',
@@ -4623,15 +4642,15 @@ export default {
   left: 50%;
   transform: translateX(-50%);
   bottom: 160rpx;
-  width: 640rpx;
-  max-width: calc(100vw - 40rpx);
+  width: 880rpx;
+  max-width: calc(100vw - 20rpx);
   z-index: 30;
   background: rgba(11, 16, 32, 0.86);
   backdrop-filter: blur(30px) saturate(180%);
   -webkit-backdrop-filter: blur(30px) saturate(180%);
   border: 2rpx solid rgba(255, 255, 255, 0.16);
   border-radius: 32rpx;
-  padding: 0 32rpx 24rpx;
+  padding: 0 24rpx 24rpx;
   box-sizing: border-box;
   box-shadow: 0 24rpx 64rpx rgba(0, 0, 0, 0.5), inset 0 1rpx 0 rgba(255, 255, 255, 0.18);
   /* 位置由 JS 直接给 left/top：不能加 transition，否则拖动跟手有延迟 */
@@ -4641,7 +4660,7 @@ export default {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 12rpx;
+  gap: 8rpx;
   padding: 22rpx 0 18rpx;
   margin-bottom: 4rpx;
   border-bottom: 2rpx solid rgba(255, 255, 255, 0.1);
@@ -4703,40 +4722,69 @@ export default {
   background: rgba(var(--ac-rgb), 0.3);
   border-color: rgba(var(--ac-rgb), 0.65);
 }
-/* 站点详情窗：换乘线路行式列表，行间只用细分割线，不再每项自带背景/圆角 */
+/* 站点详情窗：换乘线路改两列卡片网格，10 条左右一屏可见，超出才滚动 */
 .st-list {
-  margin-top: 6rpx;
-  display: flex;
-  flex-direction: column;
-  max-height: 400rpx;
+  margin-top: 12rpx;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10rpx;
+  align-content: start;
+  max-height: 540rpx;
   overflow-y: auto;
   overscroll-behavior: contain;
-  padding-right: 8rpx;
+  padding-right: 6rpx;
+}
+.st-list::-webkit-scrollbar {
+  width: 6rpx;
+}
+.st-list::-webkit-scrollbar-thumb {
+  border-radius: 6rpx;
+  background: rgba(255, 255, 255, 0.18);
 }
 .st-chip {
-  flex-shrink: 0;
-  display: flex;
-  align-items: center;
-  gap: 14rpx;
   min-width: 0;
-  padding: 14rpx 6rpx;
-  border-bottom: 2rpx solid rgba(255, 255, 255, 0.07);
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  gap: 6rpx;
+  padding: 10rpx 12rpx 12rpx;
+  border: 2rpx solid rgba(255, 255, 255, 0.09);
+  border-radius: 14rpx;
+  background: rgba(255, 255, 255, 0.035);
   cursor: pointer;
-  transition: background 0.2s;
+  transition: background 0.2s, border-color 0.2s, transform 0.15s;
 }
 .st-chip:hover {
-  background: rgba(var(--ac-rgb), 0.1);
+  background: rgba(var(--ac-rgb), 0.12);
+  border-color: rgba(var(--ac-rgb), 0.5);
+  transform: translateY(-2rpx);
 }
 .st-chip:active {
-  opacity: 0.7;
+  opacity: 0.75;
+  transform: none;
+}
+/* 当前线路：琥珀描边 + 淡底，一眼从换乘清单里挑出来 */
+.st-chip.cur {
+  border-color: rgba(252, 211, 77, 0.5);
+  background: rgba(252, 211, 77, 0.08);
+}
+.st-chip.cur:hover {
+  background: rgba(252, 211, 77, 0.14);
+}
+.st-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8rpx;
+  min-width: 0;
 }
 /* 线路号徽章：实体靛蓝牌，公交站牌视觉；当前线路换成琥珀 */
 .st-no {
-  flex: 0 0 auto;
+  flex: 0 1 auto;
+  min-width: 0;
+  max-width: 100%;
   box-sizing: border-box;
-  min-width: 76rpx;
-  max-width: 150rpx;
-  padding: 4rpx 12rpx;
+  padding: 2rpx 12rpx;
   overflow: hidden;
   text-overflow: ellipsis;
   text-align: center;
@@ -4746,20 +4794,30 @@ export default {
   color: #ffffff;
   font-size: 24rpx;
   font-weight: 800;
+  line-height: 36rpx;
   font-variant-numeric: tabular-nums;
 }
 .st-chip.cur .st-no {
   background: rgba(252, 211, 77, 0.92);
   color: #0b1020;
 }
-.st-route {
-  flex: 1 1 0;
+/* 第二行：乘客最关心的「开往哪」。只允许一行显示，超长终点站名以省略号截断，
+   保证两列卡片网格等高整齐；完整起讫站见卡片 title / .st-end title */
+.st-end {
   min-width: 0;
-  font-size: 23rpx;
+  width: 100%;
+  display: block;
+  font-size: 20rpx;
+  line-height: 28rpx;
   color: rgba(255, 255, 255, 0.8);
+  white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  white-space: nowrap;
+}
+.st-to {
+  margin-right: 6rpx;
+  font-size: 18rpx;
+  color: rgba(255, 255, 255, 0.4);
 }
 .st-cur {
   flex: 0 0 auto;
@@ -4770,22 +4828,25 @@ export default {
 }
 .st-go {
   flex: 0 0 auto;
-  font-size: 28rpx;
+  font-size: 22rpx;
   line-height: 1;
-  color: rgba(255, 255, 255, 0.36);
+  color: rgba(255, 255, 255, 0.28);
   transition: color 0.2s;
 }
 .st-chip:hover .st-go {
   color: var(--ac-text);
 }
 .st-none {
+  grid-column: 1 / -1;
   font-size: 22rpx;
   color: rgba(255, 255, 255, 0.42);
   padding: 8rpx 0;
 }
 .sheet-line {
-  flex: 0 1 auto;
+  flex: 1 1 auto;
   min-width: 0;
+  /* 预留 40 个字宽度：超过该范围才省略，避免过早截断显得突兀 */
+  max-width: 60em;
   overflow: hidden;
   text-overflow: ellipsis;
   font-size: 36rpx;

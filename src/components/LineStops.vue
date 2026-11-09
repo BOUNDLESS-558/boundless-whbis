@@ -110,6 +110,7 @@
                 :class="b.arrived === '1' ? 'arrived' : 'running'"
                 v-for="b in stop.buses"
                 :key="b.busId"
+                :title="busTip(b, stop)"
               >
                 <text class="b-org">{{ b.orgId || '?' }}</text>
                 <text class="b-meta">{{ b.time }} · {{ b.gpsSpeed }}km/h</text>
@@ -245,7 +246,19 @@ export default {
       const h = Math.max(170, count * 108 + 24)
       return { height: h + 'rpx' }
     },
-    // 当前方向中最长站名的行数（每行约 6 个汉字），用于统一预留高度使换乘标签对齐
+    // 当前方向中最长站名的行数（每行约 6 个汉字）/ 字宽（约 28rpx/汉字），用于动态预留节点宽度
+    // 避免 .node 固定 180rpx 导致长站名折叠不可见
+    maxNameWidth() {
+      return this.activeCols.reduce((m, s) => {
+        const len = (s.stopName || '').length
+        // 2行以内撑满节点宽度；超过则单站展开到内容实际宽
+        if (len <= 12) return m
+        return Math.max(m, len * 28 + 40) // +40rpx 余量给首末站徽标/换乘标签
+      }, 180)
+    },
+    nodeMinW() {
+      return this.maxNameWidth + 'rpx'
+    },
     maxNameLines() {
       const perLine = 6
       return this.activeCols.reduce((m, s) => {
@@ -392,6 +405,17 @@ export default {
       const cn = ['', '第一', '第二', '第三', '第四', '第五', '第六', '第七', '第八', '第九']
       const d = String(id || '').charAt(0)
       return d >= '1' && d <= '9' ? `武汉公交集团${cn[Number(d)]}营运公司` : '营运公司未知'
+    },
+    // 在线车辆悬浮提示：编号 / 营运公司 / 所在站点 / 时间 / 速度 / 状态 / 经纬度（与复制列一致）
+    busTip(b, stop) {
+      const state = b.arrived === '1' ? '已到站' : '行驶中'
+      const coord = b.lat != null && b.lng != null ? `${b.lat}, ${b.lng}` : '经纬度未知'
+      return (
+        `${b.orgId || b.busNo || '?'} · ${this.companyOf(b.orgId || b.busNo)}\n` +
+        `所在站点：${stop.stopName || '未知站点'}\n` +
+        `${b.time || '--'} · ${b.gpsSpeed != null ? b.gpsSpeed + 'km/h' : '--'} · ${state}\n` +
+        coord
+      )
     },
     // 一键复制当前方向在线车辆信息（编号 / 营运公司 / 所在站点 / 时间 / 速度 / 状态 / 经纬度），多辆车逐行换行
     copyOnlineBuses() {
@@ -1062,10 +1086,10 @@ export default {
 }
 .node {
   flex-shrink: 0;
-  width: 180rpx;
   display: inline-flex;
   flex-direction: column;
   align-items: center;
+  min-width: v-bind('nodeMinW');
 }
 /* 车辆浮层（高度由内联 busZoneStyle 动态控制，保证线路对齐） */
 .node-bus {

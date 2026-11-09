@@ -339,11 +339,16 @@ const FS5 = 'https://cdn.jsdelivr.net/npm/@fontsource/'
 const LGW = 'https://cdn.jsdelivr.net/npm/lxgw-wenkai-webfont@1.7.0/'
 const LGW_LITE = 'https://cdn.jsdelivr.net/npm/lxgw-wenkai-lite-webfont@1.6.0/'
 const LGW_SCREEN = 'https://cdn.jsdelivr.net/npm/lxgw-wenkai-screen-webfont@1.6.0/'
+// 厂商免费商用字体（小米 MiSans / 华为 HarmonyOS Sans），同样是 unicode-range 分片
+const MISANS = 'https://cdn.jsdelivr.net/npm/misans@5.0.0/lib/Normal/'
+const HARMONY = 'https://cdn.jsdelivr.net/npm/harmonyos-sans-sc-webfont-splitted@1.1.0/dist/'
+// cn-fontsource 系列：社区把免费商用字体切成分片 woff2，单包只含一个 font.css
+const CNFS = 'https://cdn.jsdelivr.net/npm/'
 
 /**
  * 字体档位：css 为需要注入的 <link> 列表；family 为该字体在 CSS 里的 font-family 名。
  * 排序按「日常可用度」：系统默认 → 正文字体（黑/宋/楷）→ 圆体 → 书法展示体。
- * 全部 SIL OFL / 免费商用；CSS 均为 unicode-range 分片，只下载页面用到的字形。
+ * 全部 SIL OFL / 厂商免费商用；CSS 均为 unicode-range 分片，只下载页面用到的字形。
  */
 export const FONT_OPTS = [
   { key: 'system', label: '系统默认', note: '跟随系统 · 零加载', family: '', css: [] },
@@ -366,6 +371,18 @@ export const FONT_OPTS = [
   {
     key: 'noto-serif', label: '思源宋体', note: '衬线宋体 · 文艺', family: "'Noto Serif SC'",
     css: [FS5 + 'noto-serif-sc@5.1.0/400.css', FS5 + 'noto-serif-sc@5.1.0/700.css'],
+  },
+  {
+    key: 'misans', label: 'MiSans 小米', note: '现代黑体 · 大气', family: "'MiSans'",
+    css: [MISANS + 'MiSans-Regular.min.css', MISANS + 'MiSans-Medium.min.css', MISANS + 'MiSans-Bold.min.css'],
+  },
+  {
+    key: 'harmony', label: '鸿蒙黑体', note: 'HarmonyOS · 科技感', family: "'HarmonyOS Sans SC'",
+    css: [HARMONY + 'Regular.css', HARMONY + 'Medium.css', HARMONY + 'Bold.css'],
+  },
+  {
+    key: 'neo-xihei', label: '霞鹜新晰黑', note: '屏幕黑体 · 清晰大气', family: "'LXGW Neo XiHei'",
+    css: [CNFS + 'cn-fontsource-lxgw-neo-xi-hei-regular@1.0.1/font.css'],
   },
   {
     key: 'xiaowei', label: '站酷小薇体', note: '复古宋体 · 秀气', family: "'ZCOOL XiaoWei'",
@@ -394,6 +411,14 @@ export const FONT_OPTS = [
   {
     key: 'liujian', label: '柳建毛草', note: '草书 · 写意', family: "'Liu Jian Mao Cao'",
     css: [FS5 + 'liu-jian-mao-cao@5.1.0/400.css'],
+  },
+  {
+    key: 'smiley', label: '得意黑', note: '潮流标题 · 动感', family: "'Smiley Sans Oblique'",
+    css: [CNFS + 'cn-fontsource-smiley-sans-oblique-regular@1.0.1/font.css'],
+  },
+  {
+    key: 'dingtalk', label: '钉钉进步体', note: '标题感 · 现代', family: "'DingTalk JinBuTi'",
+    css: [CNFS + 'cn-fontsource-ding-talk-jin-bu-ti-regular@1.0.3/font.css'],
   },
 ]
 

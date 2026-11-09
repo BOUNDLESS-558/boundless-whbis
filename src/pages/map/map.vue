@@ -273,7 +273,7 @@
 
           <view class="acct-div"></view>
 
-          <!-- 界面字体：内置 OFL 开源可商用 webfont，unicode-range 分片按需加载。
+          <!-- 界面字体：内置 OFL / 厂商免费商用 webfont，unicode-range 分片按需加载。
                选项卡上的字体名直接用真字体渲染当预览（开窗时预载各档 CSS） -->
           <view class="acct-sec-head" @click="toggleAcctSection('font')">
             <text class="acct-sec-title">界面字体</text>
