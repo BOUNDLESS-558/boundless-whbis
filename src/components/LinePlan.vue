@@ -4,11 +4,15 @@
        版式与车辆面板同出一辙（标题行 + 折叠键 + 列表），字号完全对齐：
        标题 30rpx / 方向徽标 20rpx / 主数据 34rpx / 次要 24rpx / 提示 20rpx / 空态 26rpx -->
   <view class="plans" :class="{ folded: collapsed }">
+    <!-- 标题栏：与车辆面板 .panel-header 同构（左标题含计数，右折叠键） -->
     <view class="plan-head">
-      <text class="ph-title">🕐 发车时刻</text>
-      <text class="ph-count">共 {{ totalCount }} 班</text>
-      <view class="ph-copy" v-if="totalCount" @click="copyPlans" title="一键复制全部班次时刻（TSV，可直接粘贴进表格）">⧉ 复制</view>
+      <view class="plan-title">🕐 发车时刻（共 {{ totalCount }} 班）</view>
       <view class="ph-fold" :class="{ folded: collapsed }" @click="collapsed = !collapsed" :title="collapsed ? '展开' : '折叠'">▾</view>
+    </view>
+    <!-- 工具行：与车辆面板 .panel-tools 同构（左提示，右复制按钮） -->
+    <view class="plan-tools">
+      <text class="ph-hint">{{ sortedByDir[0].length }} 上行 · {{ sortedByDir[1].length }} 下行</text>
+      <view class="ph-copy" v-if="totalCount" @click="copyPlans" title="一键复制全部班次时刻（TSV，可直接粘贴进表格）">⧉ 复制</view>
     </view>
 
     <view class="plan-body" v-show="!collapsed">
@@ -20,15 +24,15 @@
         </view>
 
         <view class="plan-row" v-for="(p, i) in sortedByDir[d]" :key="p.busId || i">
-          <!-- 主数据：发车时间，最大号加粗，tabular-nums 保证数字对齐不动 -->
-          <text class="plan-time" :class="timeState(p.planStartTime)" :title="timeHint(p.planStartTime)">
-            {{ p.planStartTime || '--' }}
-          </text>
-          <!-- 状态徽标：距目标时间 15min 内 / 已过 → 让候车的人一眼看到要等的车 -->
-          <text v-if="timeBadge(p.planStartTime)" class="plan-badge" :class="timeBadgeClass(p.planStartTime)">
-            {{ timeBadge(p.planStartTime) }}
-          </text>
-          <!-- 车辆车牌：次要信息，用胶囊 chip 区隔，不抢时间的视觉权重 -->
+          <!-- 左：发车时间（主视觉）+ 时间感知徽标；右：车辆车牌 chip -->
+          <view class="plan-left">
+            <text class="plan-time" :class="timeState(p.planStartTime)" :title="timeHint(p.planStartTime)">
+              {{ p.planStartTime || '--' }}
+            </text>
+            <text v-if="timeBadge(p.planStartTime)" class="plan-badge" :class="timeBadgeClass(p.planStartTime)">
+              {{ timeBadge(p.planStartTime) }}
+            </text>
+          </view>
           <view class="plan-org-chip" v-if="p.bus">
             <text class="plan-org-icon">🚌</text>
             <text class="plan-org">{{ p.bus }}</text>
@@ -196,43 +200,61 @@ export default {
   flex: 1 1 auto;
   min-height: 0;
 }
-/* ---- 标题行：与 .panel-header 同构（左标题 + 右折叠键） ---- */
+/* ---- 标题栏：与车辆面板 .panel-header 同构（左标题含计数 + 右折叠键） ---- */
 .plan-head {
   flex-shrink: 0;
   display: flex;
   align-items: center;
-  gap: 12rpx;
-  margin-bottom: 14rpx;
+  justify-content: space-between;
+  gap: 10rpx;
+  margin-bottom: 18rpx;
 }
-/* 折叠态只留标题行，底部间距收回（同 .panel.collapsed .panel-header） */
+/* 折叠态只留标题栏，底部间距收回（同 .panel.collapsed .panel-header） */
 .plans.folded .plan-head {
   margin-bottom: 0;
 }
-.ph-title {
-  flex: 0 0 auto;
+.plan-title {
+  flex: 1;
+  min-width: 0;
   font-size: 30rpx;
   font-weight: 700;
   color: #fff;
+  overflow: hidden;
+  text-overflow: ellipsis;
   white-space: nowrap;
 }
-/* 班次合计：贴右，字号取面板提示文字 .pt-hint 的 20rpx */
-.ph-count {
+/* 工具行：与车辆面板 .panel-tools 同构（左提示，右复制按钮） */
+.plan-tools {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14rpx;
+  margin-bottom: 18rpx;
+}
+.plans.folded .plan-tools {
+  margin-bottom: 0;
+}
+.ph-hint {
   flex: 1;
   min-width: 0;
   font-size: 20rpx;
   color: rgba(255, 255, 255, 0.42);
-  text-align: right;
+  text-align: left;
   white-space: nowrap;
 }
-/* 复制按钮：与车辆面板的 .copy-btn 同族幽灵小圆角，hover 提到靛蓝 */
+/* 复制按钮：与车辆面板 .copy-btn 同款胶囊（56rpx 高 / 24rpx 字） */
 .ph-copy {
   flex: 0 0 auto;
-  font-size: 22rpx;
+  height: 56rpx;
+  box-sizing: border-box;
+  line-height: 52rpx;
+  font-size: 24rpx;
   color: rgba(255, 255, 255, 0.66);
   background: rgba(255, 255, 255, 0.08);
   border: 2rpx solid rgba(255, 255, 255, 0.14);
   border-radius: 999rpx;
-  padding: 6rpx 18rpx;
+  padding: 0 20rpx;
   cursor: pointer;
   white-space: nowrap;
   transition: transform 0.15s, background 0.2s, color 0.2s;
@@ -327,9 +349,17 @@ export default {
 .plan-row {
   display: flex;
   align-items: center;
+  justify-content: space-between;
   gap: 16rpx;
   padding: 22rpx 0;
   border-top: 2rpx solid rgba(255, 255, 255, 0.08);
+}
+/* 左：发车时间 + 时间感知徽标成组；与车辆面板 .bus-left/.bus-right 的 space-between 同构 */
+.plan-left {
+  display: flex;
+  align-items: center;
+  gap: 14rpx;
+  min-width: 0;
 }
 /* 主数据：发车时间 — 最大号加粗，tabular-nums 保证数字对齐；
    soon（即将发车）用琥珀色脉冲感强调，past（已过）用偏灰降低权重 */
