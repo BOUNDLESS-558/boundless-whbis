@@ -11,6 +11,8 @@
     "scan:routes": "node scripts/scan-routes.mjs",
     "scan:routes:stops": "node scripts/scan-routes.mjs --no-route",
     "scan:routes:amap": "node scripts/scan-routes-amap.mjs",
+    "scan:foreign": "node scripts/scan-foreign.mjs",
+    "build:foreign-net": "node scripts/build-foreign-net.mjs",
     "scan:manifest": "node scripts/build-manifest.mjs",
     "probe:suggest": "node scripts/probe-line-suggest.mjs",
     "dev:custom": "uni -p",

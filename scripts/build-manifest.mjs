@@ -18,9 +18,16 @@ const OUT = path.join(LINES_DIR, 'manifest.json')
 
 const lib = JSON.parse(fs.readFileSync(LIB, 'utf8'))
 const nameOf = new Map((lib.lines || []).map((l) => [String(l.no), l.name]))
+// 非集团线路的展示名也并进来，清单里不再显示 name:null
+try {
+  const fl = JSON.parse(fs.readFileSync('src/static/foreign-lines.json', 'utf8'))
+  for (const l of fl.lines || []) nameOf.set(String(l.no), l.name || l.no)
+} catch (e) { /* 资产未生成时忽略 */ }
 
-const files = fs.readdirSync(LINES_DIR).filter((x) => /^b\d+\.json$/.test(x))
+// 集团分片 bNN.json；非集团分片按「公司缩写 + B + 数字」命名（CCB01 / MLB01 / HQB01…）
+const files = fs.readdirSync(LINES_DIR).filter((x) => /^(b|(CC|ML|HQ)B)\d+\.json$/.test(x))
 const summary = { total: 0, amap: 0, osrm: 0, empty: 0, shards: files.length, totalPoints: 0 }
+const foreign = { total: 0, amap: 0, shards: 0 }
 const lines = {}
 
 for (const f of files) {
@@ -49,7 +56,20 @@ for (const f of files) {
   }
 }
 
-const manifest = { generatedAt: new Date().toISOString(), summary, lines }
+const isForeignShard = (f) => /^(CC|ML|HQ)B\d+\.json$/.test(f)
+for (const f of files.filter(isForeignShard)) {
+  foreign.shards++
+  const j = JSON.parse(fs.readFileSync(path.join(LINES_DIR, f), 'utf8'))
+  for (const row of Object.values(j.lines || {})) {
+    for (const d of ['0', '1']) {
+      const r = row.dirs && row.dirs[d]
+      if (!r) continue
+      foreign.total++
+      if (r.source === 'amap') foreign.amap++
+    }
+  }
+}
+const manifest = { generatedAt: new Date().toISOString(), summary, foreign, lines }
 fs.writeFileSync(OUT, JSON.stringify(manifest))
 console.log('清单已生成：', OUT)
 console.log(JSON.stringify(summary, null, 2))
