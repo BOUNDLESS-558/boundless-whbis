@@ -24,15 +24,8 @@
         </view>
 
         <view class="plan-row" v-for="(p, i) in sortedByDir[d]" :key="p.busId || i">
-          <!-- 左：发车时间（主视觉）+ 时间感知徽标；右：车辆车牌 chip -->
-          <view class="plan-left">
-            <text class="plan-time" :class="timeState(p.planStartTime)" :title="timeHint(p.planStartTime)">
-              {{ p.planStartTime || '--' }}
-            </text>
-            <text v-if="timeBadge(p.planStartTime)" class="plan-badge" :class="timeBadgeClass(p.planStartTime)">
-              {{ timeBadge(p.planStartTime) }}
-            </text>
-          </view>
+          <!-- 发车时间（主视觉，与车辆面板自编号同色）在左，车辆车牌 chip 在右 -->
+          <text class="plan-time" :title="timeHint(p.planStartTime)">{{ p.planStartTime || '--' }}</text>
           <view class="plan-org-chip" v-if="p.bus">
             <text class="plan-org-icon">🚌</text>
             <text class="plan-org">{{ p.bus }}</text>
@@ -154,31 +147,6 @@ export default {
       const now = new Date()
       const target = new Date(now); target.setHours(h, m, 0, 0)
       return Math.round((target - now) / 60000)
-    },
-    // 时间视觉状态类名：'soon'（15min 内）、'past'（已过）、''（正常）
-    timeState(when) {
-      const diff = this._planMinutesFromNow(when)
-      if (diff == null) return ''
-      if (diff < 0 && diff > -15) return 'soon'
-      if (diff >= 0 && diff <= 15) return 'soon'
-      if (diff > 15) return 'past'
-      return ''
-    },
-    // 状态徽标文案（15min 窗口 + 刚过 15min）
-    timeBadge(when) {
-      const diff = this._planMinutesFromNow(when)
-      if (diff == null) return null
-      if (diff < -15) return null
-      if (diff < 0) return '即将'
-      if (diff <= 15) return '已到'
-      return null
-    },
-    // 状态徽标样式类名
-    timeBadgeClass(when) {
-      const diff = this._planMinutesFromNow(when)
-      if (diff == null) return ''
-      if (diff < 0) return 'badge-soon'
-      return 'badge-past'
     },
     // 鼠标 hover 时的 tooltip 提示文案
     timeHint(when) {
@@ -354,15 +322,8 @@ export default {
   padding: 22rpx 0;
   border-top: 2rpx solid rgba(255, 255, 255, 0.08);
 }
-/* 左：发车时间 + 时间感知徽标成组；与车辆面板 .bus-left/.bus-right 的 space-between 同构 */
-.plan-left {
-  display: flex;
-  align-items: center;
-  gap: 14rpx;
-  min-width: 0;
-}
-/* 主数据：发车时间 — 最大号加粗，tabular-nums 保证数字对齐；
-   soon（即将发车）用琥珀色脉冲感强调，past（已过）用偏灰降低权重 */
+/* 主数据：发车时间 — 与车辆面板 .bus-org 同色（var(--ac-hi)）、同字重，
+   tabular-nums 保证数字对齐不跳动 */
 .plan-time {
   flex: 0 0 auto;
   font-size: 42rpx;
@@ -372,45 +333,18 @@ export default {
   letter-spacing: 1rpx;
   line-height: 1;
 }
-.plan-time.soon {
-  color: #fbbf24;
-  text-shadow: 0 0 12rpx rgba(251, 191, 36, 0.35);
-}
-.plan-time.past {
-  color: rgba(255, 255, 255, 0.38);
-}
-/* 时间状态徽标：仅 within ±15min 时显示，让用户一眼看到要等的车 */
-.plan-badge {
-  flex: 0 0 auto;
-  font-size: 18rpx;
-  font-weight: 700;
-  padding: 4rpx 12rpx;
-  border-radius: 999rpx;
-  white-space: nowrap;
-  letter-spacing: 1rpx;
-}
-.plan-badge.badge-soon {
-  color: #fef3c7;
-  background: rgba(245, 158, 11, 0.28);
-  border: 1rpx solid rgba(245, 158, 11, 0.5);
-}
-.plan-badge.badge-past {
-  color: rgba(255, 255, 255, 0.55);
-  background: rgba(255, 255, 255, 0.08);
-  border: 1rpx solid rgba(255, 255, 255, 0.12);
-}
-/* 车辆车牌：胶囊 chip 压在后，次要视觉权重 */
+/* 车辆车牌：次要信息，灰阶与车辆面板 .bus-hash 对齐（0.55 灰），不抢时间主色 */
 .plan-org-chip {
   flex: 0 0 auto;
   display: inline-flex;
   align-items: center;
   gap: 6rpx;
   padding: 6rpx 12rpx;
-  background: rgba(255, 255, 255, 0.07);
-  border: 1rpx solid rgba(255, 255, 255, 0.14);
+  background: rgba(255, 255, 255, 0.06);
+  border: 1rpx solid rgba(255, 255, 255, 0.12);
   border-radius: 999rpx;
   font-size: 22rpx;
-  color: rgba(255, 255, 255, 0.6);
+  color: rgba(255, 255, 255, 0.55);
   font-variant-numeric: tabular-nums;
 }
 .plan-org-icon { font-size: 20rpx; }
