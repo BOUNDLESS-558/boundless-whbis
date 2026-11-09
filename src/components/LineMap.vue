@@ -323,7 +323,7 @@
       <!-- 实时车辆面板（可折叠，列表随视角方向过滤） -->
       <view class="panel" :class="{ collapsed: panelCollapsed, 'menu-open': refreshMenu }">
         <view class="panel-header">
-          <view class="panel-title">实时车辆（{{ shownBuses.length }}辆 · {{ dirFilterLabel }}）</view>
+          <view class="panel-title">实时车辆（{{ shownBuses.length }}辆）</view>
           <FavStar v-if="lineNo && !cityOn" :line="favLine" small />
           <view class="collapse-btn" :class="{ folded: panelCollapsed }" @click="panelCollapsed = !panelCollapsed" :title="panelCollapsed ? '展开' : '折叠'">▾</view>
         </view>
@@ -365,18 +365,21 @@
         <view class="panel-body" v-show="!panelCollapsed">
           <!-- 普通 view + overflow-y 自己滚：不用 <scroll-view>，它在 flex 限高下内层会涨到内容高（宿主 overflow 可视），车一多就画到卡外面 -->
           <view class="bus-list" v-if="shownBuses.length">
-            <view class="bus-item" v-for="(bus, i) in shownBuses" :key="bus.dir + '-' + i" @click="selectBus(bus)">
-              <view class="bus-left">
-                <!-- ★ 自编号（由 MD5 加密值还原，如 3240）+ 方向徽标 -->
-                <view class="bus-org">
-                  {{ bus.orgId || '未知' }}
-                  <text class="bus-dir" :class="'d' + bus.dir">{{ bus.dir === 0 ? '上行' : '下行' }}</text>
-                </view>
-                <view class="bus-hash">{{ bus.busNo }}</view>
+            <view class="bus-group" v-for="g in groupedBuses" :key="'g' + g.dir">
+              <view class="bus-group-head">
+                <text class="bus-dir" :class="'d' + g.dir">{{ g.name }}</text>
+                <text class="bus-group-count">{{ g.buses.length }} 辆</text>
               </view>
-              <view class="bus-right">
-                <view class="bus-speed">⚡ {{ bus.gpsSpeed }} km/h</view>
-                <view class="bus-time">🕐 {{ bus.time }}</view>
+              <view class="bus-item" v-for="(bus, i) in g.buses" :key="bus.dir + '-' + i" @click="selectBus(bus)">
+                <view class="bus-left">
+                  <!-- ★ 自编号（由 MD5 加密值还原，如 3240） -->
+                  <view class="bus-org">{{ bus.orgId || '未知' }}</view>
+                  <view class="bus-hash">{{ bus.busNo }}</view>
+                </view>
+                <view class="bus-right">
+                  <view class="bus-speed">⚡ {{ bus.gpsSpeed }} km/h</view>
+                  <view class="bus-time">🕐 {{ bus.time }}</view>
+                </view>
               </view>
             </view>
           </view>
@@ -840,6 +843,14 @@ export default {
     shownBuses() {
       const all = [...this.busesByDir[0], ...this.busesByDir[1]]
       return this.dirFilter === 2 ? all : all.filter((b) => b.dir === this.dirFilter)
+    },
+    // 按方向分组（参考发车时刻的分组方式）：全部视角分上行/下行两组，单方向只一组；空组不渲染
+    groupedBuses() {
+      const name = { 0: '上行', 1: '下行' }
+      const dirs = this.dirFilter === 2 ? [0, 1] : [this.dirFilter]
+      return dirs
+        .map((d) => ({ dir: d, name: name[d], buses: this.busesByDir[d] || [] }))
+        .filter((g) => g.buses.length)
     },
     dirFilterLabel() {
       return this.dirFilter === 2 ? '全部' : DIR_STYLE[this.dirFilter].name
@@ -4521,6 +4532,24 @@ export default {
   color: #fda4af;
   background: rgba(225, 29, 72, 0.18);
   border: 2rpx solid rgba(251, 113, 133, 0.45);
+}
+/* 车辆分组头：方向徽标 + 辆数（参考发车时刻的分组方式，行内不再重复方向） */
+.bus-group-head {
+  display: flex;
+  align-items: center;
+  gap: 12rpx;
+  padding: 14rpx 0 6rpx;
+}
+.bus-group-head .bus-dir {
+  margin-left: 0;
+}
+.bus-group-count {
+  flex: 1;
+  min-width: 0;
+  font-size: 20rpx;
+  color: rgba(255, 255, 255, 0.42);
+  text-align: right;
+  white-space: nowrap;
 }
 /* 车辆详情窗：可拖动浮窗（默认居中贴底；拖动过后改用 left/top 绝对定位） */
 .bus-sheet {
