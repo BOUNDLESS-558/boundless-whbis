@@ -15,8 +15,9 @@
 - **触发条件**：高德日配额于**北京时间 0:00 重置**后执行（建议先跑集团、再跑非集团增量）。
 - **命令**（采集器有跳过逻辑，已是 `amap` 的行自动跳过 → 断点续跑不丢进度）：
   ```powershell
-  # 免费 Web 服务 Key，无需签名（已在本地用过，可复用）
-  $env:AMAP_KEY="75134897b6ea3686545a60bc7748511e"
+  # Key 走环境变量 / GitHub Actions Secret，绝不写入仓库
+  #   本地：已设置用户级环境变量 AMAP_KEY（不进版本库；轮换后需同步更新）
+  #   CI  ：仓库 Settings -> Secrets and variables -> Actions -> AMAP_KEY
   npm run scan:routes:amap            # 方案 A：全量补齐集团剩余方向
   # 方案 B（省额度）：先 npm run scan:manifest 筛出 source=osrm 且 chord 多的“真断点”线，
   #   再用 --only 只采这些，其余留 OSRM（视觉已可接受）
