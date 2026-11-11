@@ -5,8 +5,13 @@ name: 高德线路走向补全
 #   Pages 发布源是明确的 pages 分支，改默认分支不影响站点。
 on:
   schedule:
-    # UTC 16:20 = 北京时间 00:20（高德日配额 0:00 重置后留 20 分钟余量）
+    # UTC 16:20 = 北京时间次日 00:20（高德日配额 0:00 重置后留 20 分钟余量）
+    # 每天：只处理台账里没有记录的线路，已采过的绝不重打
     - cron: '20 16 * * *'
+    # 每周日 UTC 16:40 = 北京时间周一 00:40：额外重试历史 partial/no-match，
+    # 否则这些「试过但没成功」的线路会被台账永久跳过，剩余数据补不齐。
+    # done 状态仍被采集器硬性跳过，不会造成重复请求。
+    - cron: '40 16 * * 0'
   workflow_dispatch:
     inputs:
       only:
@@ -19,6 +24,11 @@ on:
         default: '0'
       probe:
         description: '仅做连通性探针，不采集、不提交'
+        type: boolean
+        required: false
+        default: false
+      retry_unmatched:
+        description: '重试历史未命中线路（partial/no-match）；已 done 的线路仍绝不重打'
         type: boolean
         required: false
         default: false
@@ -59,6 +69,20 @@ jobs:
           fi
           echo "AMAP_KEY 已配置（长度 ${#AMAP_KEY}，值不打印）"
 
+      - name: 台账自检（去重依据）
+        if: ${{ github.event_name == 'schedule' || inputs.probe != true }}
+        run: |
+          node -e "
+            const fs=require('fs');
+            const p='scripts/.amap-progress.json';
+            const j=JSON.parse(fs.readFileSync(p,'utf8').replace(/^\uFEFF/,''));
+            const t={}; for(const v of Object.values(j.lines)) t[v]=(t[v]||0)+1;
+            console.log('台账已记录 '+Object.keys(j.lines).length+' 条线路：'+JSON.stringify(t));
+            console.log('这些线路本轮一律跳过，不会再次请求高德；仅处理未记录或被标记为待重试的线路。');
+            const shards=fs.readdirSync('src/static/lines').filter(x=>x.endsWith('.json'));
+            console.log('分支内现有分片文件 '+shards.length+' 个（含 manifest.json）。');
+          "
+
       - name: 连通性探针
         continue-on-error: true
         env:
@@ -76,24 +100,34 @@ jobs:
 
       - name: 采集（断点续跑）
         if: ${{ github.event_name == 'schedule' || inputs.probe != true }}
+        # 留出余量：步骤超时只是本步失败，后面 !cancelled() 的提交步骤仍会执行，
+        # 把已逐条落盘的台账/分片提交出去，避免整轮进度丢失导致次日重复请求。
+        timeout-minutes: 150
         env:
           AMAP_KEY: ${{ secrets.AMAP_KEY }}
           AMAP_SECRET: ${{ secrets.AMAP_SECRET }}
           IN_ONLY: ${{ inputs.only }}
           IN_MAX: ${{ inputs.max_lines }}
+          IN_RETRY: ${{ inputs.retry_unmatched }}
+          WEEKLY_RETRY: ${{ github.event.schedule == '40 16 * * 0' }}
         run: |
           ARGS=()
           if [ -n "$IN_ONLY" ]; then ARGS+=(--only "$IN_ONLY"); fi
           if [ -n "$IN_MAX" ] && [ "$IN_MAX" != "0" ]; then ARGS+=(--max-lines "$IN_MAX"); fi
+          if [ "$IN_RETRY" = "true" ] || [ "$WEEKLY_RETRY" = "true" ]; then ARGS+=(--retry-unmatched); fi
           echo "参数：${ARGS[*]:-（无）}"
           node scripts/scan-routes-amap.mjs "${ARGS[@]}"
 
       - name: 刷新资产清单
-        if: ${{ github.event_name == 'schedule' || inputs.probe != true }}
+        # !cancelled()：采集步骤失败/超时也必须刷新，否则分片与清单会不一致
+        if: ${{ !cancelled() && (github.event_name == 'schedule' || inputs.probe != true) }}
         run: node scripts/build-manifest.mjs
 
       - name: 提交并推送数据
-        if: ${{ github.event_name == 'schedule' || inputs.probe != true }}
+        # 关键：不能用默认的 success()。采集器每条线路都立即写台账，一旦中途失败或
+        # 超时被杀，若这步被跳过，本轮进度就随 runner 销毁 → 次日重复请求已采线路。
+        # !cancelled() 保证只要 job 没被手动取消，就一定把进度提交回 amap-data。
+        if: ${{ !cancelled() && (github.event_name == 'schedule' || inputs.probe != true) }}
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
