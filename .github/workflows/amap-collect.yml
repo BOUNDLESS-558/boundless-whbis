@@ -40,7 +40,9 @@ jobs:
         uses: actions/checkout@v4
         with:
           ref: amap-data
-          fetch-depth: 1
+          # 全量历史（本分支只有孤立根提交，成本极低）；浅克隆会让后续 commit+push 报
+          # "shallow update not allowed"
+          fetch-depth: 0
 
       - name: 准备 Node
         uses: actions/setup-node@v4
