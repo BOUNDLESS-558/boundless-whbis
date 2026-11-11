@@ -5,13 +5,17 @@ name: 高德线路走向补全
 #   Pages 发布源是明确的 pages 分支，改默认分支不影响站点。
 on:
   schedule:
-    # UTC 16:20 = 北京时间次日 00:20（高德日配额 0:00 重置后留 20 分钟余量）
+    # 北京时间 = UTC+8。要求落在凌晨 3:00~6:00 → 对应 UTC 前一天 19:00~22:00。
+    # GitHub cron 只能给一个时刻（不能给区间），选 UTC 19:20 = 北京 03:20：
+    #   · 高德日配额北京 0:00 已重置，此时额度充足
+    #   · 避开整点（GitHub 建议错峰，整点调度最拥堵）
+    #   · 即便 schedule 延迟 30 分钟~2 小时，实际仍落在 3~6 点窗口内，余量 2h40m
     # 每天：只处理台账里没有记录的线路，已采过的绝不重打
-    - cron: '20 16 * * *'
-    # 每周日 UTC 16:40 = 北京时间周一 00:40：额外重试历史 partial/no-match，
+    - cron: '20 19 * * *'
+    # 每周日 UTC 20:40 = 北京时间周一 04:40：额外重试历史 partial/no-match，
     # 否则这些「试过但没成功」的线路会被台账永久跳过，剩余数据补不齐。
-    # done 状态仍被采集器硬性跳过，不会造成重复请求。
-    - cron: '40 16 * * 0'
+    # done 状态仍被采集器硬性跳过，不会造成重复请求。同样落在 3~6 点窗口内。
+    - cron: '40 20 * * 0'
   workflow_dispatch:
     inputs:
       only:
@@ -109,7 +113,7 @@ jobs:
           IN_ONLY: ${{ inputs.only }}
           IN_MAX: ${{ inputs.max_lines }}
           IN_RETRY: ${{ inputs.retry_unmatched }}
-          WEEKLY_RETRY: ${{ github.event.schedule == '40 16 * * 0' }}
+          WEEKLY_RETRY: ${{ github.event.schedule == '40 20 * * 0' }}
         run: |
           ARGS=()
           if [ -n "$IN_ONLY" ]; then ARGS+=(--only "$IN_ONLY"); fi
