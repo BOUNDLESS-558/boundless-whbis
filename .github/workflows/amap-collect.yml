@@ -73,7 +73,7 @@ jobs:
             -d '{"cityCode":"420100","lineCode":"420100-337-0"}'
 
       - name: 采集（断点续跑）
-        if: ${{ inputs.probe != true }}
+        if: ${{ github.event_name == 'schedule' || inputs.probe != true }}
         env:
           AMAP_KEY: ${{ secrets.AMAP_KEY }}
           AMAP_SECRET: ${{ secrets.AMAP_SECRET }}
@@ -87,11 +87,11 @@ jobs:
           node scripts/scan-routes-amap.mjs "${ARGS[@]}"
 
       - name: 刷新资产清单
-        if: ${{ inputs.probe != true }}
+        if: ${{ github.event_name == 'schedule' || inputs.probe != true }}
         run: node scripts/build-manifest.mjs
 
       - name: 提交并推送数据
-        if: ${{ inputs.probe != true }}
+        if: ${{ github.event_name == 'schedule' || inputs.probe != true }}
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
