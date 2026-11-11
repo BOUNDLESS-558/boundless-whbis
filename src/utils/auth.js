@@ -39,6 +39,7 @@ export const EMBEDDED_ACCOUNTS = [
   'WG6120BEVHR3',
   'Lazian-',
   'XY8xiaoyu8',
+  'turbo',
 ]
 const EMBEDDED_MAP = new Map(EMBEDDED_ACCOUNTS.map((n) => [normAccount(n), n]))
 

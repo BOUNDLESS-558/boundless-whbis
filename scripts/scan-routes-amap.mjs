@@ -17,6 +17,17 @@
  *   node scripts/scan-routes-amap.mjs --only 337,909,273      # 小样本先验证字段/覆盖率
  *   node scripts/scan-routes-amap.mjs                          # 全量（按免费额度限速）
  *   node scripts/scan-routes-amap.mjs --city 武汉 --delay 1100 # 控制 QPS（免费 1000~5000/日）
+ *   node scripts/scan-routes-amap.mjs --retry-unmatched         # 只重试未命中的线，done 的不动
+ *
+ * 断点续跑：scripts/.amap-progress.json 记录每条线的采集结果（done / partial /
+ * no-match / not-found），已记录的线直接跳过，高德未收录 / 方向匹配不上的也不会每轮重打。
+ * 接口失败、/line 探测失败都不记账，下一轮自动重试；初始台账会自动从现有资产回填
+ * 「所有方向已是 amap」的线路。
+ *
+ * 主链路 linename 日配额耗尽(10044) 时自动切备用链路 inputtips → lineid（配额池独立）。
+ * ⚠ 备用链路对集团纯数字线路号覆盖率低（inputtips 是模糊搜索，常只给 408路 / 轨道交通4号线
+ * 这类干扰项），所以它查不到精确 POI 时返回 null 而不记账，次日主链路额度恢复后仍会重试。
+ * 两条链路配额都耗尽才提前停机。
  *
  * 不写 Key 直接退出并提示。
  */
@@ -71,6 +82,11 @@ const CITYNAME = argOf('city', '武汉')
 const DELAY = Math.max(0, Number(argOf('delay', 1100)))
 const FORCE = has('force')
 const DRY = has('dry')
+// 只重试「未命中」的线路（partial / no-match / not-found），已 done 的不动，比 --force 省额度
+const RETRY_UNMATCHED = has('retry-unmatched')
+// 采集进度台账：记录每条线已尝试的结果，避免「高德未收录 / 方向未匹配」的线路每轮重复消耗日配额。
+// 单独放 scripts/ 下，不进 src/static（也就不会进 H5 产物）。
+const PROGRESS = path.resolve(argOf('progress', 'scripts/.amap-progress.json'))
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
 
 // ── 分片读写（与 scan-routes.mjs 同结构，独立维护，避免互相耦合）──
@@ -89,7 +105,9 @@ function loadShard(key) {
   return data
 }
 function rowOf(no, dir) {
-  const shard = loadShard(String(no))
+  // 必须与 putRow 用同一个分片键：以前这里写成 String(no)，读的是不存在的 "4.json"，
+  // 导致「已是 amap 就跳过」恒不成立 → 每轮把全部线路重打一遍高德并重新 probe /line。
+  const shard = loadShard(shardOf(no))
   const line = shard.lines[String(no)]
   return line && line.dirs && line.dirs[String(dir)]
 }
@@ -119,6 +137,34 @@ let flushTail = Promise.resolve()
 function requestFlush() {
   flushTail = flushTail.then(() => flushDirty()).catch((e) => console.error('[flush]', e && e.message))
   return flushTail
+}
+
+// ── 采集进度台账（去重）──
+// done      = 该线所有方向都已是 amap
+// partial   = 部分方向命中 amap，其余方向尽力后仍无法匹配
+// no-match  = 高德有该线数据，但起讫站名匹配不上任何方向
+// not-found = 高德确认未收录（status=0 / infocode=10000）
+// 接口失败(null)、/line 探测失败、日配额耗尽 → 不记账，下一轮自动重试。
+const progress = { updated: '', version: 1, lines: {} }
+function loadProgress() {
+  try {
+    const j = JSON.parse(fs.readFileSync(PROGRESS, 'utf8'))
+    if (j && j.lines && typeof j.lines === 'object') Object.assign(progress.lines, j.lines)
+  } catch (e) { /* 首次运行：空台账 */ }
+}
+function saveProgress() {
+  if (DRY) return
+  progress.updated = new Date().toISOString()
+  fs.mkdirSync(path.dirname(PROGRESS), { recursive: true })
+  fs.writeFileSync(PROGRESS, JSON.stringify(progress) + '\n', 'utf8')
+}
+function mark(no, state) { progress.lines[String(no)] = state }
+function isLogged(no) {
+  if (FORCE) return false
+  const s = progress.lines[String(no)]
+  if (!s) return false
+  // --retry-unmatched：只放行未完成的，done 的绝不重打
+  return !(RETRY_UNMATCHED && s !== 'done')
 }
 
 // ── /line 探测（仅当现有资产缺该方向站点时用来补 stops/base）──
@@ -159,7 +205,62 @@ function slimStops(stops) {
 }
 
 // ── 高德公交信息查询 ──
+// linename 日配额耗尽后置位 → 自动切备用链路；备用链路也耗尽才停机。
+let QUOTA_EXHAUSTED = false
+let FALLBACK_EXHAUSTED = false
+
+/** 通用 GET（含可选签名）；失败返回 null */
+async function amapGet(pathname, params) {
+  const p = { ...params, key: KEY, output: 'json' }
+  const sig = amapSig(p)
+  const qs = Object.entries(p)
+    .map(([k, v]) => `${k}=${encodeURIComponent(v)}`).join('&') + (sig ? `&sig=${sig}` : '')
+  try {
+    const res = await fetch(`https://restapi.amap.com${pathname}?${qs}`, { signal: AbortSignal.timeout(15000) })
+    return await res.json()
+  } catch (e) { return null }
+}
+function isQuotaOut(j) {
+  return !!(j && (j.infocode === '10044' || /DAILY_QUERY_OVER_LIMIT/i.test(j.info || '')))
+}
+/** 「337路(...)」这类 POI 名是否就是该线路号；避免把 4路 匹配到 40路 / 地铁4号线 */
+function tipMatchesNo(name, no) {
+  const s = String(name || '').trim()
+  const n = String(no)
+  if (!s.startsWith(n)) return false
+  return /^(路|线|\(|（|\s|$)/.test(s.slice(n.length))
+}
+
+/**
+ * 备用链路：/v3/assistant/inputtips?datatype=busline 拿线路 POI id，
+ * 再 /v3/bus/lineid?id=... 取完整走向。两个接口与 linename 的日配额分开计算
+ * （实测 linename 返回 10044 时这条链路仍可用，见 scripts/scan-foreign.mjs 汉奇采集）。
+ * lineid 返回的 busline 同样含 polyline / start_stop / end_stop / busstops，
+ * 结构与 linename 一致 → 直接喂给 matchBusline，主循环无需改动。
+ */
+async function queryAmapFallback(lineNo) {
+  const t = await amapGet('/v3/assistant/inputtips', {
+    keywords: String(lineNo), city: CITYNAME, citylimit: 'true', datatype: 'busline',
+  })
+  if (isQuotaOut(t)) { FALLBACK_EXHAUSTED = true; return null }
+  if (!t || t.status !== '1') return null
+  const ids = (t.tips || []).filter((x) => x && x.id && tipMatchesNo(x.name, lineNo)).slice(0, 4)
+  // inputtips 是模糊搜索，对集团纯数字号经常只返回「408路 / 轨道交通4号线」这类干扰项，
+  // 甚至 0 条。查不到精确 POI 一律返回 null（= 本轮无法判定，不记账），
+  // 等 linename 次日额度恢复后用主链路重试；绝不能记成 not-found 把线路永久跳过。
+  if (!ids.length) return null
+  const out = []
+  for (const x of ids) {
+    const j = await amapGet('/v3/bus/lineid', { id: String(x.id), city: CITYNAME, extensions: 'all' })
+    if (isQuotaOut(j)) { FALLBACK_EXHAUSTED = true; return null }
+    const b = j && Array.isArray(j.buslines) && j.buslines[0]
+    if (b && b.polyline) out.push(b)
+  }
+  return out.length ? out : null
+}
+
 async function queryAmap(lineNo) {
+  if (QUOTA_EXHAUSTED) return queryAmapFallback(lineNo)
   const params = {
     key: KEY, city: CITYNAME, keywords: String(lineNo),
     extensions: 'all', output: 'json', citylimit: 'true',
@@ -174,8 +275,15 @@ async function queryAmap(lineNo) {
       const j = await res.json()
       if (j && j.status === '1' && Array.isArray(j.buslines)) return j.buslines
       if (j && j.infocode === '10000' && j.status === '0') return [] // 查无此线
+      if (isQuotaOut(j)) {
+        if (!QUOTA_EXHAUSTED) {
+          QUOTA_EXHAUSTED = true
+          console.error(`\n  [amap] linename 日配额耗尽（${j.infocode}），自动切换备用链路 inputtips → lineid，本轮继续采集。`)
+        }
+        return queryAmapFallback(lineNo)
+      }
       // 额度/频率类报错先提示但不死循环
-      if (j && (j.infocode === '10003' || j.infocode === '10004' || j.infocode === '10010')) {
+      if (j && (j.infocode === '10003' || j.infocode === '10004' || j.infocode === '10010' || j.infocode === '10002')) {
         console.error(`  [amap] ${lineNo} 受限 ${j.infocode}，${attempt < 2 ? '退避重试' : '跳过'}`)
       }
       if (attempt === 2) return null
@@ -228,24 +336,55 @@ if (!DRY) fs.mkdirSync(OUT, { recursive: true })
 
 const stats = { total: todo.length, done: 0, skipped: 0, matched: 0, probe: 0,
   amapMiss: 0, dirMiss: 0, fallback: 0 }
+
+// 台账初始化：首次运行时按现有资产回填「所有方向已是 amap」的线路，
+// 这样历史采集成果也进入台账，不会被重复请求。
+loadProgress()
+let seeded = 0
+for (const l of lines) {   // 用全量库回填，而非本轮 todo：--only 小样本也能记全历史成果
+  const no = String(l.no)
+  if (progress.lines[no]) continue
+  const ds = (l.dirs && l.dirs.length ? l.dirs : [0]).map(Number)
+  if (ds.every((d) => { const r = rowOf(no, d); return r && r.source === 'amap' })) {
+    mark(no, 'done')
+    seeded++
+  }
+}
+saveProgress()
+const loggedBefore = Object.keys(progress.lines).length
 console.log(`高德采集：候选 ${todo.length} 条线，城市 ${CITYNAME}，间隔 ${DELAY}ms${DRY ? '（dry，不落盘）' : ''}`)
+console.log(`进度台账 ${path.relative(process.cwd(), PROGRESS)}：已记录 ${loggedBefore} 条线（本次回填 ${seeded} 条）`)
 
 let doneCount = 0
 for (const l of todo) {
+  if (FALLBACK_EXHAUSTED) break
   const no = String(l.no)
   const dirs = (l.dirs && l.dirs.length ? l.dirs : [0]).map(Number)
 
-  // 已全是 amap 且非强制 → 整条线跳过
+  // 台账命中即跳过：包括「高德未收录」「方向未匹配」这些过去每轮都会重打的线路
+  if (isLogged(no)) { stats.skipped++; continue }
+
+  // 双保险：台账被手删时，资产本身已全是 amap 的线也不重打
   if (!FORCE && dirs.every((d) => { const r = rowOf(no, d); return r && r.source === 'amap' })) {
+    mark(no, 'done')
+    saveProgress()
     stats.skipped++
     continue
   }
 
   const buslines = await queryAmap(no)
+  if (FALLBACK_EXHAUSTED) break           // 两条链路都耗尽：不记账，下一轮重试
   if (buslines === null) { stats.amapMiss++; continue } // 接口失败：保留现有 B 行，下一轮重试
-  if (!buslines.length) { stats.amapMiss++; continue }   // 高德未收录：保留现有 B 行
+  if (!buslines.length) {                              // 高德确认未收录：记账，以后不再问
+    stats.amapMiss++
+    mark(no, 'not-found')
+    saveProgress()
+    continue
+  }
 
   let lineMatched = false
+  let unresolved = 0      // 该线仍未落 amap 的方向数
+  let transient = false   // /line 探测失败属临时故障 → 不记账，下轮重试
   for (const d of dirs) {
     const prev = rowOf(no, d)
     if (!FORCE && prev && prev.source === 'amap') { stats.skipped++; continue }
@@ -257,14 +396,14 @@ for (const l of todo) {
       rawStops = prev.stops
     } else {
       const r = await probe(l.code || no, d)
-      if (!r.ok) { stats.probe++; continue }
+      if (!r.ok) { stats.probe++; transient = true; unresolved++; continue }
       base = r.base
       rawStops = r.stops
       stats.probe++
     }
-    if (!Array.isArray(rawStops) || rawStops.length < 2) { stats.dirMiss++; continue }
+    if (!Array.isArray(rawStops) || rawStops.length < 2) { stats.dirMiss++; unresolved++; continue }
     const { stops } = cleanStops(rawStops)
-    if (stops.length < 2) { stats.dirMiss++; continue }
+    if (stops.length < 2) { stats.dirMiss++; unresolved++; continue }
 
     // 用清洗后站点的首末站名匹配高德方向
     let firstStop = stops[0].stopName
@@ -277,17 +416,17 @@ for (const l of todo) {
       lastStop = (rawStops[rawStops.length - 1] && rawStops[rawStops.length - 1].stopName) || lastStop
       m = matchBusline(buslines, firstStop, lastStop)
     }
-    if (!m) { stats.dirMiss++; stats.fallback++; continue }
+    if (!m) { stats.dirMiss++; stats.fallback++; unresolved++; continue }
 
     const pts = parsePolyline(m.polyline)
-    if (pts.length < 2) { stats.dirMiss++; stats.fallback++; continue }
+    if (pts.length < 2) { stats.dirMiss++; stats.fallback++; unresolved++; continue }
     // 高德 polyline 本就优化过，只做极轻抽稀去掉浮点抖动，不丢走向细节
     // reversed=true 表示该方向的起讫站与高德 busline 相反（往返同路的线路，高德常只给
     // 一条 polyline，两个方向都会匹配到它）。必须反转点序，否则上下行几何同向重合，
     // 「全部」视角里后画的玫红会整条盖掉青蓝，方向箭头也反了。
     const route = simplify(pts, 0.00001)
     const dirRoute = m.reversed ? route.slice().reverse() : route
-    if (dirRoute.length < 2) { stats.dirMiss++; stats.fallback++; continue }
+    if (dirRoute.length < 2) { stats.dirMiss++; stats.fallback++; unresolved++; continue }
 
     putRow(no, d, {
       base,
@@ -303,21 +442,33 @@ for (const l of todo) {
     lineMatched = true
   }
 
+  // 记账：临时故障不记，下一轮重试；否则按结果记入台账，本轮及后续都不再重打。
+  // 每条线立即落盘，中途 Ctrl+C / 取消也只丢当前这一条，不会成片重复采集。
+  if (!transient) { mark(no, unresolved === 0 ? 'done' : (lineMatched ? 'partial' : 'no-match')); saveProgress() }
+
   if (lineMatched) stats.done++
   doneCount++
   if (doneCount % 25 === 0 || doneCount === todo.length) {
     process.stdout.write(`\r  已处理 ${doneCount}/${todo.length}（amap 命中 ${stats.matched} 方向，未收录 ${stats.amapMiss}）`)
     await requestFlush()
+    saveProgress()
   }
   if (DELAY) await sleep(DELAY)
 }
 await flushTail
 flushDirty()
+saveProgress()
 process.stdout.write('\n')
 
+const tally = {}
+for (const s of Object.values(progress.lines)) tally[s] = (tally[s] || 0) + 1
 const files = [...SHARDS.keys()].filter((k) => !DRY && fs.existsSync(shardPath(k)))
 console.log(`\n完成：写入 amap 方向 ${stats.matched} 个（覆盖线路 ${stats.done} 条），跳过 ${stats.skipped}`)
 console.log(`高德未收录 ${stats.amapMiss} 条线（保留 OSRM 兜底），方向未匹配 ${stats.dirMiss}，补 /line ${stats.probe}`)
 console.log(`分片 ${files.length} 个，本次写出 ${(writeBytes / 1024).toFixed(1)} KB${DRY ? '（dry 未落盘）' : ''}`)
-console.log('提示：未命中 amap 的方向仍由 scan-routes.mjs 的 OSRM 几何兜底，无需手动处理。')
+console.log(`进度台账 ${path.relative(process.cwd(), PROGRESS)}：共 ${Object.keys(progress.lines).length} 条线 ` +
+  `(done ${tally.done || 0} / partial ${tally.partial || 0} / no-match ${tally['no-match'] || 0} / not-found ${tally['not-found'] || 0})`)
+if (FALLBACK_EXHAUSTED) console.log('主链路与备用链路配额均耗尽，提前停机；未处理的线路未记账，次日 0 点后重跑自动续采。')
+else if (QUOTA_EXHAUSTED) console.log('本轮 linename 配额耗尽，已自动切换备用链路 inputtips → lineid 继续采集。')
+console.log('提示：未命中 amap 的方向仍由 scan-routes.mjs 的 OSRM 几何兜底，无需手动处理；如需重试未命中线路用 --retry-unmatched。')
 process.exit(0)

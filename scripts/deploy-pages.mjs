@@ -93,6 +93,9 @@ console.log(`· 本地 ${BRANCH} 分支 → ${commit.slice(0, 7)}（孤立，无
 const PROXY = process.env.GIT_HTTP_PROXY ?? 'http://127.0.0.1:7890'
 const pushArgs = ['-c', 'http.version=HTTP/1.1']
 if (PROXY) pushArgs.push('-c', `http.proxy=${PROXY}`, '-c', `https.proxy=${PROXY}`)
+// 低速检测：代理链路慢时，git 默认 60s/100B/s 就主动断开连接，导致大产物推送中断。
+// 设为 0 完全关闭该检测（curl 不再设 CURLOPT_LOW_SPEED_LIMIT/TIME），由网络层自行处理超时。
+pushArgs.push('-c', 'http.lowSpeedLimit=0', '-c', 'http.lowSpeedTime=0')
 pushArgs.push('push', '-f', REMOTE, `${BRANCH}:${REMOTE_BRANCH}`)
 if (noPush) {
   console.log(`· --no-push：跳过推送。稍后可执行 git ${pushArgs.join(' ')} `)

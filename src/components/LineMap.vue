@@ -4843,12 +4843,7 @@ export default {
   padding: 8rpx 0;
 }
 .sheet-line {
-  flex: 1 1 auto;
-  min-width: 0;
-  /* 预留 40 个字宽度：超过该范围才省略，避免过早截断显得突兀 */
-  max-width: 60em;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  flex: 0 0 auto;
   font-size: 36rpx;
   font-weight: 800;
   color: #fff;
