@@ -69,9 +69,21 @@ for (const f of files.filter(isForeignShard)) {
     }
   }
 }
-const manifest = { generatedAt: new Date().toISOString(), summary, foreign, lines }
-fs.writeFileSync(OUT, JSON.stringify(manifest))
-console.log('清单已生成：', OUT)
+// 幂等：内容没变就不重写（generatedAt 每次都新，若无条件写入会让 CI 每轮产生
+// 「只改时间戳」的空提交）。比较时剔除 generatedAt，只看真正的资产内容。
+const body = { summary, foreign, lines }
+let unchanged = false
+try {
+  const prev = JSON.parse(fs.readFileSync(OUT, 'utf8'))
+  const { generatedAt, ...rest } = prev
+  unchanged = JSON.stringify(rest) === JSON.stringify(body)
+} catch (e) { /* 首次生成 */ }
+if (unchanged) {
+  console.log('清单内容未变化，跳过写入：', OUT)
+} else {
+  fs.writeFileSync(OUT, JSON.stringify({ generatedAt: new Date().toISOString(), ...body }))
+  console.log('清单已生成：', OUT)
+}
 console.log(JSON.stringify(summary, null, 2))
 console.log('示例 211：', JSON.stringify(lines['211']))
 console.log('示例 232：', JSON.stringify(lines['232']))

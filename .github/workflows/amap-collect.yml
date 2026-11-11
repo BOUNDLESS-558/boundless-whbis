@@ -1,0 +1,105 @@
+name: 高德线路走向补全
+
+# ⚠ GitHub 硬规则：schedule / workflow_dispatch 只认「默认分支」上的 workflow 文件。
+#   本仓库需把默认分支设为 amap-data（Settings → Branches → Default branch）。
+#   Pages 发布源是明确的 pages 分支，改默认分支不影响站点。
+on:
+  schedule:
+    # UTC 16:20 = 北京时间 00:20（高德日配额 0:00 重置后留 20 分钟余量）
+    - cron: '20 16 * * *'
+  workflow_dispatch:
+    inputs:
+      only:
+        description: '只采这些线路号（逗号分隔，留空 = 全量断点续跑）'
+        required: false
+        default: ''
+      max_lines:
+        description: '本轮最多实际处理线路数（0 = 不限）'
+        required: false
+        default: '0'
+      probe:
+        description: '仅做连通性探针，不采集、不提交'
+        type: boolean
+        required: false
+        default: false
+
+permissions:
+  contents: write
+
+# 采集器有台账并发写风险，禁止两轮重叠；新轮排队而不是取消正在跑的那轮
+concurrency:
+  group: amap-collect
+  cancel-in-progress: false
+
+jobs:
+  collect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    steps:
+      - name: 检出数据分支
+        uses: actions/checkout@v4
+        with:
+          ref: amap-data
+          fetch-depth: 1
+
+      - name: 准备 Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: 校验 Secret
+        env:
+          AMAP_KEY: ${{ secrets.AMAP_KEY }}
+        run: |
+          if [ -z "$AMAP_KEY" ]; then
+            echo "::error::AMAP_KEY 未配置：请在 Settings → Secrets and variables → Actions 新建 AMAP_KEY（值用轮换后的新 Key），可选再加 AMAP_SECRET"
+            exit 1
+          fi
+          echo "AMAP_KEY 已配置（长度 ${#AMAP_KEY}，值不打印）"
+
+      - name: 连通性探针
+        continue-on-error: true
+        env:
+          AMAP_KEY: ${{ secrets.AMAP_KEY }}
+        run: |
+          echo "· 高德 linename（主链路）"
+          curl -sS --max-time 25 -o /tmp/amap.json -w '  HTTP %{http_code} / %{time_total}s\n' \
+            "https://restapi.amap.com/v3/bus/linename?key=${AMAP_KEY}&city=%E6%AD%A6%E6%B1%89&keywords=337&extensions=all&output=json&citylimit=true"
+          head -c 220 /tmp/amap.json; echo
+          echo "· 上游 /line（补站点用；境外 runner 可能不通，失败会被采集器标为 transient 而不记账）"
+          curl -sS --max-time 25 -o /dev/null -w '  HTTP %{http_code} / %{time_total}s\n' \
+            -X POST 'https://customized.wuhanbus.com/gps-resapi/wechat/bus/line' \
+            -H 'Content-Type: application/json' -H 'openId: wx_openid_dev_001' \
+            -d '{"cityCode":"420100","lineCode":"420100-337-0"}'
+
+      - name: 采集（断点续跑）
+        if: ${{ inputs.probe != true }}
+        env:
+          AMAP_KEY: ${{ secrets.AMAP_KEY }}
+          AMAP_SECRET: ${{ secrets.AMAP_SECRET }}
+          IN_ONLY: ${{ inputs.only }}
+          IN_MAX: ${{ inputs.max_lines }}
+        run: |
+          ARGS=()
+          if [ -n "$IN_ONLY" ]; then ARGS+=(--only "$IN_ONLY"); fi
+          if [ -n "$IN_MAX" ] && [ "$IN_MAX" != "0" ]; then ARGS+=(--max-lines "$IN_MAX"); fi
+          echo "参数：${ARGS[*]:-（无）}"
+          node scripts/scan-routes-amap.mjs "${ARGS[@]}"
+
+      - name: 刷新资产清单
+        if: ${{ inputs.probe != true }}
+        run: node scripts/build-manifest.mjs
+
+      - name: 提交并推送数据
+        if: ${{ inputs.probe != true }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A src/static/lines scripts/.amap-progress.json
+          if git diff --cached --quiet; then
+            echo "本轮无数据变化，跳过提交"
+            exit 0
+          fi
+          git diff --cached --stat | tail -n 20
+          git commit -m "data: 高德走向自动补全 $(date -u +%Y-%m-%dT%H:%MZ)"
+          git push origin HEAD:refs/heads/amap-data

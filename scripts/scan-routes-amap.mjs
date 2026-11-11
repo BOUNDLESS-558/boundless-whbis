@@ -80,6 +80,10 @@ const OUT = path.resolve(argOf('out', 'src/static/lines'))
 const ONLY = String(argOf('only', '')).split(',').map((s) => s.trim()).filter(Boolean)
 const CITYNAME = argOf('city', '武汉')
 const DELAY = Math.max(0, Number(argOf('delay', 1100)))
+// 0 = 不限；CI 里可分批跑，避免单次 job 过长。只统计「实际处理」的线路，跳过的不算。
+const MAX_LINES = Math.max(0, Number(argOf('max-lines', 0)))
+// GitHub Actions 日志是行缓冲，\r 刷新进度会糊成一长行；CI 下改用逐行输出
+const CI_LOG = has('ci-log') || !!process.env.GITHUB_ACTIONS
 const FORCE = has('force')
 const DRY = has('dry')
 // 只重试「未命中」的线路（partial / no-match / not-found），已 done 的不动，比 --force 省额度
@@ -146,14 +150,19 @@ function requestFlush() {
 // not-found = 高德确认未收录（status=0 / infocode=10000）
 // 接口失败(null)、/line 探测失败、日配额耗尽 → 不记账，下一轮自动重试。
 const progress = { updated: '', version: 1, lines: {} }
+let progressSnapshot = ''   // 幂等：内容没变就不重写文件，避免 CI 每轮产生「只改时间戳」的空提交
 function loadProgress() {
   try {
     const j = JSON.parse(fs.readFileSync(PROGRESS, 'utf8'))
     if (j && j.lines && typeof j.lines === 'object') Object.assign(progress.lines, j.lines)
   } catch (e) { /* 首次运行：空台账 */ }
+  progressSnapshot = JSON.stringify(progress.lines)
 }
 function saveProgress() {
   if (DRY) return
+  const snapshot = JSON.stringify(progress.lines)
+  if (snapshot === progressSnapshot) return
+  progressSnapshot = snapshot
   progress.updated = new Date().toISOString()
   fs.mkdirSync(path.dirname(PROGRESS), { recursive: true })
   fs.writeFileSync(PROGRESS, JSON.stringify(progress) + '\n', 'utf8')
@@ -358,6 +367,10 @@ console.log(`进度台账 ${path.relative(process.cwd(), PROGRESS)}：已记录 
 let doneCount = 0
 for (const l of todo) {
   if (FALLBACK_EXHAUSTED) break
+  if (MAX_LINES && doneCount >= MAX_LINES) {
+    console.log(`\n已达本轮上限 --max-lines ${MAX_LINES}，提前结束；台账已落盘，下轮自动续采。`)
+    break
+  }
   const no = String(l.no)
   const dirs = (l.dirs && l.dirs.length ? l.dirs : [0]).map(Number)
 
@@ -449,7 +462,9 @@ for (const l of todo) {
   if (lineMatched) stats.done++
   doneCount++
   if (doneCount % 25 === 0 || doneCount === todo.length) {
-    process.stdout.write(`\r  已处理 ${doneCount}/${todo.length}（amap 命中 ${stats.matched} 方向，未收录 ${stats.amapMiss}）`)
+    const msg = `  已处理 ${doneCount}/${todo.length}（amap 命中 ${stats.matched} 方向，未收录 ${stats.amapMiss}）`
+    if (CI_LOG) console.log(msg)
+    else process.stdout.write(`\r${msg}`)
     await requestFlush()
     saveProgress()
   }
@@ -458,7 +473,7 @@ for (const l of todo) {
 await flushTail
 flushDirty()
 saveProgress()
-process.stdout.write('\n')
+if (!CI_LOG) process.stdout.write('\n')
 
 const tally = {}
 for (const s of Object.values(progress.lines)) tally[s] = (tally[s] || 0) + 1
