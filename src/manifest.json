@@ -2,8 +2,8 @@
     "name" : "武汉公交信息实时查询",
     "appid" : "__UNI__C8E17D8",
     "description" : "武汉公交信息实时查询",
-    "versionName" : "1.0.0",
-    "versionCode" : "100",
+    "versionName" : "1.1.0",
+    "versionCode" : "110",
     "transformPx" : false,
     "app-plus" : {
         "usingComponents" : true,

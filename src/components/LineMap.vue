@@ -3658,7 +3658,8 @@ export default {
 .fs-btn {
   position: absolute;
   right: 20rpx;
-  bottom: 20rpx;
+  /* 让位给右下角「更新信息」悬浮按钮（见 UpdateInfo.vue）：上移到 126rpx，形成右下角按钮栈 */
+  bottom: 126rpx;
   z-index: 25;
   display: flex;
   align-items: center;

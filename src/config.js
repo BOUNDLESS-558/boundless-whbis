@@ -6,6 +6,9 @@
  *   因此这里填任意非空字符串即可。真实小程序中该值是微信 openId。
  *   若将来服务端加强校验，替换为真实 openId 即可，无需改动其它代码。
  */
+// 应用版本号：与 manifest.json 的 versionName 保持一致；右下角「更新信息」弹窗据此显示当前版本
+export const APP_VERSION = '1.1.0'
+
 export const APP_CONFIG = {
   // 请求头 openId（必填，非空 ASCII 字符串）
   openId: 'wx_openid_dev_001',

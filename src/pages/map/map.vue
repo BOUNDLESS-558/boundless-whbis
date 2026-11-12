@@ -384,6 +384,8 @@
         </view>
       </view>
     </view>
+    <!-- 右下角「更新信息」悬浮入口：单击弹出版本号与更新记录 -->
+    <UpdateInfo />
   </view>
 </template>
 
@@ -423,6 +425,7 @@ import {
 import { getAvatar, removeAvatar, pickAvatar } from '../../utils/avatar.js'
 import { COPY_MODE_OPTS, getCopyMode, setCopyMode } from '../../utils/settings.js'
 import FavPanel from '../../components/FavPanel.vue'
+import UpdateInfo from '../../components/UpdateInfo.vue'
 
 // 上次查过的线路：下次进来直接落在地图上，省掉「每次都要搜一遍」
 const HOME_LINE_KEY = 'whbis:home-line'
