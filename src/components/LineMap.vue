@@ -1379,6 +1379,13 @@ export default {
         uni.showToast({ title: '请输入线路号', icon: 'none' })
         return
       }
+      // 已停运线路不加载：无在运车辆可画，走向只是历史档案（线路库仍可查）。
+      // 只拦手动输入；URL 进页 / 收藏直达不拦，保留查看历史档案的能力。
+      const hit = findLine(no)
+      if (hit && hit.status === '停运') {
+        uni.showToast({ title: `「${hit.no}路」已停运${hit.stopDate ? '（' + hit.stopDate + ' 起）' : ''}`, icon: 'none' })
+        return
+      }
       this.loadByLine(no, this.dirFilter === 2 ? this.direction : this.dirFilter)
     },
     /**
@@ -1635,6 +1642,29 @@ export default {
         try {
           const ls = new AMap.LineSearch({ city: '武汉', citylimit: true, types: 'BUS' })
           const toXY = (p) => ({ lng: typeof p.getLng === 'function' ? p.getLng() : p.lng, lat: typeof p.getLat === 'function' ? p.getLat() : p.lat })
+          // 高德按线名搜索可能返回同名/近似线，必须校验轨迹是否与本线站点吻合，
+          // 否则会把 K524 之类画成另一条线的走向（完全偏离）。吻合判定：平均偏离 <900m 且
+          // 远离轨迹(>1.5km)的站点占比 <25%；不吻合则丢弃，回退资产/站点连线。
+          const meters = (lat1, lng1, lat2, lng2) => {
+            const R = 6371000, r = (d) => (d * Math.PI) / 180
+            const dLat = r(lat2 - lat1), dLng = r(lng2 - lng1)
+            const a = Math.sin(dLat / 2) ** 2 + Math.cos(r(lat1)) * Math.cos(r(lat2)) * Math.sin(dLng / 2) ** 2
+            return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))
+          }
+          const routeMatchesStops = (pts, stops) => {
+            if (!pts.length || !stops.length) return false
+            let sum = 0, far = 0, n = 0
+            for (const s of stops) {
+              const la = parseFloat(s.latitude), ln = parseFloat(s.longitude)
+              if (isNaN(la) || isNaN(ln)) continue
+              n++
+              let best = Infinity
+              for (const p of pts) { const dd = meters(la, ln, p.latitude, p.longitude); if (dd < best) best = dd }
+              sum += best; if (best > 1500) far++
+            }
+            if (!n) return false
+            return sum / n < 900 && far < n * 0.25
+          }
           ls.search(this.lineName, (status, result) => {
             if (status !== 'complete') return done()
             const lines = (result && (result.lineInfo || result.lineList)) || []
@@ -1656,9 +1686,11 @@ export default {
               if (!line && lines.length === 1) line = lines[0]
               if (!line) continue
               used.add(line)
-              out[dir] = (line.path || []).map(toXY)
+              const pts = (line.path || []).map(toXY)
                 .map((xy) => ({ latitude: xy.lat, longitude: xy.lng }))
                 .filter((p) => !isNaN(p.latitude) && !isNaN(p.longitude))
+              // 校验：与本站点的贴合度太差 → 判定为同名错线，丢弃（回退资产/站点路线）
+              out[dir] = routeMatchesStops(pts, this.stopsByDir[dir]) ? pts : []
             }
             done()
           })

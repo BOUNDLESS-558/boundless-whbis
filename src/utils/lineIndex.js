@@ -121,6 +121,8 @@ export function lineStatus(line, now = new Date()) {
 /**
  * 按关键词联想线路
  * 打分：线路号 完全相等 > 前缀 > 包含；描述名命中排在线路号之后。同分按编号大小排（数字优先）
+ * 已停运线路不进联想：搜索框是查询营运线网的入口，给出停运线只会误导乘车决策；
+ * 停运线仍保留在线路库（allLines）中可查，状态依据见 statusSource/stopDate/statusNote。
  * @param {string} kw 用户输入
  * @param {number} limit 最多返回条数
  * @returns {Array<{no,code,name,start,end,stops,dirs}>}
@@ -130,6 +132,7 @@ export function suggestLines(kw, limit = 8) {
   if (!q) return []
   const hits = []
   for (const l of pool()) {
+    if (l.status === '停运') continue
     let score = 0
     if (l.key === q) score = 1000
     else if (l.key.startsWith(q)) score = 800 - Math.min(60, l.key.length - q.length)
@@ -142,12 +145,15 @@ export function suggestLines(kw, limit = 8) {
   return hits.slice(0, limit).map((h) => h.l)
 }
 
-/** 关键词命中的总条数（用于显示"共 N 条相关线路"） */
+/** 关键词命中的总条数（用于显示"共 N 条相关线路"），口径与 suggestLines 一致：不含停运线 */
 export function countMatches(kw) {
   const q = normNo(kw)
   if (!q) return 0
   let n = 0
-  for (const l of pool()) if (l.key.includes(q) || (l.alt && l.alt.includes(q))) n++
+  for (const l of pool()) {
+    if (l.status === '停运') continue
+    if (l.key.includes(q) || (l.alt && l.alt.includes(q))) n++
+  }
   return n
 }
 

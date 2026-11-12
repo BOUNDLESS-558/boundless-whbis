@@ -103,7 +103,7 @@
 <script>
 import { buildLineCode } from '../config.js'
 import { assetUrl } from '../utils/asset.js'
-import { suggestLines, countMatches, normNo, lineStatus, lineCount as getLineCount } from '../utils/lineIndex.js'
+import { suggestLines, countMatches, normNo, lineStatus, lineCount as getLineCount, findLine } from '../utils/lineIndex.js'
 import { companyOf } from '../utils/companies.js'
 import FavStar from './FavStar.vue'
 
@@ -136,7 +136,8 @@ export default {
   data() {
     return {
       lineNo: this.lineNoProp || '',
-      quickLines: ['337', '59', '61', '538', '706', '901', '718', '792'],
+      // 快捷标签只放营运线路（61 路已停运，点击只会弹「已停运」提示，换成 588）
+      quickLines: ['337', '59', '588', '538', '706', '901', '718', '792'],
       // 联想面板开关（点选 / 查询 / 点外部都关闭）
       suggestOpen: false,
     }
@@ -156,15 +157,27 @@ export default {
     suggestTotal() {
       return countMatches(this.lineNo)
     },
-    // 输入了东西但库里没收录：提示仍可直接查询，不拦截
+    // 输入精确命中了停运线路：联想面板已排除停运线，这里单独提示原因，
+    // 避免被误读成「库里没收录，仍可查询」（停运线不该再发起实时查询）
+    stoppedHit() {
+      if (!this.suggestOpen) return null
+      if (!normNo(this.lineNo)) return null
+      const l = findLine(this.lineNo)
+      return l && l.status === '停运' ? l : null
+    },
+    // 输入了东西但库里没收录（且不是停运线）：提示仍可直接查询，不拦截
     suggestEmpty() {
-      return !!this.suggestOpen && !!normNo(this.lineNo) && !this.suggestList.length
+      return !!this.suggestOpen && !!normNo(this.lineNo) && !this.suggestList.length && !this.stoppedHit
     },
     // 占位与提示按视图切换：只有全市态通查自编号，其余视图仅线路号
     searchPlaceholder() {
       return this.cityMode ? '线路号 / 车辆自编号，如 337 · 3240' : '输入线路号，如 337 / 电1'
     },
     emptyHint() {
+      if (this.stoppedHit) {
+        const l = this.stoppedHit
+        return `「${l.no}路」已停运${l.stopDate ? '（' + l.stopDate + ' 起）' : ''}，可在线路库查看档案`
+      }
       return this.cityMode
         ? `线路库未收录「${this.lineNo}」，点「查询」可按自编号找车或直接向后端查一次`
         : `线路库未收录「${this.lineNo}」，点「查询」仍可直接向后端查一次`
@@ -227,6 +240,13 @@ export default {
       const no = (this.lineNo || '').trim()
       if (!no) {
         uni.showToast({ title: this.cityMode ? '请输入线路号或车辆自编号' : '请输入线路号', icon: 'none' })
+        return
+      }
+      // 已停运线路不再发起实时查询：后端既不会有在运车辆，走向也只是历史档案。
+      // 仅拦截手动输入；线路库详情页仍可查看停运线档案。
+      const hit = findLine(no)
+      if (hit && hit.status === '停运') {
+        uni.showToast({ title: `「${hit.no}路」已停运${hit.stopDate ? '（' + hit.stopDate + ' 起）' : ''}`, icon: 'none' })
         return
       }
       this.$emit('pick', this.buildPick(no, no))
