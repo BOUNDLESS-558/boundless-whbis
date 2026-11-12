@@ -94,7 +94,7 @@ export default {
 </script>
 
 <style scoped>
-/* ── 右下角悬浮按钮：默认贴边隐藏（只露左侧半圆），悬停 / 有新更新时滑出 ── */
+/* ── 右下角悬浮按钮：默认贴边隐藏（只露左半圆作「把手」），悬停 / 有新更新时滑出 ── */
 .upd-fab {
   position: fixed;
   right: 0;
@@ -109,10 +109,12 @@ export default {
   color: #fff;
   /* 与主按钮同款强调色渐变（靛蓝 → 青），保证全站视觉统一 */
   background: linear-gradient(135deg, var(--ac), var(--ac-2));
+  /* 贴边半圆加一圈亮白边，深色地图上 unmistakable，避免被忽略 */
+  border: 2rpx solid rgba(255, 255, 255, 0.85);
   box-shadow: 0 12rpx 30rpx rgba(79, 110, 247, 0.45), inset 0 1rpx 0 rgba(255, 255, 255, 0.3);
   cursor: pointer;
-  /* 贴边态：整体右移 55%，只露 45% 半圆；悬停或有新更新时滑出 */
-  transform: translateX(55%);
+  /* 贴边态：整体右移 48%，露出 52% 半圆作「把手」；悬停或有新更新时滑出 */
+  transform: translateX(48%);
   transition: transform 0.28s ease, filter 0.2s ease;
 }
 .upd-fab:hover,
@@ -127,7 +129,7 @@ export default {
 .upd-fab-ico {
   font-size: 44rpx;
   line-height: 1;
-  transform: translateX(-28rpx);
+  transform: translateX(-24rpx);
   transition: transform 0.28s ease;
 }
 .upd-fab:hover .upd-fab-ico,
