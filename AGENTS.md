@@ -45,10 +45,20 @@ Git 仓库 main 存源码、pages 分支只存 H5 构建产物（远端 `origin`
   集团内部号段细分放在选中「公交集团」后才出现的「号段」二级行里。
   `companyOf(line).label` 对集团一律返回「公交集团」，分公司全名保留在 `.full`
   （详情弹层与 TSV 导出用）。旧的 `lineIndex.orgOf()` 已删除，别再引入。
-- 设置项「复制方式」（`whbis:copy-mode`，默认 text）：**所有**复制按钮统一走
+- 复制方式（`whbis:copy-mode`，默认 text）：**所有**复制按钮统一走
   `utils/clipboard.js` 的 `copyTable({title, columns, rows, text})`，不要再直接调
   `uni.setClipboardData`。image 档用离屏 canvas 画 PNG → `ClipboardItem` 写剪贴板，
   不支持的环境自动回退文本。新增复制入口必须复用它。
+- **档位不在设置面板**：设置窗里的「复制方式」分区已移除，档位改由每枚复制胶囊
+  `components/CopyPill.vue` 右半的下拉提供（纯文本 / Excel / 图片，左半按当前档位立即复制）。
+  `setCopyMode` 经 `onCopyModeChange` 广播，任一处切换全站所有胶囊即时跟随，不存在多份设置。
+  新加复制入口直接用 `<CopyPill label="…" @copy="fn" />`，别再手写 `⧉ 复制` 按钮。
+- **就地下拉全局互斥**：`utils/dropdown.js` 是唯一仲裁器，同一时刻只允许一个下拉展开。
+  复制胶囊（CopyPill）、刷新间隔下拉（LineMap / LineStops）、搜索联想面板（LineSearch）都经
+  `attachDropdown(vm, stateKey, prefix)` 接入，开关一律走 `vm._dd.open() / close() / toggle()`，卸载时 `dispose()`。
+  仲裁器还统一挂 document 级 `pointerdown` 实现「点空白关闭」（原来只有部分菜单自带遮罩，联想面板完全没有）。
+  新加就地菜单必须接入，别再自己写 `xxxMenu = !xxxMenu` + 独立遮罩；模态弹窗（线路库详情 / 激活码 / 账号窗）
+  不注册，打开时调 `closeAllDropdowns()` 清场。回归探针：`node scripts/probe-copy-menu.mjs`。
 - 线路收藏夹：`utils/favorites.js`（`whbis:fav-lines:v1`，**上限 10 条**）+ `FavStar.vue`（星标，
   订阅变更同步高亮）+ `FavPanel.vue`（挂在设置窗分区）。收藏按钮已铺到搜索联想、实时线路、
   地图车辆面板、全市筛选芯片、线路库列表与详情弹层。

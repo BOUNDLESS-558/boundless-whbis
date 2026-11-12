@@ -12,7 +12,7 @@
     <!-- 工具行：与车辆面板 .panel-tools 同构（左提示，右复制按钮） -->
     <view class="plan-tools">
       <text class="ph-hint">{{ sortedByDir[0].length }} 上行 · {{ sortedByDir[1].length }} 下行</text>
-      <view class="ph-copy" v-if="totalCount" @click="copyPlans" title="一键复制全部班次时刻（TSV，可直接粘贴进表格）">⧉ 复制</view>
+      <CopyPill label="复制" :disabled="!totalCount" @copy="copyPlans" />
     </view>
 
     <view class="plan-body" v-show="!collapsed">
@@ -42,12 +42,14 @@
 import { fetchPlanTime, decryptBusId, onBusIdReady, isBusIdReady } from '../utils/api.js'
 import { buildLineCode } from '../config.js'
 import { copyTable } from '../utils/clipboard.js'
+import CopyPill from './CopyPill.vue'
 
 // 方向常量：0 上行 / 1 下行（两方向同屏，顺序与地图控制卡一致）
 const DIRS = [0, 1]
 
 export default {
   name: 'LinePlan',
+  components: { CopyPill },
   props: {
     lineNo: { type: String, default: '' },
   },
@@ -190,29 +192,6 @@ export default {
   color: rgba(255, 255, 255, 0.42);
   text-align: left;
   white-space: nowrap;
-}
-/* 复制按钮：与车辆面板 .copy-btn 同款胶囊（56rpx 高 / 24rpx 字） */
-.ph-copy {
-  flex: 0 0 auto;
-  height: 56rpx;
-  box-sizing: border-box;
-  line-height: 52rpx;
-  font-size: 24rpx;
-  color: rgba(255, 255, 255, 0.66);
-  background: rgba(255, 255, 255, 0.08);
-  border: 2rpx solid rgba(255, 255, 255, 0.14);
-  border-radius: 999rpx;
-  padding: 0 20rpx;
-  cursor: pointer;
-  white-space: nowrap;
-  transition: transform 0.15s, background 0.2s, color 0.2s;
-}
-.ph-copy:hover {
-  color: var(--ac-text);
-  background: rgba(var(--ac-rgb), 0.3);
-}
-.ph-copy:active {
-  transform: scale(0.94);
 }
 /* 折叠键：与车辆面板的 .collapse-btn 同一枚圆键 */
 .ph-fold {

@@ -77,7 +77,7 @@
     <view class="db-mod db-list" :class="{ plain: plain }" ref="listRoot">
       <view class="db-row db-lhead">
         <text class="db-lh-t">匹配 {{ filtered.length }} 条</text>
-        <view class="db-copy" v-if="filtered.length" @click.stop="copyFiltered" title="一键复制当前筛选命中的全部线路信息（TSV，可直接粘贴进表格）">⧉ 复制</view>
+        <CopyPill v-if="filtered.length" label="复制" @copy="copyFiltered" />
         <text class="db-lh-s" v-if="filtered.length">按线路号排序</text>
       </view>
       <view class="db-div"></view>
@@ -165,6 +165,8 @@ import { buildLineCode } from '../config.js'
 import { copyTable } from '../utils/clipboard.js'
 import { assetUrl } from '../utils/asset.js'
 import FavStar from './FavStar.vue'
+import CopyPill from './CopyPill.vue'
+import { closeAllDropdowns } from '../utils/dropdown.js'
 
 // 分页大小：一次只挂 80 条，避免 1300+ 行全量 DOM 拖慢 H5 滚动
 const PAGE = 80
@@ -183,7 +185,7 @@ function writePage(n) {
 
 export default {
   name: 'LineDb',
-  components: { FavStar },
+  components: { FavStar, CopyPill },
   props: {
     // 裸形态：挂在地图悬浮窗（FloatWin）里时，窗壳只有一张，头卡与列表卡不再各自套玻璃卡
     plain: { type: Boolean, default: false },
@@ -381,6 +383,8 @@ export default {
       if (this.page < 1) this.page = 1
     },
     openDetail(l) {
+      // 模态详情接管画面：先收掉所有就地菜单，避免遮罩层叠
+      closeAllDropdowns()
       this.detail = l
     },
     closeDetail() {
@@ -576,27 +580,6 @@ export default {
   font-size: 24rpx;
   font-weight: 700;
   color: rgba(255, 255, 255, 0.82);
-}
-/* 复制按钮：与 LineMap 的 copy-btn 同族幽灵小圆角，hover 提到靛蓝 */
-.db-copy {
-  margin-left: 16rpx;
-  font-size: 20rpx;
-  color: rgba(255, 255, 255, 0.66);
-  background: rgba(255, 255, 255, 0.08);
-  border: 2rpx solid rgba(255, 255, 255, 0.14);
-  border-radius: 999rpx;
-  padding: 4rpx 16rpx;
-  cursor: pointer;
-  white-space: nowrap;
-  flex-shrink: 0;
-  transition: transform 0.15s, background 0.2s, color 0.2s;
-}
-.db-copy:hover {
-  color: var(--ac-text);
-  background: rgba(var(--ac-rgb), 0.3);
-}
-.db-copy:active {
-  transform: scale(0.94);
 }
 .db-lh-s {
   margin-left: auto;

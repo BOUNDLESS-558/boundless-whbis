@@ -179,7 +179,7 @@ ws.onopen = async () => {
     await sleep(400)
   }
   await sleep(1200)
-  const a = await read(ready ? `① 初始渲染（默认 ${isStops ? '15秒自动' : '手动'}）` : '① 初始渲染（首屏未就绪）')
+  const a = await read(ready ? '① 初始渲染（全站统一默认 15 秒自动）' : '① 初始渲染（首屏未就绪）')
 
   check(a.pill, '胶囊存在')
   if (isStops) {
@@ -192,7 +192,7 @@ ws.onopen = async () => {
     const overlap = a.rects.info && a.rects.pill && a.rects.info.right > a.rects.pill.x
     check(!overlap, '不与左侧信息文字重叠')
   } else {
-    console.log('（地图视图：初始应为手动，仅打印不强制断言文案）')
+    console.log('（地图视图：刷新间隔已与实时线路 / 极简站牌统一，仅打印不强制断言文案）')
   }
 
   await clickSel('.rp-mode')

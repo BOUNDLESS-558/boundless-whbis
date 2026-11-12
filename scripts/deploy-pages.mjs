@@ -88,18 +88,41 @@ console.log(`· 本地 ${BRANCH} 分支 → ${commit.slice(0, 7)}（孤立，无
 
 // 4. 强推远端
 // HTTP/1.1：规避本机网络对 H2 上传连接的不稳定；
-// 代理：git 不走系统代理，需显式指定本地代理端口（与浏览器一致），否则国内直连 github:443 会超时。
-// 如需修改/关闭代理，设置环境变量 GIT_HTTP_PROXY 为空即可。
+// 代理优先 + 直连回退：国内直连 github:443 常超时，优先走本地代理；
+// 代理不可用时自动降级直连，保障部署可用性。
+// 修改代理地址/关闭代理：设置环境变量 GIT_HTTP_PROXY，留空表示只走直连。
 const PROXY = process.env.GIT_HTTP_PROXY ?? 'http://127.0.0.1:7890'
-const pushArgs = ['-c', 'http.version=HTTP/1.1']
-if (PROXY) pushArgs.push('-c', `http.proxy=${PROXY}`, '-c', `https.proxy=${PROXY}`)
-// 低速检测：代理链路慢时，git 默认 60s/100B/s 就主动断开连接，导致大产物推送中断。
-// 设为 0 完全关闭该检测（curl 不再设 CURLOPT_LOW_SPEED_LIMIT/TIME），由网络层自行处理超时。
-pushArgs.push('-c', 'http.lowSpeedLimit=0', '-c', 'http.lowSpeedTime=0')
-pushArgs.push('push', '-f', REMOTE, `${BRANCH}:${REMOTE_BRANCH}`)
+const pushBaseArgs = [
+  '-c', 'http.version=HTTP/1.1',
+  '-c', 'http.lowSpeedLimit=0',
+  '-c', 'http.lowSpeedTime=0',
+  'push', '-f', REMOTE, `${BRANCH}:${REMOTE_BRANCH}`
+]
+
 if (noPush) {
-  console.log(`· --no-push：跳过推送。稍后可执行 git ${pushArgs.join(' ')} `)
+  console.log(`· --no-push：跳过推送。稍后可执行 git ${pushBaseArgs.join(' ')} `)
 } else {
-  git(pushArgs, { stdio: 'inherit' })
-  console.log(`√ 已强推 ${BRANCH} → ${REMOTE}/${REMOTE_BRANCH}（代理 ${PROXY || '直连'}），Pages 将自动重新发布`)
+  // 尝试代理推送
+  let success = false
+  if (PROXY) {
+    try {
+      console.log(`· 尝试通过代理推送 → ${PROXY}`)
+      git([...pushBaseArgs, '-c', `http.proxy=${PROXY}`, '-c', `https.proxy=${PROXY}`], { stdio: 'inherit' })
+      success = true
+    } catch (e) {
+      console.error(`× 代理推送失败：${e.message}`)
+    }
+  }
+  // 代理失败或未配置时，回退直连
+  if (!success) {
+    try {
+      console.log('· 代理不可用，降级为直连推送')
+      git(pushBaseArgs, { stdio: 'inherit' })
+      success = true
+    } catch (e) {
+      console.error(`× 直连推送也失败：${e.message}`)
+      process.exit(1)
+    }
+  }
+  console.log(`√ 已强推 ${BRANCH} → ${REMOTE}/${REMOTE_BRANCH}，Pages 将自动重新发布`)
 }

@@ -235,11 +235,16 @@
           <text class="dc-unit">路</text>
         </view>
         <view class="dir-cur none" v-else>未选择线路</view>
-        <!-- 所属营运公司（由在线车辆自编号首位推断，未收录不显示）：紧跟在“337 路”后面同一行，不换行 -->
-        <view class="ctrl-org" v-if="operatorCompanies.length">
+        <!-- 所属营运公司徽标：集团线由在线车辆自编号首位推断；
+             非集团线（蔡城 / 木兰 / 汉奇）没有实时车辆，改从公司字典取，保证这一行永远有归属 -->
+        <view class="ctrl-org" v-if="operatorCompanies.length || orgBadge">
           <view class="org-tag" v-for="c in operatorCompanies" :key="c.no" :title="c.label">
             <text class="org-no">{{ c.no }}</text>
             <text class="org-name">{{ c.short }}</text>
+          </view>
+          <view class="org-tag foreign" v-if="orgBadge" :title="orgBadge.full">
+            <image class="org-logo" :src="companyLogo" mode="aspectFit" />
+            <text class="org-name">{{ orgBadge.label }}</text>
           </view>
         </view>
       </view>
@@ -345,7 +350,7 @@
                 <text class="rp-ico" :class="{ spin: loading }">↻</text>
               </view>
               <view class="rp-split"></view>
-              <view class="rp-mode" @click="refreshMenu = !refreshMenu" :title="refreshTitle">
+              <view class="rp-mode" @click="toggleRefreshMenu" :title="refreshTitle">
                 <text class="rp-txt">{{ refreshLabel }}</text>
                 <text class="rp-caret" :class="{ open: refreshMenu }">▾</text>
               </view>
@@ -364,7 +369,7 @@
               </view>
             </view>
           </view>
-          <view class="copy-btn" @click="copyOnlineBuses" title="一键复制全部在线车辆信息（TSV，可直接粘贴进表格）">⧉ 复制</view>
+          <CopyPill label="复制" :disabled="!shownBuses.length" @copy="copyOnlineBuses" />
           <text class="pt-hint">{{ refreshSec > 0 ? '自动刷新中' : '仅点 ↻ 时拉取' }}</text>
         </view>
         <view class="panel-body" v-show="!panelCollapsed">
@@ -400,7 +405,7 @@
     </view>
 
     <!-- 刷新间隔下拉的“点外部关闭”透明遮罩：面板带 backdrop-filter 会形成包含块，遮罩只能放在面板外 -->
-    <view class="rm-mask" v-if="refreshMenu" @click="refreshMenu = false"></view>
+    <view class="rm-mask" v-if="refreshMenu" @click="closeRefreshMenu"></view>
 
     <!-- 车辆详情窗：单击地图标记 / 示意图车辆 / 右侧列表项弹出。可拖动、可固定位置、可关闭；
          不带全屏遮罩 —— 窗口开着时地图仍可拖拽缩放，不遮挡操作 -->
@@ -561,13 +566,18 @@ import {
 import LinePlan from './LinePlan.vue'
 import Signboard from './Signboard.vue'
 import SpeedRank from './SpeedRank.vue'
-import { getRefreshDefault, getMapSource, accentRgba, getAccent } from '../utils/settings.js'
+import {
+  getRefreshSec, setRefreshSec as saveRefreshSec, onRefreshSecChange, REFRESH_OPTS,
+  getMapSource, accentRgba, getAccent,
+} from '../utils/settings.js'
 import { cleanStops, pointsOf, fromFlat } from '../utils/routeClean.js'
 import { loadLineAsset, assetDir } from '../utils/lineAsset.js'
 import { orgCompanyOf, routeOf } from '../utils/speedRank.js'
 import { copyTable } from '../utils/clipboard.js'
+import { attachDropdown } from '../utils/dropdown.js'
 import { orgInfo, COMPANIES, companyKeyOfNo } from '../utils/companies.js'
 import FavStar from './FavStar.vue'
+import CopyPill from './CopyPill.vue'
 
 // —— 方向配色（全站统一）：上行 = 青蓝，下行 = 玫红 ——
 // 色相相隔约 150°，在浅色高德底图与深色自绘画布上都清晰；不依赖红绿对比，色盲用户也能分辨。
@@ -579,9 +589,8 @@ const DIR_STYLE = {
   0: { name: '上行', casing: '#FFFFFF', inner: '#06B6D4', svgStroke: '#22D3EE', bus: '#67E8F9', labelText: '#0E7490' },
   1: { name: '下行', casing: '#FFFFFF', inner: '#F43F5E', svgStroke: '#FB7185', bus: '#FDA4AF', labelText: '#BE185D' },
 }
-// 刷新间隔选项（秒）：0 = 手动刷新，其余为自动刷新周期。选择结果持久化，下次进地图页沿用。
-const REFRESH_OPTS = [0, 15, 20, 30]
-const REFRESH_KEY = 'whbis:map-refresh-sec'
+// 刷新间隔（秒）：0 = 手动。全站统一真源在 utils/settings.js，
+// 地图页与实时线路 / 极简站牌 / 账号与设置里的刷新控件共用一份值并即时同步。
 // —— 全市实时分布 ——
 // 自动跟随档位（分钟）：0 = 手动。一轮扫描 ≈ 1535 个请求（生产环境全部走 Worker 反代），
 // 所以不给 15/30 秒这种线路态档位，最低 5 分钟且默认关闭，配额代价写在按钮提示里。
@@ -687,8 +696,36 @@ function smoothPath(pts, snapped) {
   return d
 }
 
+// 把屏幕点吸附到折线最近线段的垂足。走向线经过 sideShift 分轨 + 贴路几何重采样后，
+// 已经不再穿过站台的原始经纬度投影点，若站点圆点仍用原始坐标画，就会与线路系统性错开
+// （弯道 / 上下行同屏时最明显）。超过 maxDist 说明这条走向确实不经过该站点，保留原点，
+// 以免把站点硬拽到错误的走廊上掩盖数据问题。
+function snapToRoute(pts, x, y, maxDist = 40) {
+  if (!pts || pts.length < 2) return null
+  let best = null
+  let bestD2 = Infinity
+  for (let i = 0; i < pts.length - 1; i++) {
+    const a = pts[i]
+    const b = pts[i + 1]
+    const dx = b.x - a.x
+    const dy = b.y - a.y
+    const len2 = dx * dx + dy * dy
+    if (len2 < 1e-6) continue
+    let t = ((x - a.x) * dx + (y - a.y) * dy) / len2
+    t = t < 0 ? 0 : t > 1 ? 1 : t
+    const px = a.x + t * dx
+    const py = a.y + t * dy
+    const d2 = (x - px) * (x - px) + (y - py) * (y - py)
+    if (d2 < bestD2) {
+      bestD2 = d2
+      best = { x: px, y: py }
+    }
+  }
+  return best && bestD2 <= maxDist * maxDist ? best : null
+}
+
 export default {
-  components: { LinePlan, Signboard, SpeedRank, FavStar },
+  components: { LinePlan, Signboard, SpeedRank, FavStar, CopyPill },
   props: {
     lineCodeProp: { type: String, default: '' },
     initDirection: { type: Number, default: 0 },
@@ -827,6 +864,11 @@ export default {
       const c = this.foreignCompany
       return c && c.logo ? assetUrl(c.logo) : ''
     },
+    // 控制卡上的公司徽标：非集团线路来自高德静态数据、没有实时车辆，
+    // operatorCompanies 恒为空，这里直接取公司字典里的徽标（集团线不走这条，避免重复）
+    orgBadge() {
+      return this.isForeignLine ? this.foreignCompany : null
+    },
     // 全市公交「已筛选」芯片的收藏摘要
     cityFavLine() {
       const no = String(this.cityFilterNo || '').trim()
@@ -911,12 +953,7 @@ export default {
       return this.refreshSec > 0 ? `每 ${this.refreshSec} 秒自动刷新` : '手动刷新（点 ↻ 拉取）'
     },
     refreshOptions() {
-      return [
-        { sec: 0, label: '手动刷新', tip: '点 ↻ 才拉取' },
-        { sec: 15, label: '15 秒', tip: '最灵敏' },
-        { sec: 20, label: '20 秒', tip: '较灵敏' },
-        { sec: 30, label: '30 秒', tip: '省流量' },
-      ]
+      return REFRESH_OPTS
     },
     // 走向尚未贴路时的提示（初屏/服务故障时画的是站间直连，必须说明白）
     routeAlert() {
@@ -1239,6 +1276,7 @@ export default {
   },
   mounted() {
     this.initFromProps()
+    attachDropdown(this, 'refreshMenu', 'refresh-map')
     // 恢复详情窗上次拖动过的位置（车辆窗 / 站点窗共用同一套浮窗与位置）
     // 此刻浮窗还没渲染，先按估算尺寸夹一次；开窗后 bindSheetDrag 会用实际尺寸再夹
     if (!this.sheetPos) this.sheetPos = clampPanelPos(readPanelPos('bus-sheet'), 320, 360)
@@ -1267,6 +1305,8 @@ export default {
       this.bindHover()
       this.setupPanelResize()
     })
+    // 订阅全站统一刷新设置：实时线路 / 极简站牌 / 设置面板任一处改动都会同步到地图页
+    this._offRefresh = onRefreshSecChange((sec) => this.applyRefreshSec(sec))
     // 拉起自动刷新定时器（组件没有 onShow，这里统一兜底启动；
     // 独立页通过 wrapper 的 onShow 转发 restartAutoRefresh 会先停后起，重复调用无害）
     this.restartAutoRefresh()
@@ -1288,8 +1328,12 @@ export default {
     this.cleanup()
   },
   methods: {
+    // 刷新间隔下拉：展开权交给全站仲裁器，点复制 / 搜索联想等其它菜单时自动收起
+    toggleRefreshMenu() { if (this._dd) this._dd.toggle() },
+    closeRefreshMenu() { if (this._dd) this._dd.close() },
     // 组件/页面卸载时统一清理（解绑手势、悬停、详情窗拖动、定位定时器、自动刷新）
     cleanup() {
+      if (this._dd) this._dd.dispose()
       // #ifdef H5
       if (this._onWinResize) window.removeEventListener('resize', this._onWinResize)
       if (this._onFsKey) window.removeEventListener('keydown', this._onFsKey)
@@ -1304,6 +1348,10 @@ export default {
       if (this._locTimer) clearTimeout(this._locTimer)
       // 在途的全网扫描：卸载后没人再消费它的结果，直接停掉（已扫到的部分不写缓存）
       if (this._cityToken) this._cityToken.cancelled = true
+      if (this._offRefresh) {
+        this._offRefresh()
+        this._offRefresh = null
+      }
       this.stopAutoRefresh()
     },
     // 组件化入口：从 props 读取线路并首次加载（页面形态下由 mounted 调用）
@@ -1826,28 +1874,20 @@ export default {
       })
       return out
     },
-    // —— 刷新间隔：手动 / 15s / 20s / 30s ——
-    // 读回上次选择：用户手动选过就用选的；没选过（或值非法）回落到「全局默认刷新间隔」（设置面板可调）
+    // —— 刷新间隔：全站唯一真源 ——
     loadRefreshPref() {
-      try {
-        const v = Number(uni.getStorageSync(REFRESH_KEY))
-        if (REFRESH_OPTS.includes(v)) {
-          this.refreshSec = v
-          return
-        }
-      } catch (e) { /* 忽略 */ }
-      this.refreshSec = getRefreshDefault()
+      this.refreshSec = getRefreshSec()
     },
-    // 全局默认刷新变更（设置面板）即时跟随：用户在本视图手动选过的间隔仍然优先
-    onGlobalRefresh(sec) {
-      try {
-        const raw = uni.getStorageSync(REFRESH_KEY)
-        if (raw !== '' && raw != null && REFRESH_OPTS.includes(Number(raw))) return
-      } catch (e) { /* 读不到视为没选过 */ }
+    // 统一真源变化回调：本视图下拉 / 实时线路 / 极简站牌 / 设置面板任一处改动都会广播到这里
+    applyRefreshSec(sec) {
       if (sec === this.refreshSec) return
       this.refreshSec = sec
       this.restartAutoRefresh()
       if (sec > 0 && !this.loading) this.loadLive(true)
+    },
+    // 兼容宿主 fire() 的历史转发入口
+    onGlobalRefresh(sec) {
+      this.applyRefreshSec(sec)
     },
     // 地图来源切换（设置面板）即时跟随：只重算底图瓦片，走向/站点/车辆等覆盖层不动。
     // 原生 <map> 模式（App 端带 Key）底图由 uni 内置，不支持换源，直接忽略。
@@ -1860,20 +1900,14 @@ export default {
       if (this.loading) return
       this.loadLive()
     },
-    // 选择刷新间隔：0 手动 / 15 / 20 / 30 秒
+    // 选择刷新间隔：写入全站唯一真源，由广播驱动地图页 + 其余所有刷新控件
     setRefreshSec(sec) {
-      this.refreshMenu = false
+      this.closeRefreshMenu()
       if (sec === this.refreshSec) {
         this.restartAutoRefresh()
         return
       }
-      this.refreshSec = sec
-      try {
-        uni.setStorageSync(REFRESH_KEY, sec)
-      } catch (e) { /* 忽略 */ }
-      this.restartAutoRefresh()
-      // 切到自动模式立刻拉一次，不必等满一个间隔才看到变化
-      if (sec > 0) this.loadLive(true)
+      saveRefreshSec(sec)
       uni.showToast({ title: sec > 0 ? `已开启：每 ${sec} 秒自动刷新` : '已改为手动刷新', icon: 'none' })
     },
     // 重建定时器（0 = 手动，不建定时器）
@@ -2877,11 +2911,14 @@ export default {
       // 1) 走向线（轨迹点过多时抽样，避免路径字符串过长拖慢渲染）+ 方向箭头
       const routes = []
       const arrows = []
+      // 每个方向「实际画出来的」屏幕点序列，供下面站点圆点吸附，保证圆点落在线上
+      const routePts = {}
       dirs.forEach((d) => {
         const pts = ptsOf(d)
         if (pts.length < 2) return
         const step = pts.length > 400 ? Math.ceil(pts.length / 400) : 1
         const sampled = step > 1 ? pts.filter((p, i) => i % step === 0).concat([pts[pts.length - 1]]) : pts
+        routePts[d] = sampled
         // 未贴路（计算中/失败）时画细虚线 + 半透明：明确告诉用户这是站间直连估算，不是真实走向
         // 贴路后两个方向靠颜色 + 横向偏移区分，不再用虚线（双轨并排比虚线更好读）
         const snapped = !!(this.routeByDir[d] && this.routeByDir[d].length > 1)
@@ -2937,8 +2974,13 @@ export default {
           const lat = parseFloat(st.latitude)
           const lng = parseFloat(st.longitude)
           if (isNaN(lat) || isNaN(lng)) return
-          const x = sx(lng)
-          const y = sy(lat)
+          // 站点圆点吸附到本方向实际绘制的走向线（含分轨偏移 / 贴路几何），
+          // 消除「站点所在位置与线路走向错开」；距离超限时保留原始投影点
+          const rawX = sx(lng)
+          const rawY = sy(lat)
+          const onRoute = snapToRoute(routePts[d], rawX, rawY)
+          const x = onRoute ? onRoute.x : rawX
+          const y = onRoute ? onRoute.y : rawY
           const isFirst = i === 0
           const isLast = i === arr.length - 1
           const terminal = isFirst || isLast
@@ -3226,6 +3268,8 @@ export default {
       const list = []
       seen.forEach((d) => {
         const l = lib.get(String(d.no)) || {}
+        // 已停运线路不展示在换乘列表里：无在运车辆，走向也只是历史档案
+        if (l.status === '停运') return
         list.push({
           no: d.no,
           code: d.code,
@@ -3658,8 +3702,7 @@ export default {
 .fs-btn {
   position: absolute;
   right: 20rpx;
-  /* 让位给右下角「更新信息」悬浮按钮（见 UpdateInfo.vue）：上移到 126rpx，形成右下角按钮栈 */
-  bottom: 126rpx;
+  bottom: 20rpx;
   z-index: 25;
   display: flex;
   align-items: center;
@@ -4177,6 +4220,23 @@ export default {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+/* 非集团线路的公司徽标：左侧直接放公司自己的 SVG 标（自带配色），文字走中性白不抢色；
+   圆标尺寸与集团线的 .org-no 对齐，同一行混排时高度不跳 */
+.org-tag.foreign {
+  background: rgba(255, 255, 255, 0.07);
+  border-color: rgba(255, 255, 255, 0.18);
+}
+.org-logo {
+  width: 40rpx;
+  height: 40rpx;
+  border-radius: 50%;
+  margin-right: 12rpx;
+  flex-shrink: 0;
+}
+.org-tag.foreign .org-name {
+  color: rgba(255, 255, 255, 0.9);
+  font-weight: 700;
+}
 /* 右侧栏：一张列容器把「实时车辆」与「发车时刻表」两张独立卡片上下排好。
    高度交给内容（不写 bottom），否则卡下方的空白条会盖住地图、吃掉拖拽手势 */
 .side-col {
@@ -4245,29 +4305,6 @@ export default {
   border: 2rpx solid rgba(255, 255, 255, 0.08);
 }
 .fn-logo { flex: 0 0 auto; width: 34rpx; height: 34rpx; border-radius: 8rpx; }
-/* 复制按钮：与刷新胶囊同高（56rpx）同字号（24rpx）的幽灵小圆角，hover 提到靛蓝 */
-.copy-btn {
-  height: 56rpx;
-  box-sizing: border-box;
-  line-height: 52rpx;
-  font-size: 24rpx;
-  color: rgba(255, 255, 255, 0.66);
-  background: rgba(255, 255, 255, 0.08);
-  border: 2rpx solid rgba(255, 255, 255, 0.14);
-  border-radius: 999rpx;
-  padding: 0 20rpx;
-  cursor: pointer;
-  white-space: nowrap;
-  flex-shrink: 0;
-  transition: transform 0.15s, background 0.2s, color 0.2s;
-}
-.copy-btn:hover {
-  color: var(--ac-text);
-  background: rgba(var(--ac-rgb), 0.3);
-}
-.copy-btn:active {
-  transform: scale(0.94);
-}
 /* 折叠态：只收车辆列表，高度自然收缩 */
 .panel.collapsed .panel-header {
   margin-bottom: 0;
@@ -4357,7 +4394,7 @@ export default {
 .refresh-pill {
   display: flex;
   align-items: stretch;
-  /* 固定高度与复制按钮（.copy-btn）对齐：同一行两个控件大小统一 */
+  /* 固定高度与复制胶囊（.copy-pill）对齐：同一行两个控件大小统一 */
   height: 56rpx;
   box-sizing: border-box;
   border-radius: 999rpx;

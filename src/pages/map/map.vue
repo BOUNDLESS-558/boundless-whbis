@@ -58,8 +58,15 @@
         resize-key="stops"
         @close="view = 'map'"
       >
-        <!-- 仿真站牌开关：原先在「账号与设置」里，挪到实时线路窗头，随当前方向区分上下行 -->
+        <!-- 实时线路窗头工具：极简站牌开关合并成「开启 / 退出」两态（退出入口从面板内
+             移到窗头，与其它窗口工具并列，极简面板内只留上下行切换和刷新胶囊） -->
         <template #actions>
+          <view
+            class="fw-act"
+            :class="{ on: minStopsMode }"
+            @click.stop="onMinStopsMode(!minStopsMode)"
+            :title="minStopsMode ? '退出极简站牌，返回完整视图' : '开启极简站牌：只显示线路头、候车信息与站点序列'"
+          >{{ minStopsMode ? '✕ 退出极简' : '▤ 极简站牌' }}</view>
           <view class="fw-act" @click.stop="onCopyRouteImg" title="复制线路仿真走向图（按当前方向区分上下行）">📷</view>
         </template>
         <LineStops
@@ -70,6 +77,7 @@
           :direction="direction"
           :start-stop="startStop"
           :end-stop="endStop"
+          :min-mode="minStopsMode"
           @set-dir="onSetDir"
         />
       </FloatWin>
@@ -204,9 +212,9 @@
 
           <view class="acct-div"></view>
 
-          <!-- 全局默认刷新间隔 -->
+          <!-- 刷新间隔（全站统一） -->
           <view class="acct-sec-head" @click="toggleAcctSection('refresh')">
-            <text class="acct-sec-title">全局默认刷新间隔</text>
+            <text class="acct-sec-title">刷新间隔</text>
             <text class="acct-sec-sum" v-if="!acctSec.refresh">{{ acctSecSummary.refresh }}</text>
             <text class="acct-sec-chev" :class="{ folded: !acctSec.refresh }">▾</text>
           </view>
@@ -220,7 +228,7 @@
                 @click="onRefreshDefault(s)"
               >{{ s === 0 ? '手动' : s + ' 秒' }}</view>
             </view>
-            <view class="acct-tip">实时线路 / 实时车辆未手动选过间隔时采用该默认值，改完即时生效</view>
+            <view class="acct-tip">实时线路、地图页、极简站牌里的刷新按钮共用此设置；任意一处改动，其余按钮即时同步</view>
           </view>
 
           <view class="acct-div"></view>
@@ -319,27 +327,6 @@
 
           <view class="acct-div"></view>
 
-          <!-- 复制方式：全站所有复制按钮统一按此档执行，改完即时生效（无需重启） -->
-          <view class="acct-sec-head" @click="toggleAcctSection('copy')">
-            <text class="acct-sec-title">复制方式</text>
-            <text class="acct-sec-sum" v-if="!acctSec.copy">{{ acctSecSummary.copy }}</text>
-            <text class="acct-sec-chev" :class="{ folded: !acctSec.copy }">▾</text>
-          </view>
-          <view v-show="acctSec.copy" class="acct-sec-body">
-            <view class="acct-seg">
-              <view
-                class="acct-seg-item"
-                v-for="o in copyModeOpts"
-                :key="o.key"
-                :class="{ on: copyMode === o.key }"
-                @click="onCopyMode(o.key)"
-              >{{ o.label }}</view>
-            </view>
-            <view class="acct-tip">{{ copyModeTip }}</view>
-          </view>
-
-          <view class="acct-div"></view>
-
           <view class="acct-tip">注销后回到登录页，本机账号保留，下次可直接登录</view>
           <view class="acct-logout" @click="acctConfirm = true">注销登录</view>
         </view>
@@ -384,8 +371,6 @@
         </view>
       </view>
     </view>
-    <!-- 右下角「更新信息」悬浮入口：单击弹出版本号与更新记录 -->
-    <UpdateInfo />
   </view>
 </template>
 
@@ -407,8 +392,9 @@ import {
   getAccent,
   setAccent,
   previewAccent,
-  getRefreshDefault,
-  setRefreshDefault,
+  getRefreshSec,
+  setRefreshSec as saveRefreshSec,
+  onRefreshSecChange,
   getMapSource,
   setMapSource,
   getSimSignboard,
@@ -423,9 +409,9 @@ import {
   setSessionDays,
 } from '../../utils/settings.js'
 import { getAvatar, removeAvatar, pickAvatar } from '../../utils/avatar.js'
-import { COPY_MODE_OPTS, getCopyMode, setCopyMode } from '../../utils/settings.js'
+import { getMinStopsMode, setMinStopsMode } from '../../utils/settings.js'
 import FavPanel from '../../components/FavPanel.vue'
-import UpdateInfo from '../../components/UpdateInfo.vue'
+import { closeAllDropdowns } from '../../utils/dropdown.js'
 
 // 上次查过的线路：下次进来直接落在地图上，省掉「每次都要搜一遍」
 const HOME_LINE_KEY = 'whbis:home-line'
@@ -438,12 +424,12 @@ const CITY_ACT_KEY = 'whbis:city-activated'
 const CITY_ACT_CODE = 'BOUNDLESS_558'
 // 「账号与设置」各分区的展开态：本机记忆，避免每次开窗都要重新点开
 const ACCT_SECTIONS_KEY = 'whbis:acct-sections'
-const ACCT_SECTION_KEYS = ['session', 'pwd', 'refresh', 'skin', 'accent', 'font', 'map', 'copy']
+const ACCT_SECTION_KEYS = ['session', 'pwd', 'refresh', 'skin', 'accent', 'font', 'map']
 // 默认：常用的小分区展开，字体（13 档）与密码表单这类长分区默认收起，
 // 让面板首屏就能看到全部设置项，不用一路滚到底
 const ACCT_SECTIONS_DEFAULT = {
   session: true, pwd: false, refresh: true, skin: true, accent: true, font: false,
-  map: true, copy: true,
+  map: true,
 }
 
 export default {
@@ -488,9 +474,8 @@ export default {
       // 界面字体：当前生效档 + 档位列表（preview = 选项卡预览用的 family 串）
       uiFont: 'system',
       fontOpts: FONT_OPTS.map((o) => ({ ...o, preview: o.family ? o.family + ', sans-serif' : 'inherit' })),
-      // 复制方式：全站复制按钮统一按此档执行
-      copyMode: 'text',
-      copyModeOpts: COPY_MODE_OPTS,
+      // 极简站牌模式：只保留线路头 + 候车信息 + 站点序列，隐藏多余控件
+      minStopsMode: false,
       // 设置分区展开态（本机记忆，见 ACCT_SECTIONS_DEFAULT）
       acctSec: { ...ACCT_SECTIONS_DEFAULT },
       sessionOpts: [
@@ -543,9 +528,7 @@ export default {
       const map = this.mapSourceOpts.find((o) => o.key === this.mapSource)
       const accent = this.accentPresets.find((p) => p.hex === this.accent)
       const days = this.sessionOpts.find((o) => o.days === this.sessionDays)
-      const copy = this.copyModeOpts.find((o) => o.key === this.copyMode)
       return {
-        copy: copy ? copy.label : '复制为文本',
         session: days ? days.label : `${this.sessionDays} 天`,
         pwd: this.pwdCustom ? '自定义密码' : '预置口令',
         refresh: this.refreshDefault === 0 ? '手动刷新' : `${this.refreshDefault} 秒`,
@@ -554,15 +537,6 @@ export default {
         font: font ? font.label : '系统默认',
         map: map ? map.label : '高德地图',
       }
-    },
-    copyModeTip() {
-      if (this.copyMode === 'image') {
-        return '所有复制按钮将把表格画成 PNG 图片写入剪贴板，图片页脚标注生成时间；当前环境不支持时自动回退为文本'
-      }
-      if (this.copyMode === 'excel') {
-        return '所有复制按钮将写入带样式的 HTML 表格，粘贴到 Excel / WPS 直接是可编辑表格；同时附带纯文本兜底，不支持时回退为文本'
-      }
-      return '所有复制按钮将复制 TSV 纯文本，可直接粘贴进 Excel / 表格'
     },
     // 是否所有分区都已展开（决定快捷按钮文案与方向）
     acctAllOpen() {
@@ -573,6 +547,9 @@ export default {
     // 登录守卫：未登录一律回登录页（pages.json 首页已指向 login，这里兜底深链/回退）
     if (!requireLogin()) return
     this.account = currentAccount()
+    // 刷新间隔全站统一：任一控件改动时，反向同步设置面板里的选中态
+    this.refreshDefault = getRefreshSec()
+    this._offRefresh = onRefreshSecChange((sec) => { this.refreshDefault = sec })
     const q = query || {}
     if (q.lineCode) {
       this.applyPick({
@@ -610,6 +587,10 @@ export default {
     this.fire(['onHide', 'stopAutoRefresh'])
   },
   onUnload() {
+    if (this._offRefresh) {
+      this._offRefresh()
+      this._offRefresh = null
+    }
     this.fire(['cleanup', 'stopAutoRefresh'])
   },
   methods: {
@@ -755,6 +736,7 @@ export default {
     // 进入全市公交：未激活弹出自定义激活弹窗，已激活直接进
     enterCity() {
       if (this.isCityActivated()) { this.view = 'city'; return }
+      closeAllDropdowns()
       this.actCode = ''
       this.actShow = true
     },
@@ -776,6 +758,7 @@ export default {
     },
     // 顶栏账号胶囊：开「账号与设置」窗；会话已失效时胶囊会引导重新登录
     onAccount() {
+      closeAllDropdowns()
       this.acctConfirm = false
       this.account = currentAccount()
       if (!this.account) {
@@ -785,12 +768,12 @@ export default {
       this.syncIdentity()
       this.skin = getSkin()
       this.accent = getAccent()
-      this.refreshDefault = getRefreshDefault()
+      this.refreshDefault = getRefreshSec()
       this.mapSource = getMapSource()
       this.sessionDays = getSessionDays()
       this.uiFont = getFont()
-      this.copyMode = getCopyMode()
       this.simSignboard = getSimSignboard()
+      this.minStopsMode = getMinStopsMode()
       this.loadAcctSections()
       // 预载各档 CSS：让「界面字体」选项卡用真字体渲染当预览
       ensureFontPreviews()
@@ -879,6 +862,12 @@ export default {
       this.simSignboard = setSimSignboard(!!on)
       uni.showToast({ title: this.simSignboard ? '已启用仿真站牌设计' : '已关闭仿真站牌设计', icon: 'none' })
     },
+    // 极简站牌模式：只保留线路头 + 候车信息 + 站点序列，隐藏多余控件
+    // 设置面板的「开启 / 关闭」与极简面板里的「✕ 退出极简」都走这里
+    onMinStopsMode(on) {
+      this.minStopsMode = setMinStopsMode(!!on)
+      uni.showToast({ title: this.minStopsMode ? '已启用极简站牌' : '已关闭极简站牌', icon: 'none' })
+    },
     // 复制线路走向图（仿真）：按当前方向渲染路线图为 PNG 再写入剪贴板
     onCopyRouteImg() {
       const c = this.$refs.stopsC
@@ -894,20 +883,11 @@ export default {
       const opt = this.fontOpts.find((o) => o.key === key)
       uni.showToast({ title: `字体已切换：${opt ? opt.label : key}`, icon: 'none' })
     },
-    // 复制方式：设置落库后所有复制按钮下次点击即按新档执行（工具函数每次点击都读设置）
-    onCopyMode(key) {
-      this.copyMode = setCopyMode(key)
-      const opt = this.copyModeOpts.find((o) => o.key === key)
-      uni.showToast({ title: `复制方式：${opt ? opt.label : key}`, icon: 'none' })
-    },
-    // 全局默认刷新：实时线路 / 实时车辆未手动选过间隔时采用；已打开的视图即时跟随
+    // 刷新间隔（全站唯一真源）：写入后由 settings 广播到所有已挂载的刷新控件，
+    // 无需再用 $refs 逐个推送；设置面板自身也通过订阅反向跟随其它控件的改动
     onRefreshDefault(sec) {
-      this.refreshDefault = setRefreshDefault(sec)
-      ;['mapC', 'stopsC'].forEach((key) => {
-        const c = this.$refs[key]
-        if (c && typeof c.onGlobalRefresh === 'function') c.onGlobalRefresh(this.refreshDefault)
-      })
-      uni.showToast({ title: sec > 0 ? `全局默认刷新：每 ${sec} 秒` : '全局默认刷新：手动', icon: 'none' })
+      this.refreshDefault = saveRefreshSec(sec)
+      uni.showToast({ title: sec > 0 ? `刷新间隔：每 ${sec} 秒` : '刷新间隔：手动', icon: 'none' })
     },
     // 登录有效期：立即生效（从当下重算当前会话到期时间）
     onSessionDays(days) {
@@ -1606,19 +1586,24 @@ export default {
 .acct-btn.save:hover {
   filter: brightness(1.08);
 }
-/* 实时线路窗头的「站牌」切换按钮：与 📌/✕ 同高，胶囊描边，激活态用青蓝实心 */
+/* 实时线路窗头的「站牌」切换按钮：与 📌/✕ 等高（56rpx），胶囊描边，激活态用青蓝实心 */
 .fw-act {
-  height: 52rpx;
-  line-height: 52rpx;
-  padding: 0 20rpx;
+  height: 56rpx;
+  line-height: 56rpx;
+  padding: 0 22rpx;
   border-radius: 999rpx;
   font-size: 22rpx;
   font-weight: 700;
+  letter-spacing: 0.4rpx;
   color: rgba(255, 255, 255, 0.72);
   background: rgba(255, 255, 255, 0.08);
   border: 2rpx solid rgba(255, 255, 255, 0.14);
   cursor: pointer;
   transition: background 0.18s, color 0.18s, border-color 0.18s, transform 0.12s;
+}
+.fw-act:hover {
+  background: rgba(255, 255, 255, 0.15);
+  color: #fff;
 }
 .fw-act.on {
   color: #06121f;

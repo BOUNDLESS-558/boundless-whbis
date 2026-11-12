@@ -1,7 +1,7 @@
 /**
  * 统一复制出口（全站所有「复制」按钮都走这里）
  *
- * 设置项 copyMode 决定行为：
+ * 复制方式（whbis:copy-mode，由各复制胶囊右半的档位下拉切换，全站共享一份）决定行为：
  *   - 'text'  ：uni.setClipboardData 写 TSV / 纯文本（原有行为）
  *   - 'image' ：H5 用离屏 canvas 把同一份表格画成 PNG，经 ClipboardItem 写入系统剪贴板
  *               （粘贴到微信 / 文档 / 聊天窗口即为一张图片）；页脚标注生成时间，便于判断数据时效

@@ -73,15 +73,45 @@ page {
   color: #ffffff;
 }
 
-/* ── 白色皮肤（html[data-skin='light']）──
-   根节点反色滤镜方案：深色 UI 一键反转成浅色，图片 / 地图瓦片 / 画布 / 视频再
-   反转一次还原本色（两次反转互相抵消）。CSS 规范对「根元素上的 filter」有豁免——
-   不会改变 position:fixed 后代的包含块，悬浮窗 / 遮罩 / toast 定位不受影响；
-   反转+色相旋转近似保留各强调色的色相（靛蓝仍靛蓝、玫红仍玫红），只翻明暗。 */
+/* ── 白色皮肤「柔和纸感」（html[data-skin='light']，2026-11-12 重设计）──
+   全站 700+ 处色值是深色硬编码，逐处改写成语义变量成本与风险过高，故保留
+   「根节点反色」骨架，但不再让结果停在「纯白 + 高饱和 + 强对比」：
+     · brightness(.89) 压掉 #fff 级亮面，把面板 / 卡片 / 底图落到柔和浅灰
+     · contrast(.90)   收敛白底深字的极端对比，仍高于 WCAG 4.5:1
+     · saturate(.52)   强调色 / 方向色 / 地图色块降饱和，减少色彩刺激
+   顺序固定：先 invert + hue-rotate 翻明暗并还原色相，再做整体柔化；调换会让色相偏移。
+   CSS 规范对「根元素上的 filter」有豁免——不会改变 position:fixed 后代的包含块，
+   悬浮窗 / 遮罩 / toast 定位不受影响。
+   html 自身也在滤镜链内，故以下深色值反色后才是页面看到的柔和浅灰。 */
 html[data-skin='light'] {
-  filter: invert(1) hue-rotate(180deg);
-  background: #e8edf6;
+  filter: invert(1) hue-rotate(180deg) brightness(0.89) contrast(0.90) saturate(0.52);
+  background: #1b2029;
 }
+
+/* 深色遮罩 + 背景照片在根节点反色后会变成「浅色遮罩 + 负片照片」，既刺眼又脏。
+   浅色皮肤改用纯柔和渐变（同样写深色让反色后成浅灰），并去掉照片层。 */
+html[data-skin='light'] page {
+  background-color: #1b2029;
+  background-image: linear-gradient(160deg, #1b2029 0%, #242b37 48%, #181d26 100%);
+}
+
+/* 自绘走向图底色 / 地图瓦片：原恒定压暗滤镜作用在「已二次反色的负片瓦片」上，
+   经根节点再反色反而把底图翻得更亮（截图里刺眼白底的根源）。浅色皮肤下：
+   · 去掉 .tile-layer 的压暗滤镜，避免「压暗→反色→更亮」的悖论
+   · 蒙版改写浅色值，反色后还原为深色压暗层，让瓦片回到柔和灰
+   · 瓦片未到位的兜底底色同样写深色，避免露出深色块 */
+html[data-skin='light'] .schematic {
+  background: #1b2029;
+}
+html[data-skin='light'] .tile-layer {
+  filter: none;
+  background: #20252d;
+}
+html[data-skin='light'] .tile-shade {
+  background: rgba(236, 240, 244, 0.38);
+}
+
+/* 头像 / Logo / 画布 / 地图瓦片等二次反色还原本色（两次反转互相抵消） */
 html[data-skin='light'] img,
 html[data-skin='light'] uni-image,
 html[data-skin='light'] canvas,

@@ -106,6 +106,7 @@ import { assetUrl } from '../utils/asset.js'
 import { suggestLines, countMatches, normNo, lineStatus, lineCount as getLineCount, findLine } from '../utils/lineIndex.js'
 import { companyOf } from '../utils/companies.js'
 import FavStar from './FavStar.vue'
+import { attachDropdown } from '../utils/dropdown.js'
 
 export default {
   name: 'LineSearch',
@@ -183,14 +184,22 @@ export default {
         : `线路库未收录「${this.lineNo}」，点「查询」仍可直接向后端查一次`
     },
   },
+  mounted() {
+    // 联想面板也归入全站下拉互斥：点刷新 / 复制胶囊时自动收起，点空白处同样收起
+    attachDropdown(this, 'suggestOpen', 'suggest')
+  },
+  beforeUnmount() {
+    if (this._dd) this._dd.dispose()
+  },
   watch: {
     // 宿主换线（选线 / 联想点选 / URL 进页）时同步进搜索框；用户手输不回抛，避免来回抖动
     lineNoProp(v) {
       this.lineNo = v || ''
-      this.suggestOpen = false
+      this.closeSuggest()
     },
   },
   methods: {
+    closeSuggest() { if (this._dd) this._dd.close() },
     // 运行状态徽标：兼容联想项（status/early/last）
     statusOf(item) {
       return lineStatus(item)
@@ -214,7 +223,8 @@ export default {
     },
     // 用户输入即展开联想（不用 watch，避免“点选后设值”又把面板弹回来）
     onInput() {
-      this.suggestOpen = true
+      // 展开权交给全站仲裁：输入时自动把其它下拉收掉
+      if (this._dd) this._dd.open()
     },
     // 拼装选线对象，上抛给宿主页（line 页去拉取详情）
     buildPick(no, label, start, end) {
@@ -227,7 +237,7 @@ export default {
       }
     },
     pickSuggest(s) {
-      this.suggestOpen = false
+      this.closeSuggest()
       this.lineNo = s.no
       // 库里的 no 是真实线路号，code 才是后端 lineCode（电1 的 code 是 1001）
       const p = this.buildPick(s.code || s.no, s.no, s.start, s.end)
@@ -236,7 +246,7 @@ export default {
       this.$emit('pick', p)
     },
     doSearch() {
-      this.suggestOpen = false
+      this.closeSuggest()
       const no = (this.lineNo || '').trim()
       if (!no) {
         uni.showToast({ title: this.cityMode ? '请输入线路号或车辆自编号' : '请输入线路号', icon: 'none' })
@@ -252,6 +262,7 @@ export default {
       this.$emit('pick', this.buildPick(no, no))
     },
     quickSearch(no) {
+      this.closeSuggest()
       this.lineNo = no
       this.$emit('pick', this.buildPick(no, no))
     },
@@ -583,7 +594,7 @@ export default {
   -webkit-backdrop-filter: blur(26px) saturate(170%);
   border: 2rpx solid rgba(255, 255, 255, 0.16);
   box-shadow: 0 24rpx 56rpx rgba(0, 0, 0, 0.55), inset 0 1rpx 0 rgba(255, 255, 255, 0.12);
-  /* 上限从 58vh 抬到 72vh：多列网格铺开后，常见输入（≤12 条）已能一屏看全，不必滚 */
+  /* 上限 72vh：结果多时面板内部滚动，不会顶出视口（宽屏每行 2 条、窄屏 1 条） */
   max-height: 72vh;
   overflow-y: auto;
 }
@@ -602,10 +613,13 @@ export default {
   font-size: 19rpx;
   color: rgba(255, 255, 255, 0.32);
 }
-/* 联想条目：紧凑单行 + 自适应多列网格——宽面板一行可放 2~3 条，避免结果多时只能竖着滚 */
+/* 联想条目：紧凑单行 + 自适应多列网格。
+   列宽下限取 560rpx（≈280px）：要能放下「公司徽标 + 线路号 + 起讫站 + 星标 + 状态点」，
+   原来 300rpx 只够线路号和半截起讫站，宽面板还会硬排成 4 列把站名整段裁掉。
+   min(100%, …) 兜住极窄容器，避免溢出。 */
 .sug-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(300rpx, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 560rpx), 1fr));
   gap: 10rpx;
   padding: 2rpx 0 4rpx;
 }
@@ -647,8 +661,8 @@ export default {
 .sug-route {
   flex: 1;
   min-width: 0;
-  font-size: 19rpx;
-  color: rgba(255, 255, 255, 0.5);
+  font-size: 20rpx;
+  color: rgba(255, 255, 255, 0.58);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;

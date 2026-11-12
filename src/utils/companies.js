@@ -46,16 +46,6 @@ export function companyKeyOfNo(no) {
   return 'JT'
 }
 
-/** 高德 company 字段 → 公司 key；集团各分公司 / 空值都归 JT */
-export function companyKeyOfAmap(v) {
-  const s = Array.isArray(v) ? '' : String(v || '').trim()
-  if (!s) return 'JT'
-  for (const k of ['CC', 'ML', 'HQ']) {
-    if (COMPANIES[k].amapNames.some((re) => re.test(s))) return k
-  }
-  return 'JT'
-}
-
 /** org 全名（集团第一…第九营运公司，或非集团全称）→ {key,label,full,color,logo} */
 export function orgInfo(line) {
   const full = String((line && (line.org || line.company)) || '').trim()

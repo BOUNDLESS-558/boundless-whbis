@@ -286,10 +286,14 @@ export default {
   box-sizing: border-box;
   /* ⚠ 根节点上不能有 transform / filter / backdrop-filter：它会把窗口变成
        内部 fixed 后代（线路库详情弹层、刷新下拉遮罩）的包含块，弹层就会被限制在窗口里 */
-  background: rgba(11, 16, 32, 0.94);
-  border: 2rpx solid rgba(255, 255, 255, 0.16);
+  /* 顶部一层极淡的玻璃反光：卡片顶部亮、越往下越透明，地图上更有悬浮层次。
+     纯背景渐变不会创建包含块，不影响内部 fixed 弹层（线路库详情 / 刷新下拉遮罩）。 */
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.065) 0, rgba(255, 255, 255, 0.016) 68rpx, transparent 156rpx),
+    rgba(11, 16, 32, 0.94);
+  border: 2rpx solid rgba(255, 255, 255, 0.17);
   border-radius: 32rpx;
-  box-shadow: 0 24rpx 64rpx rgba(0, 0, 0, 0.5), inset 0 1rpx 0 rgba(255, 255, 255, 0.18);
+  box-shadow: 0 26rpx 70rpx rgba(0, 0, 0, 0.52), 0 2rpx 8rpx rgba(0, 0, 0, 0.28), inset 0 1rpx 0 rgba(255, 255, 255, 0.2);
   /* 量好位置前不画（否则首帧会从 left:50% 往左跳一下） */
   opacity: 0;
 }
@@ -310,25 +314,36 @@ export default {
 /* 标题栏就是拖动手柄：按住任意空白处即可移动窗口 */
 .fw-head {
   flex-shrink: 0;
+  position: relative;
   display: flex;
   align-items: center;
   gap: 14rpx;
   padding: 22rpx 26rpx 18rpx;
-  border-bottom: 2rpx solid rgba(255, 255, 255, 0.1);
   cursor: move;
   touch-action: none;
   -webkit-user-select: none;
   user-select: none;
 }
+/* 分隔线两端渐隐，比整条实线更轻，减少窗头噪音 */
+.fw-head::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 2rpx;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.14) 16%, rgba(255, 255, 255, 0.14) 84%, transparent);
+}
 .fw-grip {
   font-size: 24rpx;
   line-height: 1;
   letter-spacing: -2rpx;
-  color: rgba(255, 255, 255, 0.3);
+  color: rgba(255, 255, 255, 0.22);
 }
 .fw-title {
-  font-size: 32rpx;
+  font-size: 31rpx;
   font-weight: 800;
+  letter-spacing: 0.6rpx;
   color: #fff;
   white-space: nowrap;
 }
@@ -336,8 +351,9 @@ export default {
   flex: 1;
   min-width: 0;
   text-align: right;
-  font-size: 22rpx;
-  color: rgba(255, 255, 255, 0.42);
+  font-size: 21rpx;
+  letter-spacing: 0.4rpx;
+  color: rgba(255, 255, 255, 0.46);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -362,6 +378,12 @@ export default {
   background: rgba(255, 255, 255, 0.08);
   border: 2rpx solid transparent;
   cursor: pointer;
+  transition: background 0.18s ease, color 0.18s ease, transform 0.12s ease;
+}
+.fw-pin:hover,
+.fw-close:hover {
+  background: rgba(255, 255, 255, 0.16);
+  color: #fff;
 }
 .fw-pin:active,
 .fw-close:active {

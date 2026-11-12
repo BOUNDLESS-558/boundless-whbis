@@ -112,13 +112,23 @@ function parseNo(name) {
   return { no: m[1].toUpperCase() + (m[2] || ''), base: m[1].toUpperCase() }
 }
 
-/** 高德原始线路名（去掉起讫站括号），作为检索别名写进摘要 */
+// 高德原始线路名（去掉起讫站括号），作为检索别名写进摘要
 function displayName(name) {
   return String(name || '').split('(')[0].trim()
 }
 
+// 采集器专用：从高德 company 字段推断公司 key（与前端 companyKeyOfAmap 逻辑一致）
+function companyKeyFromAmapName(v) {
+  const s = Array.isArray(v) ? '' : String(v || '').trim()
+  if (!s) return 'JT'
+  for (const k of ['CC', 'ML', 'HQ']) {
+    if (COMP[k].amapNames.some((re) => re.test(s))) return k
+  }
+  return 'JT'
+}
+
 function companyOf(busline, no) {
-  const byName = COMP.companyKeyOfAmap(busline.company)
+  const byName = companyKeyFromAmapName(busline.company)
   if (byName !== 'JT') return byName
   return COMP.companyKeyOfNo(no)
 }

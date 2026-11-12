@@ -1,5 +1,9 @@
 <template>
-  <view class="stops" :class="{ plain: plain }">
+  <view class="stops" :class="{ plain: plain, 'min-mode': minMode }">
+    <!-- ════════════════════════════════════════════════════════ -->
+    <!-- 非极简模式：原有完整布局                                -->
+    <!-- ════════════════════════════════════════════════════════ -->
+    <template v-if="!minMode">
     <!-- 卡1：线路头 —— 徽标 / 走向 / 公司 + 营运指标行 -->
     <view class="mod">
       <view class="mod-row head-row">
@@ -11,12 +15,12 @@
             <text class="hd-arrow">⇌</text>
             <text class="hd-tag hd-tag-last">终</text>
             <text class="hd-end">{{ activeBase.endStop || endStop || '终点' }}</text>
-          </view>
-          <!-- 营运公司（由车辆自编号首位推断） -->
-          <view class="hd-orgs" v-if="operatorCompanies.length">
-            <view class="org-tag" v-for="c in operatorCompanies" :key="c.no">
-              <text class="org-no">{{ c.no }}</text>
-              <text class="org-name">{{ c.label }}</text>
+            <!-- 营运公司（由车辆自编号首位推断）：跟在起讫站右侧同一行 -->
+            <view class="hd-orgs" v-if="operatorCompanies.length">
+              <view class="org-tag" v-for="c in operatorCompanies" :key="c.no">
+                <text class="org-no">{{ c.no }}</text>
+                <text class="org-name" :title="c.label">{{ c.short }}</text>
+              </view>
             </view>
           </view>
         </view>
@@ -26,7 +30,7 @@
 
       <view class="mod-div"></view>
 
-      <!-- 指标行：首末班 / 票价 / 站数 / 在线（点“在线”一键复制车辆明细） -->
+      <!-- 指标行：首末班 / 票价 / 站数 / 在线（点"在线"一键复制车辆明细） -->
       <view class="mod-row ops-row">
         <view class="ops-item">
           <text class="ops-value">{{ activeBase.earlyHour || '--' }}</text>
@@ -57,7 +61,7 @@
     </view>
 
     <!-- 卡2：控制卡 —— 方向分段 + 刷新胶囊 -->
-    <view class="mod mod-ctrl">
+    <view class="mod mod-ctrl" :class="{ 'menu-open': refreshMenu }">
       <view class="mod-row dir-row">
         <view class="seg-groove grow">
           <view class="seg-tab up" :class="{ on: dir === 0 }" @click="setDir(0)">▲ 上行</view>
@@ -71,7 +75,7 @@
               <text class="rp-ico" :class="{ spin: loading }">↻</text>
             </view>
             <view class="rp-split"></view>
-            <view class="rp-mode" @click="refreshMenu = !refreshMenu" :title="refreshTitle">
+            <view class="rp-mode" @click="toggleRefreshMenu" :title="refreshTitle">
               <text class="rp-txt">{{ refreshLabel }}</text>
               <text class="rp-caret" :class="{ open: refreshMenu }">▾</text>
             </view>
@@ -117,7 +121,7 @@
                 <text class="b-state">{{ b.arrived === '1' ? '到站' : '行驶' }}</text>
               </view>
             </view>
-            <!-- 连续线段 + 站点：首站=起点(绿) / 末站=终点(琥珀)，中间站空心环，明确“起”“终” -->
+            <!-- 连续线段 + 站点：首站=起点(绿) / 末站=终点(琥珀)，中间站空心环，明确"起""终" -->
             <view class="node-mid">
               <view class="seg" :class="{ first: i === 0, last: i === activeCols.length - 1 }"></view>
               <view
@@ -154,8 +158,112 @@
       <view class="empty-text">暂无{{ dir === 0 ? '上行' : '下行' }}站点数据</view>
     </view>
 
-    <!-- 刷新间隔下拉的“点外部关闭”透明遮罩 -->
-    <view class="rm-mask" v-if="refreshMenu" @click="refreshMenu = false"></view>
+    </template>
+
+    <!-- ════════════════════════════════════════════════════════ -->
+    <!-- 极简模式：只显示线路头 + 候车信息 + 站点序列 + 车辆自编号  -->
+    <!-- 排列固定竖向（每站一行）；上下行切换与退出入口收在头部操作条 -->
+    <!-- ════════════════════════════════════════════════════════ -->
+    <template v-else>
+      <!-- 极简线路头：线路号 + 上下行标识 + 营运信息 + 起讫站 -->
+      <view class="mod mod-min-head">
+        <view class="min-head-top">
+          <view class="line-badge" :class="dir === 0 ? 'up' : 'down'">{{ lineName }}</view>
+          <view class="min-dir-label" :class="dir === 0 ? 'up' : 'down'">{{ dir === 0 ? '上行' : '下行' }}</view>
+          <view class="min-head-info" v-if="activeBase.earlyHour || activeBase.lastHour || activeBase.price">
+            <text v-if="activeBase.earlyHour" class="min-time-tag">首 {{ activeBase.earlyHour }}</text>
+            <text v-if="activeBase.lastHour" class="min-time-tag">末 {{ activeBase.lastHour }}</text>
+            <text v-if="activeBase.price" class="min-price-tag">¥{{ activeBase.price }}</text>
+          </view>
+        </view>
+        <!-- 起讫站条：起/终小标记 + 两侧等宽站名（左对齐 / 右对齐）+ 居中箭头。
+             旧版两个 flex:1 文本都左对齐，导致「箭头居中、终点站名紧贴箭头、右侧大片留白」 -->
+        <view class="min-head-route">
+          <text class="min-terminal-tag first">起</text>
+          <text class="min-stop start">{{ activeBase.startStop || startStop || '起点' }}</text>
+          <text class="min-arrow">→</text>
+          <text class="min-stop end">{{ activeBase.endStop || endStop || '终点' }}</text>
+          <text class="min-terminal-tag last">终</text>
+        </view>
+
+        <!-- 极简模式隐藏了方向分段 / 统计块 / 原刷新胶囊，这里补回上下行切换、
+             三个明确的复制按钮（线路 / 站点 / 在线）以及同款刷新胶囊 -->
+        <view class="min-tools">
+          <view class="min-dir-seg">
+            <view class="min-dir-btn" :class="{ on: dir === 0, up: dir === 0 }" @click="setDir(0)">↑ 上行</view>
+            <view class="min-dir-btn" :class="{ on: dir === 1, down: dir === 1 }" @click="setDir(1)">↓ 下行</view>
+          </view>
+          <!-- 复制出口统一走 utils/clipboard.js 的 copyTable；档位由 CopyPill 右半的三档下拉决定，
+               与车辆面板 / 发车时刻 / 线路库的复制按钮共享同一份设置 -->
+          <view class="min-copy-group">
+            <CopyPill label="线路" @copy="copyLineInfo" />
+            <CopyPill label="站点" :disabled="!activeCols.length" @copy="copyStopsInfo" />
+            <CopyPill label="在线" :disabled="!onlineCount" @copy="copyOnlineBuses" />
+          </view>
+          <view class="refresh-wrap min-refresh" :class="{ 'menu-open': refreshMenu }">
+            <view class="refresh-pill" :class="{ busy: loading, auto: refreshSec > 0 }">
+              <view class="rp-refresh" @click="onRefresh" :title="loading ? '刷新中…' : '立即刷新'">
+                <text class="rp-ico" :class="{ spin: loading }">↻</text>
+              </view>
+              <view class="rp-split"></view>
+              <view class="rp-mode" @click="toggleRefreshMenu" :title="refreshTitle">
+                <text class="rp-txt">{{ refreshLabel }}</text>
+                <text class="rp-caret" :class="{ open: refreshMenu }">▾</text>
+              </view>
+            </view>
+            <view class="refresh-menu" v-if="refreshMenu">
+              <view
+                class="rm-item"
+                v-for="opt in refreshOptions"
+                :key="opt.sec"
+                :class="{ on: refreshSec === opt.sec }"
+                @click="setRefreshSec(opt.sec)"
+              >
+                <text class="rm-label">{{ opt.label }}</text>
+                <text class="rm-tip">{{ opt.tip }}</text>
+                <text class="rm-check" v-if="refreshSec === opt.sec">✓</text>
+              </view>
+            </view>
+          </view>
+        </view>
+      </view>
+
+      <!-- 极简站点序列：每站一行 -->
+      <view class="mod mod-min-stops" v-if="activeCols.length">
+        <view
+          class="min-stop-row"
+          v-for="(stop, i) in activeCols"
+          :key="stop.stopId"
+          :class="{ 'min-stop-first': i === 0, 'min-stop-last': i === activeCols.length - 1 }"
+        >
+          <view class="min-stop-dot" :class="{ 'min-dot-first': i === 0, 'min-dot-last': i === activeCols.length - 1 }"></view>
+          <view class="min-stop-content">
+            <text class="min-stop-name">{{ stop.stopName }}</text>
+            <text class="min-stop-no" v-if="i !== 0 && i !== activeCols.length - 1">#{{ stop.stopNo }}</text>
+          </view>
+          <!-- 车辆自编号（若有） -->
+          <view class="min-buses" v-if="stop.buses && stop.buses.length">
+            <text
+              class="min-bus-chip"
+              v-for="b in stop.buses.slice(0, 3)"
+              :key="b.busId"
+              :title="busTip(b, stop)"
+            >{{ b.orgId || b.busNo || '?' }}</text>
+            <text class="min-bus-more" v-if="stop.buses.length > 3">+{{ stop.buses.length - 3 }}</text>
+          </view>
+        </view>
+      </view>
+
+      <!-- 极简模式空状态 -->
+      <view class="mod mod-empty" v-if="!activeCols.length && !loading">
+        <view class="empty-icon">🚏</view>
+        <view class="empty-text">暂无{{ dir === 0 ? '上行' : '下行' }}站点数据</view>
+      </view>
+    </template>
+
+    <!-- 完整 / 极简两种模式共用的「点外部关闭」遮罩：放在 v-if / v-else 之外，
+         否则会打断模板配对；两种模式的下拉同一时刻只会渲染一个 -->
+    <view class="rm-mask" v-if="refreshMenu" @click="closeRefreshMenu"></view>
   </view>
 </template>
 
@@ -163,22 +271,24 @@
 import { fetchLine, fetchRealTime, decryptBusId, onBusIdReady } from '../utils/api.js'
 import { matchBusesToStops } from '../utils/geo.js'
 import { buildLineCode } from '../config.js'
-import { getRefreshDefault } from '../utils/settings.js'
+import {
+  getRefreshSec, setRefreshSec as saveRefreshSec, onRefreshSecChange, REFRESH_OPTS,
+} from '../utils/settings.js'
 import { cleanStops } from '../utils/routeClean.js'
 import { loadLineAsset, assetDir } from '../utils/lineAsset.js'
 import { copyTable, renderRoutePng } from '../utils/clipboard.js'
+import { attachDropdown } from '../utils/dropdown.js'
 import { companyKeyOfNo, orgInfo } from '../utils/companies.js'
 import { assetUrl } from '../utils/asset.js'
 import FavStar from './FavStar.vue'
+import CopyPill from './CopyPill.vue'
 
-// 自动刷新间隔（秒）：0 = 手动。与地图页各存一份（地图页是 whbis:map-refresh-sec），
-// 两个视图的使用节奏不同，共用反而互相干扰；线路带默认 15 秒（旧详情页行为）。
-const LINE_REFRESH_KEY = 'whbis:line-refresh-sec'
-const REFRESH_OPTS = [0, 15, 20, 30]
+// 自动刷新间隔（秒）：0 = 手动。全站统一真源在 utils/settings.js，
+// 实时线路 / 地图页 / 极简站牌 / 账号与设置里的刷新控件共用一份值并即时同步。
 
 export default {
   name: 'LineStops',
-  components: { FavStar },
+  components: { FavStar, CopyPill },
   props: {
     lineNo: { type: String, default: '' },
     lineName: { type: String, default: '' },
@@ -187,6 +297,8 @@ export default {
     endStop: { type: String, default: '' },
     // 裸形态：挂在地图悬浮窗（FloatWin）里时，窗壳只有一张，三块内容不再各自套玻璃卡
     plain: { type: Boolean, default: false },
+    // 极简站牌模式：隐藏多余控件，只保留线路头 + 候车信息 + 站点序列
+    minMode: { type: Boolean, default: false },
   },
   emits: ['set-dir', 'updated'],
   data() {
@@ -279,12 +391,7 @@ export default {
       return this.refreshSec > 0 ? `每 ${this.refreshSec} 秒自动刷新` : '手动刷新（点 ↻ 拉取）'
     },
     refreshOptions() {
-      return [
-        { sec: 0, label: '手动刷新', tip: '点 ↻ 才拉取' },
-        { sec: 15, label: '15 秒', tip: '最灵敏' },
-        { sec: 20, label: '20 秒', tip: '较灵敏' },
-        { sec: 30, label: '30 秒', tip: '省流量' },
-      ]
+      return REFRESH_OPTS
     },
     // 所属营运公司：由车辆自编号（orgId）首位数字推断，1 → 武汉公交集团第一营运公司，以此类推
     operatorCompanies() {
@@ -298,7 +405,9 @@ export default {
       )
       return [...set]
         .sort((a, b) => a - b)
-        .map((no) => ({ no, label: `武汉公交集团${cn[no]}营运公司` }))
+        // short 用于头部行内紧凑显示（「一公司」，与线路库 orgOf().label 口径一致），
+        // label 保留全名放 title，避免窄徽标挤掉起讫站名
+        .map((no) => ({ no, label: `武汉公交集团${cn[no]}营运公司`, short: `${cn[no].slice(1)}公司` }))
     },
   },
   watch: {
@@ -315,13 +424,21 @@ export default {
     },
   },
   mounted() {
-    this.refreshSec = this.readRefreshSec()
+    this.refreshSec = getRefreshSec()
+    attachDropdown(this, 'refreshMenu', 'refresh-stops')
+    // 任意一处刷新控件改动都会广播到这里，保证完整模式 / 极简模式胶囊显示一致
+    this._offRefresh = onRefreshSecChange((sec) => this.applyRefreshSec(sec))
     this.loadAll()
     // 编号字典就绪后重新还原自编号并刷新
     onBusIdReady(() => this.loadLive())
     this.restartAutoRefresh()
   },
   beforeUnmount() {
+    if (this._dd) this._dd.dispose()
+    if (this._offRefresh) {
+      this._offRefresh()
+      this._offRefresh = null
+    }
     this.stopAutoRefresh()
     if (this._stripCleanup) {
       this._stripCleanup()
@@ -329,6 +446,9 @@ export default {
     }
   },
   methods: {
+    // 刷新间隔下拉：展开权交给全站仲裁器，点复制胶囊等其它菜单时自动收起
+    toggleRefreshMenu() { if (this._dd) this._dd.toggle() },
+    closeRefreshMenu() { if (this._dd) this._dd.close() },
     setDir(dir) {
       if (this.dir === dir) return
       this.applyDir(dir)
@@ -337,7 +457,7 @@ export default {
     },
     applyDir(dir) {
       this.dir = dir
-      this.refreshMenu = false
+      this.closeRefreshMenu()
     },
     // 手动刷新实时车辆（点胶囊左半的 ↻）
     async onRefresh() {
@@ -345,47 +465,27 @@ export default {
       await this.loadLive()
       uni.showToast({ title: '实时数据已刷新', icon: 'none' })
     },
-    // 读上次选择的间隔：用户手动选过就用选的；没选过回落到「全局默认刷新间隔」（设置面板可调）
-    // ⚠ uni.getStorageSync 在键不存在时返回空字符串，Number('') === 0，
-    // 直接 Number 后再 includes 会把“从没设过”误判成“手动”（0 是合法值），必须先排除空值
-    readRefreshSec() {
-      try {
-        const raw = uni.getStorageSync(LINE_REFRESH_KEY)
-        if (raw === '' || raw == null) return getRefreshDefault()
-        const v = Number(raw)
-        return REFRESH_OPTS.includes(v) ? v : getRefreshDefault()
-      } catch (e) {
-        return getRefreshDefault()
-      }
-    },
-    // 全局默认刷新变更（设置面板）即时跟随：用户在本视图手动选过的间隔仍然优先
-    onGlobalRefresh(sec) {
-      try {
-        const raw = uni.getStorageSync(LINE_REFRESH_KEY)
-        if (raw !== '' && raw != null) return
-      } catch (e) { /* 读不到视为没选过 */ }
+    // 统一真源变化回调：无论是本视图下拉、极简站牌胶囊、地图页还是设置面板改的，
+    // 都会经 settings.setRefreshSec 广播到这里，所有刷新控件显示同一个值。
+    applyRefreshSec(sec) {
       if (sec === this.refreshSec) return
       this.refreshSec = sec
       this.restartAutoRefresh()
       if (sec > 0) this.loadLive(true)
     },
-    // 选择间隔：0 = 手动，其余按秒数轮询（立即生效并持久化）
+    // 兼容宿主 fire() 的历史转发入口（设置面板改值时也可直接推过来）
+    onGlobalRefresh(sec) {
+      this.applyRefreshSec(sec)
+    },
+    // 选择间隔：写入全站唯一真源，由广播驱动本视图 + 其余所有刷新控件
     setRefreshSec(sec) {
-      this.refreshMenu = false
+      this.closeRefreshMenu()
       if (sec === this.refreshSec) {
         // 重复点同一项：把计时器拨回起点（相当于“从现在开始重新计数”）
         this.restartAutoRefresh()
         return
       }
-      this.refreshSec = sec
-      try {
-        uni.setStorageSync(LINE_REFRESH_KEY, sec)
-      } catch (e) {
-        /* 存储不可用时仅本次生效 */
-      }
-      this.restartAutoRefresh()
-      // 切到自动模式立刻拉一次，不必等满一个间隔才看到变化
-      if (sec > 0) this.loadLive(true)
+      saveRefreshSec(sec)
       uni.showToast({ title: sec > 0 ? `已开启：每 ${sec} 秒自动刷新` : '已改为手动刷新', icon: 'none' })
     },
     // 重建自动刷新定时器（间隔改变、宿主页面重新显示时调用；先清旧再建，避免叠多个）
@@ -443,7 +543,32 @@ export default {
         excelToast: `已复制 ${lines.length} 辆车信息为 Excel 表格`,
       })
     },
-    // 双击「站点」统计块 → 复制当前线路走向的全部站点信息（序号 / 站名 / 站号 / 换乘 / 起终标记）
+    // 复制线路基本信息（线路号 / 方向 / 起讫站 / 首末班 / 票价 / 站数 / 在线数）。
+    // 与 copyStopsInfo / copyOnlineBuses 一样统一走 copyTable，自动跟随「复制方式」设置。
+    copyLineInfo() {
+      const b = this.activeBase || {}
+      const dirName = this.dir === 0 ? '上行' : '下行'
+      const rows = [
+        ['线路', this.lineName || this.lineNo || '—'],
+        ['方向', dirName],
+        ['起点站', b.startStop || this.startStop || '—'],
+        ['终点站', b.endStop || this.endStop || '—'],
+        ['首班', b.earlyHour || '—'],
+        ['末班', b.lastHour || '—'],
+        ['票价', b.price ? `¥${b.price}` : '—'],
+        ['站点数', String(this.activeCols.length)],
+        ['在线车辆', `${this.onlineCount} 辆`],
+      ]
+      copyTable({
+        title: `${this.lineName || this.lineNo}（${dirName}） 线路信息`,
+        columns: ['项目', '内容'],
+        rows,
+        toast: '已复制线路信息',
+        imageToast: '已复制线路信息为图片',
+        excelToast: '已复制线路信息为 Excel 表格',
+      })
+    },
+    // 双击「站点」统计块 / 极简面板「站点」按钮 → 复制当前线路走向的全部站点信息
     copyStopsInfo() {
       const cols = this.activeCols
       if (!cols || !cols.length) {
@@ -680,15 +805,26 @@ export default {
   position: relative;
   box-sizing: border-box;
   border-radius: 28rpx;
-  background: rgba(17, 22, 33, 0.86);
+  /* 顶部一层极淡反光，与 FloatWin 的玻璃质感呼应；卡片越往下越透明 */
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.05) 0, rgba(255, 255, 255, 0.012) 60rpx, transparent 140rpx),
+    rgba(17, 22, 33, 0.86);
   backdrop-filter: blur(30px) saturate(170%);
   -webkit-backdrop-filter: blur(30px) saturate(170%);
-  border: 2rpx solid rgba(255, 255, 255, 0.09);
-  box-shadow: 0 26rpx 64rpx rgba(0, 0, 0, 0.5), inset 0 1rpx 0 rgba(255, 255, 255, 0.08);
+  border: 2rpx solid rgba(255, 255, 255, 0.1);
+  box-shadow: 0 26rpx 64rpx rgba(0, 0, 0, 0.5), inset 0 1rpx 0 rgba(255, 255, 255, 0.1);
 }
 /* 控制卡得压在线路带卡之上，否则刷新间隔下拉会被下一张卡遮住 */
 .mod-ctrl {
   z-index: 20;
+}
+/* 下拉展开期间把整卡 / 胶囊壳提到「点外部关闭」遮罩(z-index:29)之上：
+   形成层叠上下文的容器会把内部下拉的 z-index:30 困住，
+   若不提层，全屏 .rm-mask 会盖住菜单，点任何选项都只触发遮罩关闭（表现为选项点不动）。
+   收回后移除，不影响原层级 —— 与 LineMap 的 .panel.menu-open 同一套解法 */
+.mod-ctrl.menu-open,
+.refresh-wrap.menu-open {
+  z-index: 31;
 }
 /* 线路带要裁掉横向滚动内容的圆角溢出 */
 .mod-strip {
@@ -792,9 +928,14 @@ export default {
 .hd-tag-last {
   background: #f59e0b;
 }
+/* 跟在起讫站右侧：margin-left:auto 把徽标推到行尾，垂直居中（.hd-route 是 baseline 对齐，需单独覆盖）；
+   .hd-route 自身 flex-wrap，窄屏放不下时整组徽标换行到下一行并仍靠右，不撑破头部 */
 .hd-orgs {
   display: flex;
   flex-wrap: wrap;
+  align-items: center;
+  align-self: center;
+  margin-left: auto;
 }
 /* 营运公司徽标 */
 .org-tag {
@@ -826,21 +967,34 @@ export default {
   font-size: 19rpx;
   color: #fcd34d;
 }
-/* 指标行 */
+/* 指标行：5 项排成数据看板，项与项之间用渐隐竖线分隔，比纯留白更整齐 */
 .ops-row {
-  padding: 20rpx 10rpx;
+  padding: 22rpx 6rpx;
   gap: 0;
 }
 .ops-item {
+  position: relative;
   flex: 1;
   display: flex;
   flex-direction: column;
   align-items: center;
   min-width: 0;
 }
+.ops-item + .ops-item::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 2rpx;
+  height: 44rpx;
+  pointer-events: none;
+  background: linear-gradient(180deg, transparent, rgba(255, 255, 255, 0.14), transparent);
+}
 .ops-value {
-  font-size: 30rpx;
-  font-weight: 700;
+  font-size: 32rpx;
+  font-weight: 800;
+  letter-spacing: -0.4rpx;
   color: #fff;
   font-variant-numeric: tabular-nums;
 }
@@ -848,9 +1002,10 @@ export default {
   color: #67e8f9;
 }
 .ops-label {
-  font-size: 19rpx;
-  color: rgba(255, 255, 255, 0.45);
-  margin-top: 6rpx;
+  font-size: 18rpx;
+  letter-spacing: 0.5rpx;
+  color: rgba(255, 255, 255, 0.42);
+  margin-top: 4rpx;
 }
 /* 在线格子：可点击一键复制 */
 .ops-click {
@@ -1277,4 +1432,291 @@ export default {
   font-size: 28rpx;
   margin-top: 20rpx;
 }
+
+/* ════════════════════════════════════════════════════════ */
+/* 极简站牌模式样式                                         */
+/* ════════════════════════════════════════════════════════ */
+/* 宿主窗是 6% 透光的玻璃卡，地图走向曲线会淡淡透进站点列表显得杂乱；
+   极简模式铺一层实底，只留面板自身层次（深色值在浅色皮肤下会被根节点反色成浅灰） */
+.stops.min-mode {
+  gap: 0;
+  background: #0b1020;
+  border-radius: 20rpx;
+}
+.stops.min-mode .mod {
+  border-radius: 0;
+}
+
+/* 极简线路头 */
+.mod-min-head {
+  padding: 24rpx 26rpx 20rpx;
+  display: flex;
+  flex-direction: column;
+  gap: 16rpx;
+}
+.min-head-top {
+  display: flex;
+  align-items: center;
+  gap: 14rpx;
+  flex-wrap: wrap;
+}
+.min-dir-label {
+  font-size: 22rpx;
+  font-weight: 700;
+  padding: 4rpx 14rpx;
+  border-radius: 20rpx;
+  line-height: 1.4;
+}
+.min-dir-label.up {
+  color: #67e8f9;
+  background: rgba(103, 232, 249, 0.14);
+}
+.min-dir-label.down {
+  color: #fda4af;
+  background: rgba(251, 113, 133, 0.14);
+}
+/* 起讫站条：独立浅底卡片，两侧站名等宽且分别左 / 右对齐，箭头居中，视觉对称 */
+.min-head-route {
+  display: flex;
+  align-items: center;
+  gap: 10rpx;
+  padding: 14rpx 16rpx;
+  border-radius: 14rpx;
+  background: rgba(255, 255, 255, 0.04);
+  border: 2rpx solid rgba(255, 255, 255, 0.06);
+  font-size: 26rpx;
+  font-weight: 600;
+  color: #fff;
+}
+.min-terminal-tag {
+  flex: 0 0 auto;
+  font-size: 18rpx;
+  font-weight: 800;
+  color: #0b1020;
+  padding: 2rpx 8rpx;
+  border-radius: 6rpx;
+  line-height: 1.5;
+}
+.min-terminal-tag.first {
+  background: #22c55e;
+}
+.min-terminal-tag.last {
+  background: #f59e0b;
+}
+.min-stop {
+  flex: 1 1 0;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.min-stop.start {
+  text-align: left;
+}
+.min-stop.end {
+  text-align: right;
+}
+.min-arrow {
+  flex: 0 0 auto;
+  font-size: 24rpx;
+  color: rgba(255, 255, 255, 0.45);
+}
+.min-head-info {
+  display: flex;
+  gap: 10rpx;
+  margin-left: auto;
+}
+.min-time-tag,
+.min-price-tag {
+  font-size: 20rpx;
+  color: rgba(255, 255, 255, 0.62);
+  background: rgba(255, 255, 255, 0.07);
+  padding: 5rpx 12rpx;
+  border-radius: 10rpx;
+  white-space: nowrap;
+}
+.min-price-tag {
+  color: #67e8f9;
+  background: rgba(103, 232, 249, 0.12);
+}
+
+/* 极简模式操作条：方向分段被隐藏，这里补回上下行切换 + 同款刷新胶囊 */
+.min-tools {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12rpx;
+  padding-top: 18rpx;
+  border-top: 2rpx solid rgba(255, 255, 255, 0.09);
+}
+.min-dir-seg {
+  display: flex;
+  gap: 8rpx;
+}
+.min-dir-btn {
+  height: 52rpx;
+  line-height: 52rpx;
+  padding: 0 22rpx;
+  box-sizing: border-box;
+  border-radius: 999rpx;
+  font-size: 23rpx;
+  font-weight: 700;
+  color: rgba(255, 255, 255, 0.6);
+  background: rgba(255, 255, 255, 0.06);
+  border: 2rpx solid rgba(255, 255, 255, 0.12);
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.18s, color 0.18s, transform 0.12s;
+}
+.min-dir-btn:active {
+  transform: scale(0.95);
+}
+.min-dir-btn.on.up {
+  color: #062a33;
+  background: linear-gradient(135deg, #67e8f9, #22d3ee);
+  border-color: transparent;
+  box-shadow: 0 6rpx 18rpx rgba(34, 211, 238, 0.35);
+}
+.min-dir-btn.on.down {
+  color: #fff;
+  background: linear-gradient(135deg, #fb7185, #e11d48);
+  border-color: transparent;
+  box-shadow: 0 6rpx 18rpx rgba(225, 29, 72, 0.35);
+}
+/* 极简模式复制胶囊组：与上下行按钮同高（52rpx），紧凑排在方向切换之后 */
+.min-copy-group {
+  display: flex;
+  gap: 8rpx;
+  margin-left: 8rpx;
+  flex-wrap: wrap;
+}
+/* 三个胶囊并排：档位文字（文本 / Excel / 图片）整体收窄一档，避免把操作条挤成两行 */
+.min-copy-group .copy-pill {
+  height: 52rpx;
+  background: rgba(255, 255, 255, 0.06);
+  border-color: rgba(255, 255, 255, 0.12);
+}
+.min-copy-group .copy-pill .cp-main {
+  padding: 0 16rpx;
+  font-size: 22rpx;
+}
+.min-copy-group .copy-pill .cp-ico {
+  font-size: 20rpx;
+}
+.min-copy-group .copy-pill .cp-mode {
+  padding: 0 12rpx 0 10rpx;
+}
+.min-copy-group .copy-pill .cp-mode-txt {
+  font-size: 19rpx;
+}
+/* 极简模式刷新胶囊：与上下行按钮同行、靠右对齐，复用完整模式那一套胶囊样式 */
+.min-refresh {
+  margin-left: auto;
+}
+.min-refresh .refresh-pill {
+  box-shadow: none;
+}
+
+/* 极简站点序列：每站一行 */
+.mod-min-stops {
+  padding: 4rpx 0;
+}
+.min-stop-row {
+  display: flex;
+  align-items: center;
+  gap: 16rpx;
+  padding: 14rpx 26rpx;
+  position: relative;
+  transition: background 0.15s ease;
+}
+/* 首末站轻微提亮，与中间站拉开层次 */
+.min-stop-row.min-stop-first,
+.min-stop-row.min-stop-last {
+  background: rgba(255, 255, 255, 0.03);
+}
+/* 桌面端悬停反馈：放在首末站规则之后，保证也能覆盖到首末站行 */
+.min-stop-row:hover {
+  background: rgba(255, 255, 255, 0.05);
+}
+.min-stop-row:not(:last-child)::after {
+  content: '';
+  position: absolute;
+  left: 58rpx;
+  right: 26rpx;
+  bottom: 0;
+  height: 1rpx;
+  background: rgba(255, 255, 255, 0.06);
+}
+.min-stop-dot {
+  width: 20rpx;
+  height: 20rpx;
+  border-radius: 50%;
+  border: 3rpx solid rgba(255, 255, 255, 0.45);
+  background: transparent;
+  flex-shrink: 0;
+  position: relative;
+}
+.min-stop-dot::after {
+  content: '';
+  position: absolute;
+  left: 7rpx;
+  top: 20rpx;
+  bottom: -22rpx;
+  width: 3rpx;
+  background: rgba(255, 255, 255, 0.15);
+}
+.min-stop-row:last-child .min-stop-dot::after {
+  display: none;
+}
+.min-dot-first {
+  border-color: #4ade80;
+  background: rgba(74, 222, 128, 0.2);
+}
+.min-dot-last {
+  border-color: #fbbf24;
+  background: rgba(251, 191, 36, 0.2);
+}
+.min-stop-content {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: baseline;
+  gap: 10rpx;
+}
+.min-stop-name {
+  font-size: 27rpx;
+  color: #fff;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* 序号靠内容区右端对齐，长站名也不会把它挤得忽左忽右 */
+.min-stop-no {
+  margin-left: auto;
+  font-size: 20rpx;
+  color: rgba(255, 255, 255, 0.42);
+  flex-shrink: 0;
+}
+.min-buses {
+  display: flex;
+  gap: 6rpx;
+  flex-shrink: 0;
+  align-items: center;
+}
+.min-bus-chip {
+  font-size: 20rpx;
+  color: #67e8f9;
+  background: rgba(103, 232, 249, 0.12);
+  padding: 2rpx 10rpx;
+  border-radius: 8rpx;
+  white-space: nowrap;
+  max-width: 120rpx;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.min-bus-more {
+  font-size: 18rpx;
+  color: rgba(103, 232, 249, 0.6);
+}
+
 </style>

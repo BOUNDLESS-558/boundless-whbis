@@ -3,8 +3,9 @@
  *
  * - 皮肤：黑色 / 白色 / 跟随系统。H5 下把解析结果写到 <html data-skin="…">，
  *   全局 CSS（App.vue）据此换肤；「跟随系统」监听 prefers-color-scheme 变化即时跟随。
- * - 全局默认刷新间隔：手动(0) / 15 / 30 / 45 / 60 秒。实时线路 / 实时车辆在用户没手动选过
- *   间隔时采用该默认值（各视图里手动选过的间隔仍然优先，互不覆盖）。
+ * - 刷新间隔：手动(0) / 15 / 20 / 30 秒，全站唯一真源（whbis:refresh-default）。
+ *   实时线路、地图页、极简站牌、账号与设置里的刷新控件都读写这一份值，
+ *   任意一处改动经 onRefreshSecChange 订阅即时同步到其余控件。
  * - 主题色（强调色）：预设色板 + 调色盘自定义。派生出 --ac / --ac-hi / --ac-deep / --ac-text /
  *   --ac-2 / --ac-rgb / --ac2-rgb 一族 CSS 变量挂 <html>，全站按钮 / 页签 / 选中态跟随变色；
  *   默认靛蓝与历史配色逐像素一致。H5 生效（App 端保持默认）。
@@ -31,7 +32,15 @@ export const SKIN_OPTS = [
   { key: 'auto', label: '跟随系统' },
 ]
 // 0 = 手动刷新（不自动轮询，仅用户下拉/点刷新时拉取）
-export const REFRESH_DEFAULT_OPTS = [0, 15, 30, 45, 60]
+// 全站统一档位：设置面板分段 + 各视图下拉共用，避免各存一份造成「设置不同步」
+export const REFRESH_DEFAULT_OPTS = [0, 15, 20, 30]
+// 下拉统一文案（label / tip），所有刷新胶囊共用一份
+export const REFRESH_OPTS = [
+  { sec: 0, label: '手动刷新', tip: '点 ↻ 才拉取' },
+  { sec: 15, label: '15 秒', tip: '最灵敏' },
+  { sec: 20, label: '20 秒', tip: '较灵敏' },
+  { sec: 30, label: '30 秒', tip: '省流量' },
+]
 
 // ── 主题色（强调色）──
 
@@ -233,18 +242,53 @@ export function setSkin(skin) {
   return getSkin()
 }
 
-// ── 全局默认刷新间隔（秒）──
+// ── 刷新间隔（秒）：全站唯一真源 ──
+// 旧版「实时线路 / 地图页各存一份」会让同一份设置在不同按钮上显示不同值，且设置面板
+// 改了默认值后已手动选过的视图不跟随。现在统一读写 REFRESH_KEY，并广播给所有订阅者。
+const _refreshListeners = new Set()
+// 旧键：首次读取时迁移到真源；setRefreshSec 也会镜像写，兼容仍在读旧键的探针/旧代码
+const LEGACY_REFRESH_KEYS = ['whbis:line-refresh-sec', 'whbis:map-refresh-sec']
 
-export function getRefreshDefault() {
-  const v = Number(readRaw(REFRESH_KEY, 15))
+function normalizeRefreshSec(sec) {
+  const v = Number(sec)
   return REFRESH_DEFAULT_OPTS.includes(v) ? v : 15
 }
 
-export function setRefreshDefault(sec) {
-  const v = REFRESH_DEFAULT_OPTS.includes(Number(sec)) ? Number(sec) : 15
+export function getRefreshSec() {
+  const raw = readRaw(REFRESH_KEY, '')
+  if (raw !== '' && raw != null) return normalizeRefreshSec(raw)
+  // 真源没写过 → 从旧键做一次性迁移，命中即写回真源（旧键保留，便于回滚）
+  for (const key of LEGACY_REFRESH_KEYS) {
+    const old = readRaw(key, '')
+    if (old !== '' && old != null) {
+      const v = normalizeRefreshSec(old)
+      writeRaw(REFRESH_KEY, v)
+      return v
+    }
+  }
+  return 15
+}
+
+export function setRefreshSec(sec) {
+  const v = normalizeRefreshSec(sec)
   writeRaw(REFRESH_KEY, v)
+  LEGACY_REFRESH_KEYS.forEach((key) => writeRaw(key, v))
+  _refreshListeners.forEach((cb) => {
+    try { cb(v) } catch (e) { /* 单个订阅者异常不影响其它控件 */ }
+  })
   return v
 }
+
+// 订阅刷新间隔变化，返回取消订阅函数（组件卸载时调用，避免泄漏）
+export function onRefreshSecChange(cb) {
+  if (typeof cb !== 'function') return () => {}
+  _refreshListeners.add(cb)
+  return () => _refreshListeners.delete(cb)
+}
+
+// 兼容旧命名：语义已从「各视图的默认值」升级为「全站统一值」
+export const getRefreshDefault = getRefreshSec
+export const setRefreshDefault = setRefreshSec
 
 // ── 地图来源（自绘走向图底图瓦片源）──
 
@@ -263,20 +307,41 @@ export function setMapSource(key) {
 // ── 复制方式（全站统一）──
 // text = TSV 纯文本；image = PNG 图片（页脚带生成时间）；
 // excel = HTML <table> 写进剪贴板，粘贴到 Excel / WPS 直接是可编辑表格（H5 安全上下文）
+// 没有设置面板入口：档位就在每个复制胶囊（components/CopyPill.vue）右半的下拉里，
+// 任一处切换经 onCopyModeChange 广播，其余胶囊即时跟随。
+// 顺序即下拉里的排列：纯文本 → Excel → 图片（由轻到重）。
+// short 用于复制胶囊右半的档位标签（一行放得下），label 用于下拉与提示。
 export const COPY_MODE_OPTS = [
-  { key: 'text', label: '复制为文本', note: 'TSV 表格，可粘进 Excel' },
-  { key: 'image', label: '复制为图片', note: 'PNG 图片，带生成时间，可直接粘贴发送' },
-  { key: 'excel', label: '复制为 Excel', note: '带样式表格，粘贴到 Excel / WPS 即可编辑' },
+  { key: 'text', label: '复制为纯文本', short: '文本', note: 'TSV 表格，可粘进 Excel' },
+  { key: 'excel', label: '复制为 Excel', short: 'Excel', note: '带样式表格，粘到 Excel / WPS 即可编辑' },
+  { key: 'image', label: '复制为图片', short: '图片', note: 'PNG 图片，带生成时间，可直接粘贴发送' },
 ]
 
-export function getCopyMode() {
-  const v = readRaw(COPY_MODE_KEY, 'text')
+function normalizeCopyMode(v) {
   return COPY_MODE_OPTS.some((o) => o.key === v) ? v : 'text'
 }
 
+export function getCopyMode() {
+  return normalizeCopyMode(readRaw(COPY_MODE_KEY, 'text'))
+}
+
+// 订阅者：全站每个复制胶囊都挂一个，任一处切换档位，其余按钮的档位标签即时跟随
+const _copyListeners = new Set()
+
 export function setCopyMode(key) {
-  if (COPY_MODE_OPTS.some((o) => o.key === key)) writeRaw(COPY_MODE_KEY, key)
-  return getCopyMode()
+  const v = normalizeCopyMode(key)
+  writeRaw(COPY_MODE_KEY, v)
+  _copyListeners.forEach((cb) => {
+    try { cb(v) } catch (e) { /* 单个订阅者异常不影响其它控件 */ }
+  })
+  return v
+}
+
+// 订阅复制方式变化，返回取消订阅函数（组件卸载时调用，避免泄漏）
+export function onCopyModeChange(cb) {
+  if (typeof cb !== 'function') return () => {}
+  _copyListeners.add(cb)
+  return () => _copyListeners.delete(cb)
 }
 
 // 说明：非集团线路（蔡城 / 木兰 / 汉奇）已并入全站线路库，默认全部可查询搜索，
@@ -499,4 +564,20 @@ export function getSimSignboard() {
 export function setSimSignboard(on) {
   writeRaw(SIGNBOARD_KEY, !!on)
   return getSimSignboard()
+}
+
+// ── 线路站牌极简模式 ──
+// 启用后，LineStops 改用「站牌」风格渲染：只保留线路头 + 候车信息 + 站点序列，
+// 隐藏刷新控件 / 方向分段 / 运营指标等冗余元素。只有开 / 关两档，默认关闭，本机记忆。
+// 排列方向固定为竖向（每站一行），不再提供横向滚带；上下行切换与退出入口在面板内。
+const MIN_MODE_KEY = 'whbis:min-stops-mode'
+
+export function getMinStopsMode() {
+  const v = readRaw(MIN_MODE_KEY, false)
+  return v === true || v === 'true' || v === 1 || v === '1'
+}
+
+export function setMinStopsMode(on) {
+  writeRaw(MIN_MODE_KEY, !!on)
+  return getMinStopsMode()
 }
