@@ -272,6 +272,8 @@ for (const g of grouped.values()) {
       source: 'amap',
       algo: 100,
       company: abbr,
+      // 线路 POI id：供兼容模式 scan-poi-newbus.mjs 回查 getPoiNewbus 补字段（免 Web 服务 Key / 需会话 Cookie）
+      amap: { id: b.id || null },
     }
   })
   if (!Object.keys(row.dirs).length) continue

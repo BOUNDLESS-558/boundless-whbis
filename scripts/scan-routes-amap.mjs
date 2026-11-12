@@ -333,7 +333,7 @@ function matchBusline(buslines, firstStop, lastStop) {
     if (score > bestScore) { bestScore = score; best = { bl, reversed } }
   }
   if (!best || bestScore < 1 || !best.bl.polyline) return null
-  return { polyline: best.bl.polyline, busstops: best.bl.busstops || [], reversed: best.reversed }
+  return { polyline: best.bl.polyline, busstops: best.bl.busstops || [], reversed: best.reversed, id: best.bl.id }
 }
 
 // ── 主流程 ──
@@ -448,7 +448,7 @@ for (const l of todo) {
       snapped: true,
       source: 'amap',
       algo: AMAP_ALGO,
-      amap: { name: (m.busstops && buslines[0] && buslines[0].name) || null, reversed: m.reversed },
+      amap: { name: (m.busstops && buslines[0] && buslines[0].name) || null, reversed: m.reversed, id: m.id || null },
       clean: prev && prev.clean,
     })
     stats.matched++

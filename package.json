@@ -11,6 +11,8 @@
     "scan:routes": "node scripts/scan-routes.mjs",
     "scan:routes:stops": "node scripts/scan-routes.mjs --no-route",
     "scan:routes:amap": "node scripts/scan-routes-amap.mjs",
+    "scan:poi-newbus": "node scripts/scan-poi-newbus.mjs",
+    "scan:amap-ids": "node scripts/scan-amap-ids.mjs",
     "scan:foreign": "node scripts/scan-foreign.mjs",
     "build:foreign-net": "node scripts/build-foreign-net.mjs",
     "scan:manifest": "node scripts/build-manifest.mjs",
