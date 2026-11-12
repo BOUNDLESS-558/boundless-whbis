@@ -92,6 +92,7 @@ console.log(`· 本地 ${BRANCH} 分支 → ${commit.slice(0, 7)}（孤立，无
 // 代理不可用时自动降级直连，保障部署可用性。
 // 修改代理地址/关闭代理：设置环境变量 GIT_HTTP_PROXY，留空表示只走直连。
 const PROXY = process.env.GIT_HTTP_PROXY ?? 'http://127.0.0.1:7890'
+// `-c` 必须放在子命令（push）前面，否则 git 会当成 push 的未知选项报 unknown switch
 const pushBaseArgs = [
   '-c', 'http.version=HTTP/1.1',
   '-c', 'http.lowSpeedLimit=0',
@@ -107,7 +108,7 @@ if (noPush) {
   if (PROXY) {
     try {
       console.log(`· 尝试通过代理推送 → ${PROXY}`)
-      git([...pushBaseArgs, '-c', `http.proxy=${PROXY}`, '-c', `https.proxy=${PROXY}`], { stdio: 'inherit' })
+      git(['-c', `http.proxy=${PROXY}`, '-c', `https.proxy=${PROXY}`, ...pushBaseArgs], { stdio: 'inherit' })
       success = true
     } catch (e) {
       console.error(`× 代理推送失败：${e.message}`)
