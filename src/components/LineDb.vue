@@ -60,6 +60,20 @@
       </view>
     </view>
 
+    <!-- 集团内部营运公司细分：仅在公司选「公交集团」时出现，按一…九公司 + 未收录分档 -->
+    <view class="db-filter" v-if="org === 'JT'">
+      <text class="db-fl">营运公司</text>
+      <view class="db-chips">
+        <view
+          v-for="o in jtOrgOpts"
+          :key="o.key"
+          class="db-chip"
+          :class="{ on: jtOrg === o.key }"
+          @click="jtOrg = o.key"
+        >{{ o.label }}<text v-if="o.count != null" class="db-chip-n"> {{ o.count }}</text></view>
+      </view>
+    </view>
+
     <view class="db-filter">
       <text class="db-fl">状态</text>
       <view class="db-chips">
@@ -160,7 +174,7 @@
 
 <script>
 import { allLines, linePrefix, lineStatus } from '../utils/lineIndex.js'
-import { companyOf } from '../utils/companies.js'
+import { companyOf, orgInfo } from '../utils/companies.js'
 import { buildLineCode } from '../config.js'
 import { copyTable } from '../utils/clipboard.js'
 import { assetUrl } from '../utils/asset.js'
@@ -207,6 +221,8 @@ export default {
       ],
       status: '全部',
       org: '全部',
+      // 集团内部营运公司细分：仅在公司选「公交集团」时出现，按一…九公司分档
+      jtOrg: '全部',
       statusOpts: [
         { key: '全部', label: '全部' },
         { key: 'live', label: '营运中' },
@@ -244,6 +260,27 @@ export default {
       ]
       return [{ key: '全部', label: '全部' }, ...defs.filter((d) => cnt[d.key])]
     },
+    // 集团内部营运公司细分：从 org 全名里提取「第X营运公司」，org 缺失的线归「未收录」
+    jtOrgOpts() {
+      const cnt = {}
+      for (const l of this.all) {
+        if (companyOf(l).key !== 'JT') continue
+        const info = orgInfo(l)
+        const k = (info && info.label) ? info.label : '未收录'
+        cnt[k] = (cnt[k] || 0) + 1
+      }
+      // 按一…九公司自然序排，未收录放最后
+      const order = ['一公司', '二公司', '三公司', '四公司', '五公司', '六公司', '七公司', '八公司', '九公司']
+      const sorted = Object.keys(cnt).sort((a, b) => {
+        const ia = order.indexOf(a), ib = order.indexOf(b)
+        if (ia >= 0 && ib >= 0) return ia - ib
+        if (ia >= 0) return -1
+        if (ib >= 0) return 1
+        return a.localeCompare(b, 'zh-CN')
+      })
+      return [{ key: '全部', label: '全部', count: null },
+        ...sorted.map((k) => ({ key: k, label: k, count: cnt[k] }))]
+    },
     filtered() {
       const q = this.kw.trim().toUpperCase()
       return this.all.filter((l) => {
@@ -251,6 +288,12 @@ export default {
         if (this.org !== '全部' && company !== this.org) return false
         // 号段细分只在「公交集团」档生效（其它公司线路本就按号段归属，无需再分）
         if (company === 'JT' && this.prefix !== '全部' && linePrefix(l.no) !== this.prefix) return false
+        // 营运公司细分：同在「公交集团」档，org 全名匹配「第X营运公司」
+        if (company === 'JT' && this.jtOrg !== '全部') {
+          const info = orgInfo(l)
+          const sub = (info && info.label) ? info.label : '未收录'
+          if (sub !== this.jtOrg) return false
+        }
         if (this.status !== '全部' && lineStatus(l).key !== this.status) return false
         if (q) {
           const hay = `${l.no} ${l.name || ''} ${l.start || ''} ${l.end || ''}`.toUpperCase()
@@ -288,8 +331,10 @@ export default {
     status() { this.page = 1 },
     org() {
       this.prefix = '全部' // 换公司时清掉集团号段细分，避免回到「公交集团」时沿用旧条件
+      this.jtOrg = '全部' // 换公司时清掉营运公司细分
       this.page = 1
     },
+    jtOrg() { this.page = 1 },
     // 结果变少导致当前页越界时，夹回最后一个有效页
     pageCount() { this.clampPage() },
   },
@@ -571,6 +616,12 @@ export default {
   font-weight: 700;
   background: linear-gradient(135deg, var(--ac), var(--ac-2));
   border-color: rgba(var(--ac-rgb), 0.7);
+}
+.db-chip-n {
+  font-size: 18rpx;
+  font-weight: 600;
+  opacity: 0.65;
+  margin-left: 4rpx;
 }
 /* 列表 */
 .db-lhead {
