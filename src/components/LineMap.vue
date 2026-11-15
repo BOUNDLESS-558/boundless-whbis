@@ -597,8 +597,6 @@ import { attachDropdown } from '../utils/dropdown.js'
 import { orgInfo, COMPANIES, companyKeyOfNo, companyOf } from '../utils/companies.js'
 import { build as kdtreeBuild, nearest as kdtreeNearest } from '../utils/kdtree.js'
 import { estimateDirection, heading } from '../utils/busDir.js'
-import { build as kdtreeBuild, nearest as kdtreeNearest } from '../utils/kdtree.js'
-import { estimateDirection } from '../utils/busDir.js'
 import FavStar from './FavStar.vue'
 import CopyPill from './CopyPill.vue'
 
