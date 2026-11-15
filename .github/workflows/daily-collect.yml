@@ -1,4 +1,4 @@
-name: 每日自动采集与部署
+name: 每 6 小时自动采集与部署
 
 # 需求 2/3/5：基于 GitHub Actions + Pages 全自动采集武汉公交集团、木兰、汉奇、蔡城线路，
 # 交叉验证后同步到源码分支并提交，再构建并部署到 Pages。
@@ -11,12 +11,11 @@ on:
   push:
     branches: [main]
   schedule:
-    # 北京时间 00:00–06:00 = UTC 16:00–22:00（前一天）。GitHub cron 只能给单个时刻，
-    # 故分散多档错峰，任何一档因延迟偏移仍落在 0~6 点窗口内：
-    - cron: '17 16 * * *' # 北京 00:17
-    - cron: '37 18 * * *' # 北京 02:37
-    - cron: '57 20 * * *' # 北京 04:57
-    - cron: '27 21 * * 0' # 周日 北京 05:27：全量重枚举（FULL_SCAN=1）
+    # 每 6 小时一次（UTC 0/6/12/18 点 +23 分偏移，避开整点峰值；
+    # 对应北京时间 02:23 / 08:23 / 14:23 / 20:23，绝对时间上间隔均匀为 6h）
+    - cron: '23 */6 * * *'
+    # 周日补充全量重枚举（FULL_SCAN=1），UTC 04:23 = 北京时间 12:23
+    - cron: '23 4 * * 0'
   workflow_dispatch:
     inputs:
       full_scan:
@@ -48,7 +47,7 @@ jobs:
       AMAP_KEY: ${{ secrets.AMAP_KEY }}
       AMAP_SECRET: ${{ secrets.AMAP_SECRET }}
       AMAP_WEB_COOKIE: ${{ secrets.AMAP_WEB_COOKIE }}
-      FULL_SCAN: ${{ (github.event.schedule == '27 21 * * 0' || inputs.full_scan == true) && '1' || '' }}
+      FULL_SCAN: ${{ (github.event.schedule == '23 4 * * 0' || inputs.full_scan == true) && '1' || '' }}
       SKIP_DEPLOY: ${{ inputs.skip_deploy == true && '1' || '' }}
     steps:
       - name: 检出（全量历史，避免浅克隆导致 push 报 shallow update not allowed）
