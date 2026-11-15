@@ -133,7 +133,16 @@ if (hasStagedChanges()) {
 if (SKIP_DEPLOY) {
   console.log('\n· SKIP_DEPLOY：跳过构建与部署')
 } else {
-  step('构建 H5', [NPM, 'run', 'build:h5'])
+  // 注意：NPM（npm / npm.cmd）应作为可执行文件直接运行，不能走 step()——
+  // step() 会强制用 `node` 作前缀，变成 `node npm run build:h5`，node 会把 npm 当成模块路径去找而报
+  // "Cannot find module …/npm"。这里直接 execFileSync(NPM, …)。
+  console.log('\n=== 构建 H5 ===')
+  try {
+    execFileSync(NPM, ['run', 'build:h5'], { cwd: ROOT, stdio: 'inherit' })
+  } catch (e) {
+    console.error('× 步骤「构建 H5」退出码 ' + (e.status ?? '?'))
+    throw e
+  }
   console.log('\n=== 部署 Pages ===')
   // 清空 GIT_HTTP_PROXY：Actions runner 无本地代理，让 deploy-pages.mjs 直连推送 pages
   execFileSync('node', ['scripts/deploy-pages.mjs'], {

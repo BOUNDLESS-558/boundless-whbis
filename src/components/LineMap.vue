@@ -180,8 +180,14 @@
       </view>
       <!-- 图例（线路态：上下行走向；全市态换成下面的车速 + 线网图例） -->
       <view class="schematic-legend" v-if="!cityOn">
-        <text class="legend-item"><text class="ln up"></text>上行走向</text>
-        <text class="legend-item"><text class="ln down"></text>下行走向</text>
+        <!-- 环形线没有上下行：图例只留一个「环形走向」 -->
+        <template v-if="isLoop">
+          <text class="legend-item"><text class="ln loop"></text>环形走向</text>
+        </template>
+        <template v-else>
+          <text class="legend-item"><text class="ln up"></text>上行走向</text>
+          <text class="legend-item"><text class="ln down"></text>下行走向</text>
+        </template>
         <text class="legend-item"><text class="dot stop"></text>站点 / 车辆</text>
       </view>
       </template>
@@ -224,15 +230,20 @@
            实时车辆挂载即自动加载，刷新统一走车辆面板的 ↻/间隔下拉，不再放「一键查询」按钮。
            全市公交视图下整行隐藏：上下行属于「当前这一条线」，与全市线网不是一个作用域 -->
       <view class="ctrl-dir" v-if="!cityOn">
-        <view class="dir-tab" :class="{ active: dirFilter === 2 }" @click="setDirView(2)">全部</view>
-        <view class="dir-tab up" :class="{ active: dirFilter === 0 }" @click="setDirView(0)">上行</view>
-        <view class="dir-tab down" :class="{ active: dirFilter === 1 }" @click="setDirView(1)">下行</view>
-        <!-- 循环切换视角（全部→上行→下行）的小方键：紧贴在三个 tab 右侧，颜色随当前视角变化 -->
-        <view class="dir-swap" :class="'d' + dirFilter" @click="cycleDirView" :title="'切换到下一个视角（当前：' + dirFilterLabel + '）'">⇄</view>
-        <!-- 线路号徽章：胶囊描边 + 大号数字 + 小字「路」，与右侧公司徽标同一视觉语言 -->
-        <view class="dir-cur" v-if="lineName" :title="'当前线路：' + lineName + ' 路'">
+        <!-- 环形线路没有上下行：不给「全部 / 上行 / 下行」按钮，只留一个不可点的「环形」标识 -->
+        <view class="dir-tab loop on" v-if="isLoop">环形</view>
+        <template v-else>
+          <view class="dir-tab" :class="{ active: dirFilter === 2 }" @click="setDirView(2)">全部</view>
+          <view class="dir-tab up" :class="{ active: dirFilter === 0 }" @click="setDirView(0)">上行</view>
+          <view class="dir-tab down" :class="{ active: dirFilter === 1 }" @click="setDirView(1)">下行</view>
+          <!-- 循环切换视角（全部→上行→下行）的小方键：紧贴在三个 tab 右侧，颜色随当前视角变化 -->
+          <view class="dir-swap" :class="'d' + dirFilter" @click="cycleDirView" :title="'切换到下一个视角（当前：' + dirFilterLabel + '）'">⇄</view>
+        </template>
+        <!-- 线路号徽章：胶囊描边 + 大号数字 + 小字「路」，与右侧公司徽标同一视觉语言。
+             环线（408内环/外环等）名称已含方向语素，不再追加「路」，避免出现「408内环路」 -->
+        <view class="dir-cur" v-if="lineName" :title="'当前线路：' + lineName + (roadUnit ? ' 路' : '')">
           <text class="dc-no">{{ lineName }}</text>
-          <text class="dc-unit">路</text>
+          <text class="dc-unit" v-if="roadUnit">路</text>
         </view>
         <view class="dir-cur none" v-else>未选择线路</view>
         <!-- 所属营运公司徽标：集团线由在线车辆自编号首位推断；
@@ -377,7 +388,7 @@
           <view class="bus-list" v-if="shownBuses.length">
             <view class="bus-group" v-for="g in groupedBuses" :key="'g' + g.dir">
               <view class="bus-group-head">
-                <text class="bus-dir" :class="'d' + g.dir">{{ g.name }}</text>
+                <text class="bus-dir" :class="g.loop ? 'loop' : 'd' + g.dir">{{ g.name }}</text>
                 <text class="bus-group-count">{{ g.buses.length }} 辆</text>
               </view>
               <view class="bus-item" v-for="(bus, i) in g.buses" :key="bus.dir + '-' + i" @click="selectBus(bus)" :title="busTip(bus)">
@@ -421,7 +432,7 @@
         <view class="sheet-title">
           <text class="sheet-grip">⣿</text>
           <text class="sheet-line" :title="sheetTitle">{{ sheetTitle }}</text>
-          <text class="sheet-dir" :class="'d' + selectedBus.dir">{{ selectedBus.dir === 0 ? '上行' : '下行' }}</text>
+          <text class="sheet-dir" :class="isLoop ? 'loop' : 'd' + selectedBus.dir">{{ dirLabel(selectedBus.dir) }}</text>
         </view>
         <view class="sheet-actions">
           <view
@@ -442,7 +453,7 @@
       <view class="sheet-route" v-if="sheetRoute">
         <view class="sr-head">
           <text class="sk">当前走向</text>
-          <text class="sr-dir" :class="'d' + sheetRoute.dir">{{ sheetRoute.dir === 0 ? '上行' : '下行' }}</text>
+          <text class="sr-dir" :class="isLoop ? 'loop' : 'd' + sheetRoute.dir">{{ dirLabel(sheetRoute.dir) }}</text>
         </view>
         <view class="sr-line">
           <text class="sr-tag sr-start">起</text>
@@ -497,7 +508,7 @@
         <view class="sheet-title">
           <text class="sheet-grip">⣿</text>
           <text class="sheet-line" :title="selectedStop.name">{{ selectedStop.name }}</text>
-          <text class="sheet-dir" :class="'d' + selectedStop.dir">{{ selectedStop.dir === 0 ? '上行' : '下行' }}</text>
+          <text class="sheet-dir" :class="isLoop ? 'loop' : 'd' + selectedStop.dir">{{ dirLabel(selectedStop.dir) }}</text>
         </view>
         <view class="sheet-actions">
           <view
@@ -511,7 +522,7 @@
       </view>
       <!-- 方向 / 所属线路 / 换乘条数合并成一行元信息，省掉两行左右分栏 -->
       <view class="sheet-sub">
-        <text class="ss-tag">{{ selectedStop.dir === 0 ? '上行' : '下行' }} · {{ stopLineLabel }}</text>
+        <text class="ss-tag">{{ dirLabel(selectedStop.dir) }} · {{ stopLineLabel }}</text>
         <text class="ss-org">{{ stopLinesBusy ? '全市线网匹配中…' : stopLines.length + ' 条可换乘 · 点击切换' }}</text>
       </view>
       <!-- 换乘线路：两列卡片网格。10 条左右一屏看全，不必逐条滚动；
@@ -523,10 +534,18 @@
           :key="t.no"
           :class="{ cur: t.cur }"
           @click="openStopLine(t)"
-          :title="(t.cur ? '当前线路 · ' : '点击切换至 ') + t.no + ' 路（' + (t.start || '?') + ' → ' + (t.end || '?') + '）'"
+          :title="(t.cur ? '当前线路 · ' : '点击切换至 ') + t.no + ' 路（' + (t.start || '?') + ' → ' + (t.end || '?') + '）· ' + (t.company ? t.company.full || t.company.label : '')"
         >
           <view class="st-top">
             <text class="st-no">{{ t.no }}</text>
+            <!-- 所属营运公司徽标：紧跟在线路号后方，公司色描边 + 半透明底，
+                 一眼看出这条换乘线是哪家在跑（公交集团 / 蔡城 / 木兰 / 汉奇） -->
+            <view
+              class="st-org"
+              v-if="t.company && t.company.label"
+              :title="t.company.full || t.company.label"
+              :style="{ borderColor: (t.company.color || '#6366f1') + '55', color: t.company.color || '#6366f1' }"
+            >{{ t.company.label }}</view>
             <text class="st-cur" v-if="t.cur">当前</text>
             <text class="st-go" v-else>↗</text>
           </view>
@@ -555,7 +574,7 @@ import { fetchRoadRoute } from '../utils/osrm.js'
 import { APP_CONFIG, buildLineCode, useNativeMap } from '../config.js'
 import { assetUrl } from '../utils/asset.js'
 import { distance } from '../utils/geo.js'
-import { allLines, findLine } from '../utils/lineIndex.js'
+import { allLines, findLine, isLoopLine } from '../utils/lineIndex.js'
 import { createResizable } from '../utils/panelResize.js'
 import { readPanelPos, writePanelPos, clampPanelPos } from '../utils/panelPos.js'
 import {
@@ -575,7 +594,11 @@ import { loadLineAsset, assetDir } from '../utils/lineAsset.js'
 import { orgCompanyOf, routeOf } from '../utils/speedRank.js'
 import { copyTable } from '../utils/clipboard.js'
 import { attachDropdown } from '../utils/dropdown.js'
-import { orgInfo, COMPANIES, companyKeyOfNo } from '../utils/companies.js'
+import { orgInfo, COMPANIES, companyKeyOfNo, companyOf } from '../utils/companies.js'
+import { build as kdtreeBuild, nearest as kdtreeNearest } from '../utils/kdtree.js'
+import { estimateDirection, heading } from '../utils/busDir.js'
+import { build as kdtreeBuild, nearest as kdtreeNearest } from '../utils/kdtree.js'
+import { estimateDirection } from '../utils/busDir.js'
 import FavStar from './FavStar.vue'
 import CopyPill from './CopyPill.vue'
 
@@ -588,6 +611,11 @@ import CopyPill from './CopyPill.vue'
 const DIR_STYLE = {
   0: { name: '上行', casing: '#FFFFFF', inner: '#06B6D4', svgStroke: '#22D3EE', bus: '#67E8F9', labelText: '#0E7490' },
   1: { name: '下行', casing: '#FFFFFF', inner: '#F43F5E', svgStroke: '#FB7185', bus: '#FDA4AF', labelText: '#BE185D' },
+}
+// 环形线路专用配色（环线没有上下行）：走向 / 站点 / 车辆统一改用紫罗兰色系，
+// 与上行青、下行玫红都明显拉开，避免被误读成某一方向。
+const LOOP_STYLE = {
+  name: '环形', casing: '#FFFFFF', inner: '#8B5CF6', svgStroke: '#A78BFA', bus: '#C4B5FD', labelText: '#6D28D9',
 }
 // 刷新间隔（秒）：0 = 手动。全站统一真源在 utils/settings.js，
 // 地图页与实时线路 / 极简站牌 / 账号与设置里的刷新控件共用一份值并即时同步。
@@ -752,6 +780,10 @@ export default {
       // 双方向数据缓存：站点 / 道路吸附轨迹 / 实时车辆
       stopsByDir: { 0: [], 1: [] },
       routeByDir: { 0: [], 1: [] },
+      // K-d Tree 索引（按方向）：每方向站点变时重建，查询 nearest 是 O(log N)
+      kdtrees: { 0: null, 1: null },
+      // 上一帧的车辆位置快照（用于 estimateDirection 的运动向量计算）
+      prevBusesByDir: { 0: [], 1: [] },
       // 走向贴路状态：idle 未开始 / loading 计算中 / ok 已贴路 / fail 失败（当前为站间直连）
       routeState: { 0: 'idle', 1: 'idle' },
       // 该方向的贴路几何是否来自静态资产且已贴路（是则跳过运行时 OSRM，避免重复请求）
@@ -900,9 +932,10 @@ export default {
         end: meta.end || (stops[stops.length - 1] && stops[stops.length - 1].stopName) || '',
       }
     },
-    // 仿真站牌：按当前视角方向分组（全部 = 上行 + 下行两组），空组不渲染
+    // 仿真站牌：按当前视角方向分组（全部 = 上行 + 下行两组），空组不渲染；
+    // 环形线没有上下行，只出一组「环形」
     signboardGroups() {
-      const dirs = this.dirFilter === 2 ? [0, 1] : [this.dirFilter]
+      const dirs = this.isLoop ? [0] : (this.dirFilter === 2 ? [0, 1] : [this.dirFilter])
       return dirs
         .map((d) => {
           const arr = this.stopsByDir[d] || []
@@ -912,7 +945,7 @@ export default {
           }))
           return {
             dir: d,
-            dirName: d === 0 ? '上行' : '下行',
+            dirName: this.dirLabel(d),
             from: (arr[0] && arr[0].stopName) || '',
             to: (arr[arr.length - 1] && arr[arr.length - 1].stopName) || '',
             stops,
@@ -934,13 +967,22 @@ export default {
       const all = [...this.busesByDir[0], ...this.busesByDir[1]]
       return this.dirFilter === 2 ? all : all.filter((b) => b.dir === this.dirFilter)
     },
-    // 按方向分组（参考发车时刻的分组方式）：全部视角分上行/下行两组，单方向只一组；空组不渲染
+    // 按方向分组（参考发车时刻的分组方式）：全部视角分上行/下行两组，单方向只一组；空组不渲染。
+    // 环形线没有上下行之分，直接合成一组，组名「环形」。
     groupedBuses() {
+      if (this.isLoop) {
+        const buses = [...this.busesByDir[0], ...this.busesByDir[1]]
+        return buses.length ? [{ dir: 0, name: '环形', loop: true, buses }] : []
+      }
       const name = { 0: '上行', 1: '下行' }
       const dirs = this.dirFilter === 2 ? [0, 1] : [this.dirFilter]
       return dirs
         .map((d) => ({ dir: d, name: name[d], buses: this.busesByDir[d] || [] }))
         .filter((g) => g.buses.length)
+    },
+    // 是否环形线路（408内环/外环…）：无上下行，换独立配色、隐藏方向切换、时刻表用「环形」
+    isLoop() {
+      return isLoopLine(this.lineName || this.lineNo)
     },
     dirFilterLabel() {
       return this.dirFilter === 2 ? '全部' : DIR_STYLE[this.dirFilter].name
@@ -1001,10 +1043,12 @@ export default {
       }
       return `${f(b.lng)}, ${f(b.lat)}`
     },
-    // 站点窗元信息里的线路名：宿主有时传「337」、有时传「337路」，统一只加一次「路」
+    // 站点窗元信息里的线路名：宿主有时传「337」、有时传「337路」，统一只加一次「路」；
+    // 环线（408内环/外环等）名称已含方向语素，不再追加「路」
     stopLineLabel() {
       const s = String(this.lineName || this.lineNo || '').trim()
-      return /路$/.test(s) ? s : `${s} 路`
+      if (!s || /路$/.test(s) || /(内环|外环|内线|外线)$/.test(s)) return s
+      return `${s} 路`
     },
     // —— 全市实时分布 ——
     // 快照里经线路筛选后的车辆（纯本地过滤，不发请求）
@@ -1080,7 +1124,7 @@ export default {
       const STOP_ID = 5000
       const stopMarkers = []
       dirs.forEach((dir) => {
-        const st = DIR_STYLE[dir]
+        const st = this.routeStyle(dir)
         const total = (this.stopsByDir[dir] || []).length
         ;(this.stopsByDir[dir] || []).forEach((s, i) => {
           // API 坐标已是 GCJ-02，直接使用，切勿再转（否则整体偏移数百米）
@@ -1163,7 +1207,7 @@ export default {
         if (points.length < 2) return
         // 同向重合时 dir1 反向偏移，两条折线分居两侧（与自绘 sideShift 兜底一致）
         const pts = offsetPolyline(points, sameDir && dir === 1 ? -split : split)
-        const st = DIR_STYLE[dir]
+        const st = this.routeStyle(dir)
         casings.push({ points: pts, color: st.casing, width: 9, arrowLine: false })      // 白色外描边
         // 主线统一用提亮一档的 direction 色（与自绘 svgStroke 同源）。
         // 不再给下行加 dottedLine：玫红虚线压在同一条走廊上会与青蓝主线互相打架，
@@ -1198,6 +1242,11 @@ export default {
       }
       return out
     },
+    // 线路号是否在名称后追加「路」单位：环线（408内环 / 外环 / 内线 / 外线）名称已含方向语素，
+    // 再追加会变成「408内环路」，故不追加
+    roadUnit() {
+      return !/(内环|外环|内线|外线)$/.test(String(this.lineName || '').trim())
+    },
     // 所属营运公司：由在线车辆自编号（orgId，纯数字）首位推断，1 → 第一营运公司，依次类推
     operatorCompanies() {
       const set = new Set()
@@ -1208,7 +1257,8 @@ export default {
       return [...set]
         .sort((a, b) => a - b)
         // short 用于控制卡里的徽标（一行放不下全名，全名留给 title / 车辆详情窗）
-        .map((no) => ({ no, short: `${CN_ORG[no]}公司`, label: `武汉公交集团${CN_ORG[no]}营运公司` }))
+        // 展示口径：只用单字序号「一公司 / 二公司」，去掉「第」；全名仍保留「第一营运公司」供 title
+        .map((no) => ({ no, short: `${CN_ORG[no].replace(/^第/, '')}公司`, label: `武汉公交集团${CN_ORG[no]}营运公司` }))
     },
     // 详情窗位置：拖动过后用 left/top 绝对定位（覆盖默认的居中贴底）
     sheetStyle() {
@@ -1450,6 +1500,14 @@ export default {
         Math.abs(Number(p.longitude) - Number(q.longitude)) < 1e-5
       return near(a[0], b[0]) && near(a[a.length - 1], b[b.length - 1])
     },
+    // 走向色板：环形线统一用独立紫罗兰色，普通线路按上行/下行取色
+    routeStyle(dir) {
+      return this.isLoop ? LOOP_STYLE : DIR_STYLE[dir]
+    },
+    // 方向文案：环形线统一称「环形」，普通线路「上行 / 下行」
+    dirLabel(dir) {
+      return this.isLoop ? '环形' : (dir === 0 ? '上行' : '下行')
+    },
     // 切换视角方向：0 上行 / 1 下行 / 2 全部（站点与轨迹已双方向缓存，切换仅重绘）
     // 自绘模式：走向/站点/车辆都是 SVG + HTML 图层，改 dirFilter 重算 svg* 即可，
     // 底图瓦片随 cam 不变、完全不动。地图 <map> 组件（原生模式）则需重建以切换 marker 集合，
@@ -1525,6 +1583,12 @@ export default {
         } catch (e) {
           this.stopsByDir[d] = []
         }
+      }
+      // 站点序列定稿后重建 K-d tree：下一次 loadLive 拿到的车辆就近站匹配从 O(N) 降到 O(log N)
+      for (const d of [0, 1]) {
+        const arr = this.stopsByDir[d] || []
+        const pts = arr.map((s, i) => ({ lat: parseFloat(s.latitude), lng: parseFloat(s.longitude), i }))
+        this.kdtrees[d] = pts.length >= 2 ? kdtreeBuild(pts).tree : null
       }
       // 地图中心移到基准线路中段，保证切线路时新走向可见（无在线车辆时尤其需要）
       const stops = this.stopsByDir[this.direction] || []
@@ -1824,7 +1888,26 @@ export default {
       await this.$nextTick()
       try {
         const [up, down] = await Promise.all([this.fetchDirLive(0), this.fetchDirLive(1)])
-        this.busesByDir = { 0: up, 1: down }
+        // 用上一帧位置 + 当前线路 polyline 估算每辆车的朝向（上行/下行）。
+        // 原先方向全靠后端 dir 字段，遇到环线或 GPS heading 与线路走向不一致时容易翻；
+        // 本算法在 60° 容差内判定同向/反向，置信度低于阈值（0.3）的保持原 dir。
+        const prev = this.prevBusesByDir || { 0: [], 1: [] }
+        const estBuses = (dir) => {
+          const arr = (up && dir === 0 ? up : down) || []
+          const polyline = this.routeByDir[dir] || []
+          return arr.map((b, i) => {
+            const pb = (prev[dir] || [])[i]
+            const res = polyline.length >= 3
+              ? estimateDirection(b, pb, polyline)
+              : { direction: null, confidence: 0 }
+            if (res.direction !== null && res.confidence >= 0.3) {
+              return { ...b, _estDir: res.direction, _estConf: res.confidence }
+            }
+            return { ...b, _estDir: b.dir, _estConf: 0 }
+          })
+        }
+        this.busesByDir = { 0: estBuses(0), 1: estBuses(1) }
+        this.prevBusesByDir = { 0: [...(up || [])], 1: [...(down || [])] }
         if (silent) {
           // 自动刷新会重建地图（清 callout 残留），重建后回到 props 指定的中心；
           // 这里先还原用户平移/缩放后的视野，避免每隔 N 秒被拽回首辆车
@@ -2924,7 +3007,7 @@ export default {
         const snapped = !!(this.routeByDir[d] && this.routeByDir[d].length > 1)
         routes.push({
           dir: d,
-          color: DIR_STYLE[d].svgStroke,
+          color: this.routeStyle(d).svgStroke,
           dash: snapped ? 'none' : '3 6',
           w: snapped ? 4.5 : 3,
           op: snapped ? 1 : 0.55,
@@ -2938,7 +3021,7 @@ export default {
             x: (a.x + b.x) / 2,
             y: (a.y + b.y) / 2,
             deg: (Math.atan2(b.y - a.y, b.x - a.x) * 180) / Math.PI,
-            color: DIR_STYLE[d].svgStroke,
+            color: this.routeStyle(d).svgStroke,
           })
         })
       })
@@ -2988,7 +3071,7 @@ export default {
           const END_COLOR = { first: '#22c55e', last: '#f59e0b' }
           const endKind = isFirst ? 'first' : isLast ? 'last' : ''
           const endTag = isFirst ? '起' : isLast ? '终' : ''
-          const color = !terminal ? DIR_STYLE[d].svgStroke : END_COLOR[endKind]
+          const color = !terminal ? this.routeStyle(d).svgStroke : END_COLOR[endKind]
           stops.push({
             dir: d,
             idx: i,
@@ -3053,7 +3136,7 @@ export default {
           labelY: p.ly,
           // 靠边时调整标签对齐方式，避免车号被画布裁掉
           edge: p.x < 34 ? 'l' : (p.x > w - 34 ? 'r' : ''),
-          color: DIR_STYLE[b.dir].bus,
+          color: this.routeStyle(b.dir).bus,
           selected: this.selectedBus === b,
           located: this.locatedBus === b,
           bus: b,
@@ -3277,6 +3360,9 @@ export default {
           end: l.end || '',
           order: l.order != null ? l.order : 999999,
           cur: String(d.no) === curNo,
+          // 所属营运公司徽标：全站统一走 companyOf（永不返回 null），
+          // 站点换乘卡里线路号后方就靠它一眼看出是哪家在跑
+          company: companyOf(l),
         })
       })
       list.sort((a, b) => a.order - b.order || (a.cur ? -1 : 1))
@@ -3602,22 +3688,30 @@ export default {
     busStateText(bus) {
       return busStateOf(bus)
     },
-    // 车辆距该方向站点序列中最近的一站（haversine，坐标均为 GCJ-02）：悬浮提示与复制的「所在站点」列共用
+    // 车辆距该方向站点序列中最近的一站（K-d Tree，O(log N) 替换 O(N) 线性扫描）
     nearStopOf(b) {
-      let best = '未知站点'
-      let bestD = Infinity
-      ;(this.stopsByDir[b.dir] || []).forEach((s) => {
-        const la = parseFloat(s.latitude)
-        const ln = parseFloat(s.longitude)
-        if (isNaN(la) || isNaN(ln)) return
-        const d = distance(b.lat, b.lng, la, ln)
-        if (d < bestD) { bestD = d; best = s.stopName || '未知站点' }
-      })
-      return best
+      const tree = this.kdtrees[b.dir]
+      if (!tree) return '未知站点'
+      const target = { lat: parseFloat(b.lat), lng: parseFloat(b.lng) }
+      const res = kdtreeNearest(tree, target)
+      if (!res) return '未知站点'
+      const station = this.stopsByDir[b.dir]?.[res.index] || this.stopsByDir[0]?.[0]
+      const la = station ? parseFloat(station.latitude) : 0
+      const ln = station ? parseFloat(station.longitude) : 0
+      const dist = res.dist
+      const dir = this.dirLabel(b.dir)
+      const state = b.arrived === '1' ? '已到站' : '行驶中'
+      const coord = b.lat != null && b.lng != null ? `${b.lat}, ${b.lng}` : '经纬度未知'
+      return (
+        `${dir} · ${b.orgId || b.busNo || '?'} · ${this.busCompanyText(b)}\n` +
+        `所在站点：${station ? `${station.latitude},${station.longitude}` : '未知站点'}\n` +
+        `${String(b.time || '--').slice(0, 5)} · ${b.gpsSpeed}km/h · ${state}\n` +
+        coord
+      )
     },
     // 在线车辆悬浮提示：方向 / 编号 / 营运公司 / 所在站点 / 时间 / 速度 / 状态 / 经纬度
     busTip(b) {
-      const dir = b.dir === 0 ? '上行' : '下行'
+      const dir = this.dirLabel(b.dir)
       const state = b.arrived === '1' ? '已到站' : '行驶中'
       const coord = b.lat != null && b.lng != null ? `${b.lat}, ${b.lng}` : '经纬度未知'
       return (
@@ -3636,14 +3730,17 @@ export default {
         const d = String(b.orgId || '').charAt(0)
         return d >= '1' && d <= '9' ? `武汉公交集团${CN[Number(d)]}营运公司` : '营运公司未知'
       }
-      const dirs = this.dirFilter === 2 ? [0, 1] : [this.dirFilter]
+      // 环形线没有上下行：合并成一段「环形」，不按上/下行拆两段
+      const dirs = this.isLoop ? [0] : (this.dirFilter === 2 ? [0, 1] : [this.dirFilter])
       const blocks = []
       const allRows = []
       let total = 0
       for (const dir of dirs) {
-        const buses = this.busesByDir[dir] || []
+        const buses = this.isLoop
+          ? [...(this.busesByDir[0] || []), ...(this.busesByDir[1] || [])]
+          : (this.busesByDir[dir] || [])
         if (!buses.length) continue
-        const dirName = dir === 0 ? '上行' : '下行'
+        const dirName = this.dirLabel(dir)
         const cells = buses.map((b) => [
           b.orgId || b.busNo || '?',
           companyOf(b),
@@ -3951,6 +4048,7 @@ export default {
 }
 .ln.up { background: #22d3ee; }
 .ln.down { background: #fb7185; }
+.ln.loop { background: #a78bfa; }
 /* 窄屏：底部让位给车辆横栏，隐藏图例（颜色说明已写进控制卡提示） */
 @media (max-width: 720px) {
   .schematic-legend {
@@ -4098,6 +4196,14 @@ export default {
   color: #fff;
   background: linear-gradient(135deg, #fda4af, #e11d48);
   box-shadow: 0 6rpx 18rpx rgba(225, 29, 72, 0.35);
+}
+/* 环形线标识：不可点，用独立紫罗兰色与「上/下行」区分 */
+.dir-tab.loop {
+  color: #ede9fe;
+  background: rgba(139, 92, 246, 0.22);
+  border: 2rpx solid rgba(167, 139, 250, 0.5);
+  font-weight: 700;
+  cursor: default;
 }
 /* 方向行内的“循环切换”小键：紧贴三个 tab 右侧，颜色随当前视角（上行青 / 下行玫红 / 中性）。
    它本质上就是“切方向”，放在方向行里才有归属感；挂在一键查询旁边时像个多余的旁路按钮。 */
@@ -4688,6 +4794,11 @@ export default {
   background: rgba(225, 29, 72, 0.18);
   border: 2rpx solid rgba(251, 113, 133, 0.45);
 }
+.bus-dir.loop {
+  color: #ddd6fe;
+  background: rgba(139, 92, 246, 0.18);
+  border: 2rpx solid rgba(167, 139, 250, 0.45);
+}
 /* 车辆分组头：方向徽标 + 辆数（参考发车时刻的分组方式，行内不再重复方向） */
 .bus-group-head {
   display: flex;
@@ -4871,6 +4982,24 @@ export default {
   background: rgba(252, 211, 77, 0.92);
   color: #0b1020;
 }
+/* 换乘卡里线路号后方的所属公司徽标：小胶囊，公司色描边 + 半透明底 + 同色文字。
+   宽度有上限，超长公司名（如「公交集团·三营运公司」）省略截断，全名在 title 里 */
+.st-org {
+  flex: 0 0 auto;
+  max-width: 46%;
+  box-sizing: border-box;
+  padding: 2rpx 8rpx;
+  margin: 0 2rpx;
+  border-radius: 20rpx;
+  border: 1rpx solid;
+  font-size: 17rpx;
+  font-weight: 600;
+  line-height: 22rpx;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  opacity: 0.95;
+}
 /* 第二行：乘客最关心的「开往哪」。只允许一行显示，超长终点站名以省略号截断，
    保证两列卡片网格等高整齐；完整起讫站见卡片 title / .st-end title */
 .st-end {
@@ -4934,6 +5063,11 @@ export default {
   color: #ffe4e6;
   background: rgba(225, 29, 72, 0.26);
   border: 2rpx solid rgba(251, 113, 133, 0.5);
+}
+.sheet-dir.loop {
+  color: #ede9fe;
+  background: rgba(139, 92, 246, 0.26);
+  border: 2rpx solid rgba(167, 139, 250, 0.5);
 }
 /* 元数据行：左小标签 + 右单行值，长公司名 / 站名不再折行 */
 .sheet-sub {
@@ -5049,6 +5183,7 @@ export default {
 }
 .sr-dir.d0 { color: #67e8f9; background: rgba(6, 182, 212, 0.18); }
 .sr-dir.d1 { color: #fda4af; background: rgba(225, 29, 72, 0.18); }
+.sr-dir.loop { color: #ddd6fe; background: rgba(139, 92, 246, 0.18); }
 .sr-line {
   display: flex;
   align-items: center;

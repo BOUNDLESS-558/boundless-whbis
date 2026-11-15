@@ -51,7 +51,7 @@
       <!-- 实时线路：不整屏换页，改为地图上的可拖动悬浮窗（与车辆详情窗同一套交互） -->
       <FloatWin
         v-if="hasLine && view === 'stops'"
-        :title="'实时线路 · ' + (lineName || lineNo) + ' 路'"
+        :title="'实时线路 · ' + displayLineName"
         sub="站点 · 在线车辆 · 营运信息"
         :width-rpx="1120"
         max-height="76vh"
@@ -513,9 +513,15 @@ export default {
     mapMount() {
       return this.hasLine || this.view === 'city'
     },
+    // 线路展示名（带「路」单位，环线不追加）：顶栏 meta 与浮窗标题共用
+    displayLineName() {
+      const nm = String(this.lineName || this.lineNo || '').trim()
+      if (!nm) return ''
+      return /(内环|外环|内线|外线)$/.test(nm) ? nm : nm + ' 路'
+    },
     metaText() {
       if (!this.lineNo) return ''
-      return `${this.lineName || this.lineNo} 路 · ${this.direction === 1 ? '下行' : '上行'}`
+      return `${this.displayLineName} · ${this.direction === 1 ? '下行' : '上行'}`
     },
     // 默认头像：用户名 / 账号名的首字母色块
     avatarLetter() {

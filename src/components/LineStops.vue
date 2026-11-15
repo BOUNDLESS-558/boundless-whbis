@@ -7,7 +7,7 @@
     <!-- 卡1：线路头 —— 徽标 / 走向 / 公司 + 营运指标行 -->
     <view class="mod">
       <view class="mod-row head-row">
-        <view class="line-badge" :class="dir === 0 ? 'up' : 'down'">{{ lineName }}</view>
+        <view class="line-badge" :class="isLoop ? 'loop' : (dir === 0 ? 'up' : 'down')">{{ lineName }}</view>
         <view class="hd-body">
           <view class="hd-route">
             <text class="hd-tag hd-tag-first">起</text>
@@ -64,8 +64,12 @@
     <view class="mod mod-ctrl" :class="{ 'menu-open': refreshMenu }">
       <view class="mod-row dir-row">
         <view class="seg-groove grow">
-          <view class="seg-tab up" :class="{ on: dir === 0 }" @click="setDir(0)">▲ 上行</view>
-          <view class="seg-tab down" :class="{ on: dir === 1 }" @click="setDir(1)">▼ 下行</view>
+          <!-- 环形线没有上下行：不给上/下切换，只留一个不可点的「环形」 -->
+          <view class="seg-tab loop on" v-if="isLoop">◆ 环形</view>
+          <template v-else>
+            <view class="seg-tab up" :class="{ on: dir === 0 }" @click="setDir(0)">▲ 上行</view>
+            <view class="seg-tab down" :class="{ on: dir === 1 }" @click="setDir(1)">▼ 下行</view>
+          </template>
         </view>
         <!-- 刷新控件：与地图页 .refresh-pill 同一套设计 ——
              左半 ↻ 立即拉一次，右半显示当前间隔并可展开 手动 / 15 / 20 / 30 秒 -->
@@ -168,8 +172,8 @@
       <!-- 极简线路头：线路号 + 上下行标识 + 营运信息 + 起讫站 -->
       <view class="mod mod-min-head">
         <view class="min-head-top">
-          <view class="line-badge" :class="dir === 0 ? 'up' : 'down'">{{ lineName }}</view>
-          <view class="min-dir-label" :class="dir === 0 ? 'up' : 'down'">{{ dir === 0 ? '上行' : '下行' }}</view>
+          <view class="line-badge" :class="isLoop ? 'loop' : (dir === 0 ? 'up' : 'down')">{{ lineName }}</view>
+          <view class="min-dir-label" :class="isLoop ? 'loop' : (dir === 0 ? 'up' : 'down')">{{ isLoop ? '环形' : (dir === 0 ? '上行' : '下行') }}</view>
           <view class="min-head-info" v-if="activeBase.earlyHour || activeBase.lastHour || activeBase.price">
             <text v-if="activeBase.earlyHour" class="min-time-tag">首 {{ activeBase.earlyHour }}</text>
             <text v-if="activeBase.lastHour" class="min-time-tag">末 {{ activeBase.lastHour }}</text>
@@ -190,8 +194,12 @@
              三个明确的复制按钮（线路 / 站点 / 在线）以及同款刷新胶囊 -->
         <view class="min-tools">
           <view class="min-dir-seg">
-            <view class="min-dir-btn" :class="{ on: dir === 0, up: dir === 0 }" @click="setDir(0)">↑ 上行</view>
-            <view class="min-dir-btn" :class="{ on: dir === 1, down: dir === 1 }" @click="setDir(1)">↓ 下行</view>
+            <!-- 环形线没有上下行：只留一个不可点的「环形」 -->
+            <view class="min-dir-btn loop on" v-if="isLoop">⟳ 环形</view>
+            <template v-else>
+              <view class="min-dir-btn" :class="{ on: dir === 0, up: dir === 0 }" @click="setDir(0)">↑ 上行</view>
+              <view class="min-dir-btn" :class="{ on: dir === 1, down: dir === 1 }" @click="setDir(1)">↓ 下行</view>
+            </template>
           </view>
           <!-- 复制出口统一走 utils/clipboard.js 的 copyTable；档位由 CopyPill 右半的三档下拉决定，
                与车辆面板 / 发车时刻 / 线路库的复制按钮共享同一份设置 -->
@@ -279,6 +287,7 @@ import { loadLineAsset, assetDir } from '../utils/lineAsset.js'
 import { copyTable, renderRoutePng } from '../utils/clipboard.js'
 import { attachDropdown } from '../utils/dropdown.js'
 import { companyKeyOfNo, orgInfo } from '../utils/companies.js'
+import { isLoopLine } from '../utils/lineIndex.js'
 import { assetUrl } from '../utils/asset.js'
 import FavStar from './FavStar.vue'
 import CopyPill from './CopyPill.vue'
@@ -316,6 +325,10 @@ export default {
     }
   },
   computed: {
+    // 是否环形线路（408内环/外环…）：没有上下行，方向切换与文案统一改「环形」
+    isLoop() {
+      return isLoopLine(this.lineName || this.lineNo)
+    },
     // 非集团线路（高德静态数据源）：站点与走向可用，但没有实时车辆
     isForeignLine() {
       return companyKeyOfNo(this.lineName || this.lineNo) !== 'JT'
@@ -533,7 +546,7 @@ export default {
         uni.showToast({ title: '当前无在线车辆', icon: 'none' })
         return
       }
-      const dirName = this.dir === 0 ? '上行' : '下行'
+      const dirName = this.isLoop ? '环形' : (this.dir === 0 ? '上行' : '下行')
       copyTable({
         title: `${this.lineName || this.lineNo}（${dirName}） 在线 ${lines.length} 辆`,
         columns: ['编号', '营运公司', '所在站点', '时间', '速度', '状态', '经纬度'],
@@ -547,7 +560,7 @@ export default {
     // 与 copyStopsInfo / copyOnlineBuses 一样统一走 copyTable，自动跟随「复制方式」设置。
     copyLineInfo() {
       const b = this.activeBase || {}
-      const dirName = this.dir === 0 ? '上行' : '下行'
+      const dirName = this.isLoop ? '环形' : (this.dir === 0 ? '上行' : '下行')
       const rows = [
         ['线路', this.lineName || this.lineNo || '—'],
         ['方向', dirName],
@@ -575,7 +588,7 @@ export default {
         uni.showToast({ title: '当前方向无站点数据', icon: 'none' })
         return
       }
-      const dirName = this.dir === 0 ? '上行' : '下行'
+      const dirName = this.isLoop ? '环形' : (this.dir === 0 ? '上行' : '下行')
       const rows = cols.map((s, i) => {
         const transfer = (s.transferInfos || [])
           .map((t) => (t && t.subwayLineNo ? t.subwayLineNo + '号线' : ''))
@@ -595,7 +608,7 @@ export default {
     },
     // 复制当前方向的仿真线路走向图为 PNG（上行走上行、下行走下行），写入剪贴板
     copyRouteImage() {
-      const dirName = this.dir === 0 ? '上行' : '下行'
+      const dirName = this.isLoop ? '环形' : (this.dir === 0 ? '上行' : '下行')
       const cols = this.activeCols
       if (!cols || !cols.length) {
         uni.showToast({ title: '当前方向无站点数据', icon: 'none' })
@@ -887,6 +900,12 @@ export default {
   background: linear-gradient(135deg, #fb7185, #e11d48);
   box-shadow: 0 10rpx 26rpx rgba(225, 29, 72, 0.32), inset 0 1rpx 0 rgba(255, 255, 255, 0.34);
 }
+/* 环形线路徽标：独立紫罗兰色，与上行青 / 下行玫红都拉开距离 */
+.line-badge.loop {
+  color: #fff;
+  background: linear-gradient(135deg, #8b5cf6, #7c3aed);
+  box-shadow: 0 10rpx 26rpx rgba(124, 58, 237, 0.34), inset 0 1rpx 0 rgba(255, 255, 255, 0.3);
+}
 .hd-body {
   flex: 1;
   min-width: 0;
@@ -1070,6 +1089,18 @@ export default {
   color: #fff;
   background: linear-gradient(135deg, #fb7185, #e11d48);
   box-shadow: 0 6rpx 18rpx rgba(225, 29, 72, 0.32);
+}
+/* 环形线没有上下行：只留一个不可点的「环形」标识（v-if 替代上/下切换） */
+.seg-tab.loop {
+  color: #ede9fe;
+  background: rgba(124, 58, 237, 0.2);
+  border: 2rpx solid rgba(167, 139, 250, 0.45);
+  font-weight: 700;
+  cursor: default;
+}
+.seg-tab.loop:hover {
+  color: #ede9fe;
+  background: rgba(124, 58, 237, 0.2);
 }
 .lt-count {
   flex: 0 0 auto;
@@ -1475,6 +1506,10 @@ export default {
   color: #fda4af;
   background: rgba(251, 113, 133, 0.14);
 }
+.min-dir-label.loop {
+  color: #ddd6fe;
+  background: rgba(124, 58, 237, 0.16);
+}
 /* 起讫站条：独立浅底卡片，两侧站名等宽且分别左 / 右对齐，箭头居中，视觉对称 */
 .min-head-route {
   display: flex;
@@ -1582,6 +1617,17 @@ export default {
   background: linear-gradient(135deg, #fb7185, #e11d48);
   border-color: transparent;
   box-shadow: 0 6rpx 18rpx rgba(225, 29, 72, 0.35);
+}
+/* 极简态方向切换：环形线只留一个不可点的「环形」 */
+.min-dir-btn.loop {
+  color: #ede9fe;
+  background: rgba(124, 58, 237, 0.2);
+  border: 2rpx solid rgba(167, 139, 250, 0.45);
+  font-weight: 700;
+  cursor: default;
+}
+.min-dir-btn.loop:active {
+  transform: none;
 }
 /* 极简模式复制胶囊组：与上下行按钮同高（52rpx），紧凑排在方向切换之后 */
 .min-copy-group {

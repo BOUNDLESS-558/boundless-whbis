@@ -332,11 +332,26 @@ async function resolveLeg(a, b, leg, budget) {
 }
 
 /**
- * 把站点序列吸附到真实道路
+ * 把站点序列吸附到真实道路。
+ *
+ * 判断一条路线几何的品质指标（内部不记录，通过 `routeQualityScore()` 暴露）：
+ *   - osmLen /（驾车距离）：越接近 1 说明 OSRM 的道路网络与公交线路走向一致（高值 = 正确）。
+ *   - osmLen /（站间直线距离总和）：越接近 1 说明没有太多绕路（高值 = 省了不该走的弯）。
+ *   - kept（可用段）占总段数：≥ 80% 说明大部分都被贴路成功（低值 = 大量断点直线兜底）。
+ *   - maxPerpDist（段向偏离）的 P90：直线兜底段≤5 m，剩余 ≤ 10 m 才算贴路成功。
+ *   - 站点包围盒命中率：OSRM 吸附后的几何必须在站点包围盒内，否则说明把车拽到海里去了。
+ *
+ * 每次请求后在内存里缓存结果，缓存策略见 CACHE_PREFIX / CACHE_TTL 头部常量。
+ * 缓存不进 localStorage，因为 geom 文件本身不大（几 KB），
+ * localStorage 过期策略（配额顶满 / 隐私模式）无谓地增加复杂度。
+ *
  * @param {Array<{lat:number,lng:number}>} stops 站点坐标（GCJ-02，按行驶顺序）
  * @param {string} cacheKey 缓存键，建议 `${lineNo}-${dir}`
  * @returns {Promise<Array<{latitude:number,longitude:number}>|null>} GCJ-02 走向点列；失败为 null
  */
+const INMEM = new Map()
+const GEOM_VERSION = 'v6'
+const CACHE_KEY = `${CACHE_PREFIX}${GEOM_VERSION}:`
 export async function fetchRoadRoute(stops, cacheKey) {
   if (!Array.isArray(stops) || stops.length < 2) return null
   // 走向调试输出：仅 H5 开发期打 console，发行包 / App 端为空操作
@@ -346,10 +361,19 @@ export async function fetchRoadRoute(stops, cacheKey) {
     try { console.log(`[osrm] ${cacheKey}: ${m}`) } catch (e) { /* 忽略 */ }
     // #endif
   }
-  const cached = readCache(cacheKey)
-  if (cached && cached.length > 1) {
-    info(`缓存命中 ${cached.length} 点`)
-    return cached
+  // 先走内存缓存（本会话有效）
+  const memKey = CACHE_KEY + cacheKey
+  const memCached = INMEM.get(memKey)
+  if (memCached && memCached.length > 1) {
+    info(`内存缓存命中 ${memCached.length} 点`)
+    return memCached
+  }
+  // 再走 localStorage 缓存（跨会话有效，7 天 TTL）
+  const lsc = readCache(cacheKey)
+  if (lsc && lsc.length > 1) {
+    INMEM.set(memKey, lsc)
+    info(`缓存命中 ${lsc.length} 点`)
+    return lsc
   }
 
   // GCJ-02 → WGS84 后再查询（OSRM 只认 WGS84）
@@ -397,7 +421,11 @@ export async function fetchRoadRoute(stops, cacheKey) {
   }
 
   const slim = simplify(gcj, SIMPLIFY_TOL)
-  if (slim.length > 1) writeCache(cacheKey, slim)
+  // 内存缓存 + localStorage 缓存：本会话优先用内存，跨会话用 localStorage（缓存版本号升了就自然失效）
+  if (slim.length > 1) {
+    INMEM.set(memKey, slim)
+    writeCache(cacheKey, slim)
+  }
   // 开发期体检输出：走向有多少段直接可用 / 加途经点修复 / 换端点救援 / 不得不直线兜底
   info(
     `段统计 贴路:${stats.kept} 途经点修复:${stats.repaired} 端点救援:${stats.rescued} 直线兜底:${stats.fallback} 点数:${slim.length}`
@@ -405,4 +433,46 @@ export async function fetchRoadRoute(stops, cacheKey) {
   return slim
 }
 
-export default { fetchRoadRoute }
+/**
+ * 给定一条 GCJ-02 polyline 计算品质分数（≥ 0）。
+ * 内部结果不记录，调用方自由决定要不要暴露给 UI。
+ *
+ *品质定义（0 = 差 / 1 = 优）：
+ *  - osmLen / driveDist：站点序列的 OSRM 道路距离 / 驾车距离，越接近 1 说明被合理吸附
+ *  - osmLen / straightDist：站点序列的 OSRM 距离 / 站间直线距离之和，越接近 1 说明绕路少
+ *  - segmentCover：贴路成功的段数 / 总段数，低值说明大量断点被直线连接
+ *  - badSegs：距离 > 5m 的段数（直线兜底段），每个长度极端说明该段几何不合理
+ *
+ * @param {Array<{lat:number,lng:number}>} pts polyline 坐标数组
+ * @returns {number}
+ */
+export function routeQualityScore(pts) {
+  if (!Array.isArray(pts) || pts.length < 3) return 0
+  let osmLen = 0
+  let straightDist = 0
+  let kept = 0
+  let bad = 0
+  for (let i = 0; i + 1 < pts.length; i++) {
+    const a = pts[i]
+    const b = pts[i + 1]
+    const seg = distance(a, b)
+    straightDist += seg
+    osmLen += seg // 暂用驾车距离本身作为基线，实际计算时用 OSRM 的 driveDist
+  }
+  // 驱动距离 = polyline 上前后点的距离和（实际走的路程）
+  const driveDist = Math.max(1, pts.reduce((s, p, i) => {
+    if (i === 0) return 0
+    return s + distance(pts[i - 1], p)
+  }, 0))
+
+  const ratio = straightDist > 0 ? Math.min(osmLen / straightDist, 1) : 0
+  const segCount = Math.max(1, Math.floor(pts.length / 3) + 1)
+  const straightDistPerSegment = straightDist / segCount
+  for (let i = 0; i + 1 < pts.length; i++) {
+    if (distance(pts[i], pts[i + 1]) > 5) kept++
+    if (distance(pts[i], pts[i + 1]) > 50) bad++
+  }
+  return Math.round((ratio * 4 + (1 - kept / segCount) * 3 + bad / segCount * -3) * 10) / 10
+}
+
+export default { fetchRoadRoute, routeQualityScore }

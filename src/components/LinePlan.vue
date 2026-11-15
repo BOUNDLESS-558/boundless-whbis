@@ -11,27 +11,29 @@
     </view>
     <!-- 工具行：与车辆面板 .panel-tools 同构（左提示，右复制按钮） -->
     <view class="plan-tools">
-      <text class="ph-hint">{{ sortedByDir[0].length }} 上行 · {{ sortedByDir[1].length }} 下行</text>
+      <!-- 环形线没有上下行：不再拆上/下行计数，只报总班次 + 环形提示 -->
+      <text class="ph-hint" v-if="isLoop">{{ totalCount }} 班 · 环形</text>
+      <text class="ph-hint" v-else>{{ sortedByDir[0].length }} 上行 · {{ sortedByDir[1].length }} 下行</text>
       <CopyPill label="复制" :disabled="!totalCount" @copy="copyPlans" />
     </view>
 
     <view class="plan-body" v-show="!collapsed">
-      <view class="plan-group" v-for="d in DIRS" :key="'g' + d">
+      <view class="plan-group" v-for="g in groups" :key="g.key">
         <!-- 分组头：方向徽标（与车辆列表的 .bus-dir 同一尺寸与着色） + 该方向班次数 -->
         <view class="pg-head">
-          <text class="pg-dir" :class="'d' + d">{{ d === 0 ? '↑ 上行' : '↓ 下行' }}</text>
-          <text class="pg-count">{{ sortedByDir[d].length }} 班</text>
+          <text class="pg-dir" :class="g.loop ? 'loop' : 'd' + g.dir">{{ g.label }}</text>
+          <text class="pg-count">{{ g.plans.length }} 班</text>
         </view>
 
-        <view class="plan-row" v-for="(p, i) in sortedByDir[d]" :key="p.busId || i">
+        <view class="plan-row" v-for="(p, i) in g.plans" :key="p.busId || i">
           <!-- 左：车辆自编号（沿用车辆面板 .bus-org 字体：主色 800 等宽数字，无图标无胶囊）；右：发车时间 -->
           <text class="plan-org" v-if="p.bus">{{ p.bus }}</text>
           <text class="plan-time">{{ p.planStartTime || '--' }}</text>
         </view>
 
-        <view class="plan-empty" v-if="!sortedByDir[d].length">
+        <view class="plan-empty" v-if="!g.plans.length">
           <view class="empty-icon">{{ loading ? '⏳' : '🚏' }}</view>
-          <text class="empty-text">{{ loading ? '时刻表加载中…' : '暂无' + (d === 0 ? '上行' : '下行') + '计划发车数据' }}</text>
+          <text class="empty-text">{{ loading ? '时刻表加载中…' : (g.loop ? '暂无环形计划发车数据' : '暂无' + g.name + '计划发车数据') }}</text>
         </view>
       </view>
     </view>
@@ -41,6 +43,7 @@
 <script>
 import { fetchPlanTime, decryptBusId, onBusIdReady, isBusIdReady } from '../utils/api.js'
 import { buildLineCode } from '../config.js'
+import { isLoopLine } from '../utils/lineIndex.js'
 import { copyTable } from '../utils/clipboard.js'
 import CopyPill from './CopyPill.vue'
 
@@ -64,13 +67,42 @@ export default {
     }
   },
   computed: {
+    // 是否环形线路：环形无上下行，合并成一组「环形」
+    isLoop() {
+      return isLoopLine(this.lineNo)
+    },
     // 各方向按计划发车时间升序（后端 startOrder 不可靠，班次序号由排序生成）
     sortedByDir() {
       const by = (a, b) => (a.planStartTime || '').localeCompare(b.planStartTime || '')
       return { 0: [...this.plansByDir[0]].sort(by), 1: [...this.plansByDir[1]].sort(by) }
     },
+    // 展示分组：普通线路分上行/下行两组；环形线合并为一组「环形」
+    // （去重，避免两方向返回同一班次时重复列出）
+    groups() {
+      if (!this.isLoop) {
+        return DIRS.map((d) => ({
+          key: 'd' + d,
+          dir: d,
+          name: d === 0 ? '上行' : '下行',
+          label: d === 0 ? '↑ 上行' : '↓ 下行',
+          loop: false,
+          plans: this.sortedByDir[d],
+        }))
+      }
+      const seen = new Set()
+      const plans = this.sortedByDir[0]
+        .concat(this.sortedByDir[1])
+        .sort((a, b) => (a.planStartTime || '').localeCompare(b.planStartTime || ''))
+        .filter((p) => {
+          const key = p.busId || `${p.planStartTime || ''}|${p.bus || ''}`
+          if (seen.has(key)) return false
+          seen.add(key)
+          return true
+        })
+      return [{ key: 'loop', dir: 0, name: '环形', label: '⟳ 环形', loop: true, plans }]
+    },
     totalCount() {
-      return this.sortedByDir[0].length + this.sortedByDir[1].length
+      return this.groups.reduce((n, g) => n + g.plans.length, 0)
     },
   },
   watch: {
@@ -114,18 +146,22 @@ export default {
       this.plansByDir = { 0: up, 1: down }
       this.loading = false
     },
+    // 方向文案：环形线统一「环形」，普通线路「上行 / 下行」
+    dirLabel(dir) {
+      return this.isLoop ? '环形' : (dir === 0 ? '上行' : '下行')
+    },
     // 拉取失败：该方向置空（走空态文案），只提示一次
     warn(dir, e) {
-      uni.showToast({ title: `${dir === 0 ? '上行' : '下行'}时刻表加载失败：${e.message}`, icon: 'none' })
+      uni.showToast({ title: `${this.dirLabel(dir)}时刻表加载失败：${e.message}`, icon: 'none' })
       return []
     },
     // 一键复制全部班次时刻：文本/图片由「设置 → 复制方式」统一决定
     copyPlans() {
       const rows = []
-      DIRS.forEach((d) => {
-        const name = d === 0 ? '上行' : '下行'
-        this.sortedByDir[d].forEach((p, i) => {
-          rows.push([name, p.planStartTime || '--', p.bus || '--'])
+      // 直接按展示分组导出：普通线路方向列是「上行/下行」，环形线统一「环形」
+      this.groups.forEach((g) => {
+        g.plans.forEach((p) => {
+          rows.push([g.name, p.planStartTime || '--', p.bus || '--'])
         })
       })
       if (!rows.length) { uni.showToast({ title: '暂无可复制班次', icon: 'none' }); return }
@@ -251,6 +287,12 @@ export default {
   color: #fda4af;
   background: rgba(225, 29, 72, 0.18);
   border: 2rpx solid rgba(251, 113, 133, 0.45);
+}
+/* 环形线路：合并组徽标用独立紫罗兰色 */
+.pg-dir.loop {
+  color: #ddd6fe;
+  background: rgba(139, 92, 246, 0.18);
+  border: 2rpx solid rgba(167, 139, 250, 0.45);
 }
 .pg-count {
   flex: 1;

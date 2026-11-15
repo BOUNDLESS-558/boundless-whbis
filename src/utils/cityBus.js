@@ -32,6 +32,22 @@ import { allLines } from './lineIndex.js'
 import { assetUrl } from './asset.js'
 import { APP_CONFIG } from '../config.js'
 
+/**
+ * 包围盒长宽比（max(w,h)/min(w,h)）
+ * 目标线路是横跨全市的大线（如 408 环线出过问题的 292 比例超大），
+ * 其 bbox 会与任意视口区域都相交，形成视口全被它覆盖的假阳性。
+ * 过滤阈值：长宽比 > 8 视为「跨城线路」（≥8成直角）或「短而胖线路」（成环可能为圆形）。
+ * @param {Array} bb [minLng, minLat, maxLng, maxLat]
+ * @returns {number} max(w,h)/min(w,h)
+ */
+export function bboxAspectRatio(bb) {
+  if (!bb || bb.length !== 4 || bb[0] === Infinity) return 1
+  const w = bb[2] - bb[0]
+  const h = bb[3] - bb[1]
+  if (w <= 0 || h <= 0) return 1
+  return Math.max(w, h) / Math.min(w, h)
+}
+
 const CACHE_KEY = 'whbis:city-snapshot:v1'
 const WARN_KEY = 'whbis:city-warned'
 
@@ -476,6 +492,7 @@ export default {
   clusterPoints,
   speedBandOf,
   SPEED_BANDS,
+  bboxAspectRatio,
   cityNet,
   loadCityNet,
   netSearchLines,

@@ -43,6 +43,16 @@ const loopAlias = (no) => {
   return m ? normNo(`${m[1]}路${m[2]}`) : ''
 }
 
+/**
+ * 是否环形线路（408内环 / 408外环 / 内线 / 外线）。
+ * 环形线没有「上下行」之分，UI 统一的处理口径：
+ *   · 地图走向/站点/车辆改用独立配色（不复用上行青、下行玫红）；
+ *   · 控制卡不展示「全部 / 上行 / 下行」按钮，发车时刻改「环形」提示。
+ */
+export function isLoopLine(no) {
+  return /(内环|外环|内线|外线)$/.test(String(no == null ? '' : no).trim())
+}
+
 // 预计算索引，避免每次输入都遍历原始字段
 // key = 线路号（唯一，必有）；alt = 描述名（D 线很多是“起点-终点”，顺带支持按站名搜）
 // status = 静态基座（scan-lines.mjs 落盘：停运/营运）；early/last 供 lineStatus() 实时判「营运中 / 已收班」
