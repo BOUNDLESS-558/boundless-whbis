@@ -226,6 +226,94 @@ export function logout() {
 }
 
 /**
+ * 「记住我」：可逆存储账号 + 密码，但【绝不落明文】。
+ * 本系统本就是使用门槛而非安全机制（见文件头），故不引入 Web Crypto
+ * （App 端 crypto.subtle 不可用、且 localStorage 反编译即可读），改用纯 JS 的
+ * 「固定盐 + 账号」派生密钥流对密码做字节异或——可逆、非明文、两端通用。
+ * 存储形态：{ a: 规范账号, c: base64(密文) }
+ */
+const REMEMBER_KEY = 'whbis:remember-me'
+const REMEMBER_SECRET = 'whbis:remember:v1:'
+const B64 = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/'
+
+function b64enc(bytes) {
+  let s = ''
+  for (let i = 0; i < bytes.length; i += 3) {
+    const b0 = bytes[i]
+    const b1 = bytes[i + 1]
+    const b2 = bytes[i + 2]
+    s += B64[b0 >> 2]
+    s += B64[((b0 & 3) << 4) | (b1 >> 4)]
+    s += b1 === undefined ? '=' : B64[((b1 & 15) << 2) | (b2 >> 6)]
+    s += b2 === undefined ? '' : B64[b2 & 63]
+  }
+  return s
+}
+function b64dec(str) {
+  const clean = String(str).replace(/=+$/, '')
+  const bytes = []
+  for (let i = 0; i < clean.length; i += 4) {
+    const c0 = B64.indexOf(clean[i])
+    const c1 = B64.indexOf(clean[i + 1])
+    const c2 = B64.indexOf(clean[i + 2])
+    const c3 = B64.indexOf(clean[i + 3])
+    bytes.push((c0 << 2) | (c1 >> 4))
+    if (clean[i + 2] && c2 !== -1) bytes.push(((c1 & 15) << 4) | (c2 >> 2))
+    if (clean[i + 3] && c3 !== -1) bytes.push(((c2 & 15) << 6) | c3)
+  }
+  return bytes
+}
+// 派生与密码等长的密钥流：md5(盐 + 账号 + ':' + 计数) 拼接取字节
+function deriveKeystream(account, len) {
+  const base = REMEMBER_SECRET + normAccount(account)
+  const ks = []
+  let n = 0
+  while (ks.length < len) {
+    const h = md5(base + ':' + n)
+    for (let i = 0; i < h.length && ks.length < len; i += 2) ks.push(parseInt(h.substr(i, 2), 16))
+    n++
+  }
+  return ks
+}
+function utf8Bytes(str) {
+  return Array.from(unescape(encodeURIComponent(String(str))), (c) => c.charCodeAt(0))
+}
+function bytesUtf8(bytes) {
+  return decodeURIComponent(escape(String.fromCharCode.apply(null, bytes)))
+}
+function xor(a, k) {
+  return a.map((b, i) => b ^ k[i])
+}
+
+export function saveRemember(account, password) {
+  const norm = normAccount(account)
+  if (!norm || !password) return false
+  const inB = utf8Bytes(password)
+  const ct = xor(inB, deriveKeystream(norm, inB.length))
+  return writeStore(REMEMBER_KEY, { a: norm, c: b64enc(ct) })
+}
+export function loadRemember() {
+  const v = readStore(REMEMBER_KEY)
+  if (!v || !v.a || !v.c) return null
+  try {
+    const ct = b64dec(v.c)
+    const pt = xor(ct, deriveKeystream(v.a, ct.length))
+    return { account: v.a, password: bytesUtf8(pt) }
+  } catch (e) {
+    return null
+  }
+}
+export function clearRemember() {
+  try {
+    uni.removeStorageSync(REMEMBER_KEY)
+  } catch (e) { /* 忽略 */ }
+}
+export function hasRemember() {
+  const v = readStore(REMEMBER_KEY)
+  return !!(v && v.a && v.c)
+}
+
+/**
  * 页面守卫：未登录时重定向到登录页。
  * redirect 只在 H5 携带当前 hash 路由（登录后原位恢复），
  * App 端登录页不解析该参数，返回即进首页。

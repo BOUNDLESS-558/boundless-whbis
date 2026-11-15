@@ -224,6 +224,39 @@ function stripLoops(pts, minSeg = 4000, closeDist = 80, maxCuts = 8) {
 }
 
 /**
+ * OSRM map-matching（/match/v1/driving）：把整条站点序列当「GPS 轨迹」贴合到驾车路网。
+ * 相对分段 /route，match 会把稀疏站点吸附到真实道路、还原被 /route 漏掉的掉头/绕行，
+ * 直接根治「不贴合路网 / 算路不正确」。放宽 radiuses=120m 容忍站点坐标几十米误差。
+ * 失败（服务不可用 / 匹配明显绕远 / 首尾离首末站过远）返回 null，交回分段 /route 兜底。
+ */
+async function requestMatchAll(wgs) {
+  if (wgs.length < 2 || wgs.length > 100) return null // 超长线走分段 /route，避免单次请求过大
+  const coordPath = wgs.map((p) => `${p.lng.toFixed(6)},${p.lat.toFixed(6)}`).join(';')
+  const url = `${OSRM.replace('/route/v1/', '/match/v1/')}/${coordPath}` +
+    `?overview=full&geometries=geojson&radiuses=${wgs.map(() => '120').join(';')}`
+  for (let attempt = 0; attempt < 3; attempt++) {
+    try {
+      const res = await fetch(url, { signal: AbortSignal.timeout(OSRM_TIMEOUT * 2) })
+      const j = await res.json()
+      if (!j || j.code !== 'Ok' || !Array.isArray(j.matchings) || !j.matchings.length) return null
+      const coords = j.matchings[0].geometry && j.matchings[0].geometry.coordinates
+      if (!Array.isArray(coords) || coords.length < 2) return null
+      const pts = coords.map(([lng, lat]) => ({ lat, lng }))
+      const straight = haversine(wgs[0], wgs[wgs.length - 1])
+      const span = pts.reduce((s, p, i) => (i ? s + haversine(pts[i - 1], p) : 0), 0)
+      // 匹配整体须沿站点序列铺开：绕远超过 4 倍直线距离、或首尾离首末站 >1.5km 均视为失败
+      if (straight > 200 && span > straight * 4 + 2000) return null
+      if (haversine(wgs[0], pts[0]) > 1500 || haversine(wgs[wgs.length - 1], pts[pts.length - 1]) > 1500) return null
+      return pts
+    } catch (e) {
+      if (attempt === 2) return null
+      await sleep(400 * (attempt + 1))
+    }
+  }
+  return null
+}
+
+/**
  * 整线算路：清洗后的站点序列 → GCJ-02 走向点列。
  * v4：坏 leg 不再直接退化成直线弦（截图 211 路的斜切来源），而是沿用运行时验证过的
  * 「加 1/3、2/3 途经点重试」修复：把坏 leg 拆两段重算，子段仍坏才回退弦。
@@ -234,6 +267,18 @@ async function routeAlongRoads(stops) {
   const gcjStops = pointsOf(stops)
   if (gcjStops.length < 2) return null
   const wgs = gcjStops.map((p) => gcj02ToWgs84(p.lat, p.lng))
+  // 优先 map-matching：把站点序列贴合真实路网（比分段 /route 更准，根治不贴合路网）。
+  // 成功则直接走与原逻辑一致的「WGS→GCJ→stripLoops→simplify」收尾；失败回落分段 /route。
+  if (wgs.length >= 2 && wgs.length <= 100) {
+    const matched = await queueOsrm(() => requestMatchAll(wgs))
+    if (matched && matched.length >= 2) {
+      const gcj = matched.map((p) => wgs84ToGcj02(p.lat, p.lng))
+      if (isSane(gcj, gcjStops)) {
+        const cleaned = stripLoops(gcj)
+        return simplify(cleaned.pts, SIMPLIFY_TOL)
+      }
+    }
+  }
   const acc = []
   let legsTotal = 0
   let legsBad = 0

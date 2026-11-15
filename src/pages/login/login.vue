@@ -34,6 +34,13 @@
         <view class="lc-eye" :class="{ on: showPass }" @click="showPass = !showPass" v-html="showPass ? svgEyeOn : svgEyeOff" />
       </view>
 
+      <view class="lc-remember" @click="toggleRemember">
+        <view class="lc-check" :class="{ on: remember }">
+          <text v-if="remember" class="lc-check-ic">✓</text>
+        </view>
+        <text class="lc-remember-t">记住我（下次自动填写账号与密码，本地不存明文）</text>
+      </view>
+
       <view class="lc-btn" :class="{ busy }" @click="submit">
         {{ busy ? '处理中…' : '登 录' }}
       </view>
@@ -46,7 +53,7 @@
 
 <script>
 import { assetUrl } from '../../utils/asset.js'
-import { login, isLoggedIn } from '../../utils/auth.js'
+import { login, isLoggedIn, saveRemember, loadRemember, clearRemember } from '../../utils/auth.js'
 
 const HOME = '/pages/map/map'
 
@@ -56,6 +63,7 @@ export default {
     return {
       account: '',
       password: '',
+      remember: false,
       showPass: false,
       // 眼睛图标：单色描边 SVG，跟随文字色（currentColor）、1em 尺寸，避免彩色 emoji 突兀
       svgEyeOn: '<svg viewBox="0 0 24 24" width="1em" height="1em" style="display:block" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3.5-6.2 10-6.2S22 12 22 12s-3.5 6.2-10 6.2S2 12 2 12Z"/><circle cx="12" cy="12" r="2.7"/></svg>',
@@ -72,9 +80,26 @@ export default {
     // 已登录还进登录页（回退 / 直接改地址栏）→ 直接放行首页
     if (isLoggedIn()) {
       uni.reLaunch({ url: HOME })
+      return
+    }
+    // 记住我：回填账号与密码（密码经可逆混淆存储，非明文）
+    const r = loadRemember()
+    if (r) {
+      this.account = r.account
+      this.password = r.password
+      this.remember = true
     }
   },
   methods: {
+    toggleRemember() {
+      this.remember = !this.remember
+      // 关闭即清空：表单与本地存储一并清掉（需求：关闭后清空记住的账号与密码信息）
+      if (!this.remember) {
+        clearRemember()
+        this.account = ''
+        this.password = ''
+      }
+    },
     async submit() {
       if (this.busy) return
       this.busy = true
@@ -84,6 +109,9 @@ export default {
           uni.showToast({ title: r.error || '登录失败', icon: 'none' })
           return
         }
+        // 记住我：开启则保存（可逆混淆），关闭则清除存储
+        if (this.remember) saveRemember(this.account, this.password)
+        else clearRemember()
         uni.showToast({ title: '欢迎回来', icon: 'success', duration: 800 })
         this.goAfterLogin()
       } finally {
@@ -231,6 +259,45 @@ export default {
   box-shadow: 0 10rpx 26rpx rgba(79, 110, 247, 0.42), inset 0 1rpx 0 rgba(255, 255, 255, 0.3);
   cursor: pointer;
   transition: transform 0.15s, filter 0.2s;
+}
+/* ---- 记住我 ---- */
+.lc-remember {
+  margin-top: 22rpx;
+  display: flex;
+  align-items: center;
+  gap: 14rpx;
+  cursor: pointer;
+  user-select: none;
+}
+.lc-check {
+  flex: 0 0 auto;
+  width: 34rpx;
+  height: 34rpx;
+  box-sizing: border-box;
+  border-radius: 9rpx;
+  border: 2rpx solid rgba(255, 255, 255, 0.32);
+  background: rgba(255, 255, 255, 0.05);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.18s, border-color 0.18s;
+}
+.lc-check.on {
+  background: linear-gradient(135deg, var(--ac), var(--ac-2));
+  border-color: transparent;
+}
+.lc-check-ic {
+  font-size: 22rpx;
+  line-height: 1;
+  color: #fff;
+  font-weight: 900;
+}
+.lc-remember-t {
+  flex: 1;
+  min-width: 0;
+  font-size: 22rpx;
+  line-height: 1.4;
+  color: rgba(255, 255, 255, 0.5);
 }
 .lc-btn:hover {
   filter: brightness(1.08);

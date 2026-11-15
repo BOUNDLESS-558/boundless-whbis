@@ -1,0 +1,66 @@
+name: 每日自动采集与部署
+
+# 需求 2/3/5：基于 GitHub Actions + Pages 全自动采集武汉公交集团、木兰、汉奇、蔡城线路，
+# 交叉验证后同步到源码分支并提交，再构建并部署到 Pages。
+#
+# ⚠ GitHub 硬规则：schedule / workflow_dispatch 只认「默认分支」上的 workflow 文件。
+#   本仓库需把默认分支设为 main（Settings → Branches → Default branch）。
+#   Pages 发布源仍是明确的 pages 分支，改默认分支不影响站点。
+#   未改默认分支前，可手动在 Actions 页面对本工作流点「Run workflow」触发（会使用 main 上的文件）。
+on:
+  schedule:
+    # 北京时间 00:00–06:00 = UTC 16:00–22:00（前一天）。GitHub cron 只能给单个时刻，
+    # 故分散多档错峰，任何一档因延迟偏移仍落在 0~6 点窗口内：
+    - cron: '17 16 * * *' # 北京 00:17
+    - cron: '37 18 * * *' # 北京 02:37
+    - cron: '57 20 * * *' # 北京 04:57
+    - cron: '27 21 * * 0' # 周日 北京 05:27：全量重枚举（FULL_SCAN=1）
+  workflow_dispatch:
+    inputs:
+      full_scan:
+        description: '全量重枚举线路（否则仅规范化 + 增量刷新走向）'
+        required: false
+        default: false
+        type: boolean
+      skip_deploy:
+        description: '只采集、不构建/部署（自测用）'
+        required: false
+        default: false
+        type: boolean
+
+permissions:
+  contents: write
+
+# 采集器会逐条写资产/台账，禁止两轮重叠；新轮排队而非取消正在跑的那轮
+concurrency:
+  group: daily-collect
+  cancel-in-progress: false
+
+jobs:
+  collect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+    env:
+      # 上游 /line 经项目自带 Cloudflare Worker 反代（GitHub runner 在美国，直连武汉上游会被墙）
+      SCAN_BASE: https://whbis-proxy.lwu584742.workers.dev
+      AMAP_KEY: ${{ secrets.AMAP_KEY }}
+      AMAP_SECRET: ${{ secrets.AMAP_SECRET }}
+      AMAP_WEB_COOKIE: ${{ secrets.AMAP_WEB_COOKIE }}
+      FULL_SCAN: ${{ (github.event.schedule == '27 21 * * 0' || inputs.full_scan == true) && '1' || '' }}
+      SKIP_DEPLOY: ${{ inputs.skip_deploy == true && '1' || '' }}
+    steps:
+      - name: 检出（全量历史，避免浅克隆导致 push 报 shallow update not allowed）
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: 准备 Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: 安装依赖
+        run: npm install
+
+      - name: 自动采集 → 提交数据 → 部署 Pages
+        run: node scripts/auto-collect.mjs
