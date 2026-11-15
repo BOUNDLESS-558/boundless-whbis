@@ -2984,9 +2984,19 @@ export default {
         })
       }
       const ptsOf = (d) => {
-        const src = (this.routeByDir[d] && this.routeByDir[d].length > 1)
+        const hasRoute = this.routeByDir[d] && this.routeByDir[d].length > 1
+        const src = hasRoute
           ? this.routeByDir[d].map((p) => ({ lat: p.latitude, lng: p.longitude }))
           : (this.stopsByDir[d] || []).map((st) => ({ lat: parseFloat(st.latitude), lng: parseFloat(st.longitude) }))
+        // 走向几何端点常与首末站有数百米偏差（高德只画到路口 / 桥尾，离真实站点尚远），
+        // 把首末站真实坐标补到走向两端，保证连线真正接上起终点；无独立几何时走向即站序，无需补
+        const stopsArr = this.stopsByDir[d] || []
+        if (hasRoute && stopsArr.length >= 2) {
+          const f = stopsArr[0]
+          const l = stopsArr[stopsArr.length - 1]
+          src.unshift({ lat: parseFloat(f.latitude), lng: parseFloat(f.longitude) })
+          src.push({ lat: parseFloat(l.latitude), lng: parseFloat(l.longitude) })
+        }
         const raw = src.filter((p) => !isNaN(p.lat) && !isNaN(p.lng)).map((p) => ({ x: sx(p.lng), y: sy(p.lat) }))
         // 同向重合时 dir1 反向偏移，保证两条线分居两侧都能看见
         const off = (sameDir && d === 1) ? -trackOff : trackOff
