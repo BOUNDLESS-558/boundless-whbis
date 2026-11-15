@@ -26,6 +26,8 @@
 
 ### 2026-11-15（最新）
 
+- **营运公司采集双链路**：`scan-org.mjs` 从 buspedia 采集团线路 `org`（含人工核实映射 355/408=一公司，重跑不丢）；新增 `scan-org-live.mjs` 从在线车辆自编号反推（MD5 还原首位数字 1→一公司…9→九公司，按线路投票取众数），补 buspedia 未收录的 D/K/YX 线，接入 `auto-collect.mjs` 每 6 小时随 CI 累积回填。全库 `org` 570 → 604 条
+- **931 路标记停运**：用户核实已取消，`status=停运` + `statusSource=人工确认`，不再进入实时查询 / 搜索联想 / 全市线网扫描
 - **算路算法优化全集**：新增 K-d Tree 空间索引（O(log N) 替换 O(N) 最近站点扫描）、公交方向判定（航向 × 段向余弦相似度，60° 阈值）、bbox 长宽比过滤（剔除跨城大线假阳性）、route 几何质量评分（多指标合并）
 - **CI 构建修复**：`auto-collect.mjs` 构建步骤改为 `execFileSync(NPM, ...)` 直接调用，修复 `node npm run build:h5` 报错
 - **站点信息徽标**：换乘卡片线路号后方插入所属公司徽标（公交集团 / 蔡城 / 木兰 / 汉奇）
@@ -134,6 +136,8 @@ npm run test:busid    # 车辆编号还原测试（全量建字典约 400ms）
 | `npm run build:h5` | 构建网页版 | `dist/build/h5` |
 | `npm run build:app` | 构建 Android App 资源 | `dist/build/app` |
 | `npm run deploy:pages` | 构建 H5 并推送到远端 `pages` 分支（GitHub Pages） | — |
+| `npm run scan:org` | buspedia 采集营运公司写 `org`（含手动核实映射） | `src/static/lines.json` |
+| `npm run scan:org:live` | 在线车辆自编号反推营运公司（只补强不降级，`--dry` 预览） | `src/static/lines.json` |
 | `npm run test:md5` | MD5 单元测试 | — |
 | `npm run test:busid` | 车辆编号还原测试 | — |
 
@@ -310,6 +314,8 @@ busId = MD5( orgBusId )
 | `bed5623adc8b12bc67a4221a5d5cccc4` | 72541 |
 
 线路详情页与地图页会直接显示还原后的自编号（如 `72502`），并附带 MD5 原值备查。
+
+**衍生用途：营运公司反推**（`scripts/scan-org-live.mjs`）。自编号首位数字即营运公司（1→一公司 … 9→九公司），是车辆归属的权威判据：把 `/detailData` 在线车辆的 `busId` 经上述字典还原后取首位，按线路两方向合并投票取众数（护栏防跨公司支援车带偏），写入 `lines.json` 的 `org`。这比停更的 buspedia 更准，专门补它未收录的 D/K/YX 线；因定制线多在班时段才有车，靠 CI 每 6 小时反复跑累积覆盖。实测 1 路=二公司、337=三公司、10 路=七公司、408=一公司全部吻合。
 
 ### `arrived` 字段语义（实测）
 
