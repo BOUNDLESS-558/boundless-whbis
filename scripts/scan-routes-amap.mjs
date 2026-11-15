@@ -42,6 +42,7 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import RC from './_loadRouteClean.mjs'
+import { validateStopsAgainstPolyline, routeToPoly } from './_validate.mjs'
 
 const { cleanStops, pointsOf, simplify, toFlat, shardOf } = RC
 
@@ -94,6 +95,10 @@ const MAX_LINES = Math.max(0, Number(argOf('max-lines', 0)))
 const CI_LOG = has('ci-log') || !!process.env.GITHUB_ACTIONS
 const FORCE = has('force')
 const DRY = has('dry')
+// 采集前先复校验：把台账里标 done 但几何校验不过的线撤销，让本轮重拉
+const VALIDATE_DONE = has('validate-done')
+// 纯校验模式：不发任何请求，只扫现有资产并报告（可配合 --unmark-stale 清台账）
+const VALIDATE_ONLY = has('validate-only')
 // 增量重拉：只读 scan-routes.mjs --detect-changes 产出的「变化线路清单」，对这些线强制重拉高德走向
 const ONLY_CHANGED = argOf('only-changed', '')
 // 只重试「未命中」的线路（partial / no-match / not-found），已 done 的不动，比 --force 省额度
@@ -390,7 +395,7 @@ const todoFinal = changedLines ? todo.filter((l) => changedLines.has(String(l.no
 if (!DRY) fs.mkdirSync(OUT, { recursive: true })
 
 const stats = { total: todoFinal.length, done: 0, skipped: 0, matched: 0, probe: 0,
-  amapMiss: 0, dirMiss: 0, fallback: 0 }
+  amapMiss: 0, dirMiss: 0, fallback: 0, valMiss: 0 }
 
 // 台账初始化：首次运行时按现有资产回填「所有方向已是 amap」的线路，
 // 这样历史采集成果也进入台账，不会被重复请求。
@@ -409,6 +414,41 @@ saveProgress()
 const loggedBefore = Object.keys(progress.lines).length
 console.log(`高德采集：候选 ${todoFinal.length} 条线${changedLines ? '（增量重拉）' : ''}，城市 ${CITYNAME}，间隔 ${DELAY}ms${DRY ? '（dry，不落盘）' : ''}`)
 console.log(`进度台账 ${path.relative(process.cwd(), PROGRESS)}：已记录 ${loggedBefore} 条线（本次回填 ${seeded} 条）`)
+
+// ── --validate-done：复校验已 done 的线，不过就撤销台账让它重拉 ──
+// 这是 646 / 361 事故的防御机制：线路改道后资产仍是旧的，但台账标了 done 永久跳过。
+// 纯本地校验（不发网络请求、不消耗高德配额），每轮 CI 都能跑。
+if (VALIDATE_DONE || VALIDATE_ONLY) {
+  let revalidated = 0, unmarked = 0
+  const staleList = []
+  for (const [no, state] of Object.entries(progress.lines)) {
+    // --validate-done 只复校验 done（那些会被跳过的）；--validate-only 扫全部
+    if (VALIDATE_DONE && state !== 'done') continue
+    revalidated++
+    const line = (lib.lines || []).find((x) => String(x.no) === no)
+    if (!line) continue
+    const dirs = (line.dirs && line.dirs.length ? line.dirs : [0]).map(Number)
+    let anyBad = false
+    for (const d of dirs) {
+      const r = rowOf(no, d)
+      if (!r || r.source !== 'amap' || !r.stops || r.stops.length < 2 || !r.route || r.route.length < 2) continue
+      const poly = routeToPoly(r.route)
+      const v = validateStopsAgainstPolyline(r.stops, poly, { maxDeviation: 200 })
+      if (!v.ok) { anyBad = true; staleList.push(`${no} dir${d} 偏离${v.maxDeviation.toFixed(0)}m@${v.worstStop}`) }
+    }
+    // 只有 --validate-done（采集前自愈）才撤销台账；--validate-only 仅报告不改台账
+    if (anyBad && VALIDATE_DONE) { delete progress.lines[no]; unmarked++ }
+  }
+  if (unmarked && !DRY) saveProgress()
+  console.log(`\n复校验 ${revalidated} 条线：${staleList.length} 条几何校验不过${VALIDATE_DONE ? `，已撤销 ${unmarked} 条台账，本轮自动重拉` : '（--validate-only 仅报告，未修改台账）'}`)
+  if (staleList.length) {
+    console.log(`  异常明细：${staleList.slice(0, 12).join(' | ')}${staleList.length > 12 ? ` ... 等 ${staleList.length} 项` : ''}`)
+  }
+  if (VALIDATE_ONLY) {
+    console.log(`\n--validate-only 模式：仅校验，不采集、不改台账。`)
+    process.exit(0)
+  }
+}
 
 let doneCount = 0
 for (const l of todoFinal) {
@@ -533,7 +573,24 @@ for (const l of todoFinal) {
 
   // 记账：临时故障不记，下一轮重试；否则按结果记入台账，本轮及后续都不再重打。
   // 每条线立即落盘，中途 Ctrl+C / 取消也只丢当前这一条，不会成片重复采集。
-  if (!transient) { mark(no, unresolved === 0 ? 'done' : (lineMatched ? 'partial' : 'no-match')); saveProgress() }
+  //
+  // 采集后几何校验（646/361 防御）：刚拉到的走向也可能与站点不贴合（如上游 polyline
+  // 本身异常 / 站点清洗排序错乱），此时不能标 done，否则下轮跳过就再也发现不了。
+  // 校验不过 → 标 partial，下一轮 --validate-done 复校验或 --retry-unmatched 会重拉。
+  if (!transient) {
+    let allValid = unresolved === 0
+    if (allValid) {
+      for (const d of dirs) {
+        const r = rowOf(no, d)
+        if (!r || r.source !== 'amap' || !r.stops || r.stops.length < 2 || !r.route || r.route.length < 2) { allValid = false; break }
+        const poly = routeToPoly(r.route)
+        const v = validateStopsAgainstPolyline(r.stops, poly, { maxDeviation: 200 })
+        if (!v.ok) { allValid = false; stats.valMiss++; break }
+      }
+    }
+    mark(no, allValid ? 'done' : (lineMatched ? 'partial' : 'no-match'))
+    saveProgress()
+  }
 
   if (lineMatched) stats.done++
   doneCount++
@@ -555,7 +612,7 @@ const tally = {}
 for (const s of Object.values(progress.lines)) tally[s] = (tally[s] || 0) + 1
 const files = [...SHARDS.keys()].filter((k) => !DRY && fs.existsSync(shardPath(k)))
 console.log(`\n完成：写入 amap 方向 ${stats.matched} 个（覆盖线路 ${stats.done} 条），跳过 ${stats.skipped}`)
-console.log(`高德未收录 ${stats.amapMiss} 条线（保留 OSRM 兜底），方向未匹配 ${stats.dirMiss}，补 /line ${stats.probe}`)
+console.log(`高德未收录 ${stats.amapMiss} 条线（保留 OSRM 兜底），方向未匹配 ${stats.dirMiss}，补 /line ${stats.probe}，几何校验未通过 ${stats.valMiss}`)
 console.log(`分片 ${files.length} 个，本次写出 ${(writeBytes / 1024).toFixed(1)} KB${DRY ? '（dry 未落盘）' : ''}`)
 console.log(`进度台账 ${path.relative(process.cwd(), PROGRESS)}：共 ${Object.keys(progress.lines).length} 条线 ` +
   `(done ${tally.done || 0} / partial ${tally.partial || 0} / no-match ${tally['no-match'] || 0} / not-found ${tally['not-found'] || 0})`)
