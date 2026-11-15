@@ -80,6 +80,11 @@ if (FULL_SCAN) {
   step('走向几何 + 增量检测（OSRM 贴路）', ['scripts/scan-routes.mjs', '--delay', '60', '--osrm-delay', '400', '--detect-changes'])
 }
 
+// ── 2.5 营运公司（在线车辆自编号反推，只补强不降级）──
+//   每轮捞当时有在线车的线路补 org；单次覆盖有限，靠定时反复跑累积（buspedia 未收录的 D/K/YX 线靠它补）。
+//   注意顺序：必须在步骤 1 的 scan-lines --merge 之后跑，否则新写 org 可能被那一步的规范化覆盖。
+step('营运公司（在线车辆反推）', ['scripts/scan-org-live.mjs'], { optional: true })
+
 // ── 3~6. 高德相关（有 Key 才跑，失败不阻断）──
 // 高德 Web 服务 Key 相关（需 AMAP_KEY）
 if (AMAP_KEY) {
