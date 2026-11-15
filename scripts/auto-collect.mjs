@@ -75,13 +75,19 @@ if (FULL_SCAN) {
 step('走向几何（OSRM 贴路）', ['scripts/scan-routes.mjs', '--delay', '60', '--osrm-delay', '400'])
 
 // ── 3~6. 高德相关（有 Key 才跑，失败不阻断）──
+// 高德 Web 服务 Key 相关（需 AMAP_KEY）
 if (AMAP_KEY) {
   step('非集团线路（蔡城/木兰/汉奇）', ['scripts/scan-foreign.mjs', '--delay', '1200'], { optional: true })
   step('高德官方轨迹（A 源）', ['scripts/scan-routes-amap.mjs', '--delay', '1100', '--ci-log'], { optional: true })
-  if (AMAP_COOKIE) step('高德 SSR 补充字段', ['scripts/scan-poi-newbus.mjs', '--delay', '350'], { optional: true })
   step('高德 POI id 回填', ['scripts/scan-amap-ids.mjs'], { optional: true })
 } else {
-  console.log('\n（跳过高德相关步骤：未配置 AMAP_KEY / AMAP_WEB_COOKIE）')
+  console.log('\n（跳过高德 Key 步骤：未配置 AMAP_KEY）')
+}
+// 高德 SSR 补充字段：仅需会话 Cookie，与 Key 互独立（无 Key 也能跑）
+if (AMAP_COOKIE) {
+  step('高德 SSR 补充字段', ['scripts/scan-poi-newbus.mjs', '--delay', '350'], { optional: true })
+} else {
+  console.log('\n（跳过高德 SSR 补充字段：未配置 AMAP_WEB_COOKIE）')
 }
 
 // ── 7. 资产清单 + 线网底图 ──

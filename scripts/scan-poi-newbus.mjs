@@ -2,9 +2,9 @@
  * 线路资产采集器（兼容模式）：高德网页 SSR 接口 getPoiNewbus，免 Web 服务 Key 补充采集。
  *
  * 与 scan-routes-amap.mjs（/v3/bus/linename，需 Key）并列的第三种获取模式：
- *   - 域名 www.amap.com/ssr/api（高德网页前端 SSR 内部接口），不是 restapi.amap.com（官方 Web 服务）
+ *   - 域名 ditu.amap.com/ssr/api（高德网页前端 SSR 内部接口），不是 restapi.amap.com（官方 Web 服务）
  *   - 不需要高德 Web 服务 Key，与 linename 日配额池完全独立；但**必须带网页会话 Cookie**
- *     （未带 Cookie 实测返回 302 跳回 www.amap.com 首页，不是 401，很容易被误判成「接口挂了」）
+ *     （未带 Cookie 实测返回 302 跳回 ditu.amap.com 首页，不是 401，很容易被误判成「接口挂了」）
  *   - 返回更丰富：地铁换乘 subways / 线路长度 length / 包围盒 bounds / 公司全称 company
  *     + 站点坐标 xy_coords、站点高德 POI id poiid2
  *
@@ -61,12 +61,12 @@ for (const item of String(arg('ids', '')).split(',').map((s) => s.trim()).filter
 }
 
 const CITY = '420100'
-const ENDPOINT = 'https://www.amap.com/ssr/api/getPoiNewbus'
+const ENDPOINT = 'https://ditu.amap.com/ssr/api/getPoiNewbus'
 const UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.0.0 Safari/537.36'
 // 必需：网页会话 Cookie（实测未带会被 302 跳首页）。从浏览器 DevTools 复制，仅本地环境变量，不入库。
 const COOKIE = process.env.AMAP_WEB_COOKIE || ''
 if (!COOKIE) {
-  console.error('缺少高德网页会话 Cookie：请先设置环境变量 AMAP_WEB_COOKIE（从浏览器 DevTools 复制 www.amap.com 的完整 Cookie 串）。')
+  console.error('缺少高德网页会话 Cookie：请先设置环境变量 AMAP_WEB_COOKIE（从浏览器 DevTools 复制 ditu.amap.com 的完整 Cookie 串）。')
   console.error('  PowerShell:  $env:AMAP_WEB_COOKIE="amap_new_version_flag=1; ...; isg=..."')
   console.error('  bash:        export AMAP_WEB_COOKIE=\'...\'')
   console.error('未带 Cookie 时该接口返回 302 跳回首页，不会返回数据。Cookie 不进仓库。')
@@ -118,7 +118,7 @@ let sessionExpired = false
 async function fetchNewbus(id, keywords) {
   if (sessionExpired) return null
   const url = `${ENDPOINT}?id=${encodeURIComponent(id)}&keywords=${encodeURIComponent(keywords)}&city=${CITY}`
-  const referer = `https://www.amap.com/ssr/search/busline_detail?query_type=TQUERY&query=${encodeURIComponent(keywords)}` +
+  const referer = `https://ditu.amap.com/ssr/search/busline_detail?query_type=TQUERY&query=${encodeURIComponent(keywords)}` +
     `&city=${CITY}&busId=${encodeURIComponent(id)}&keywords=${encodeURIComponent(keywords)}&key_name=${encodeURIComponent(keywords)}`
   const headers = {
     'User-Agent': UA,
