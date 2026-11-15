@@ -2989,13 +2989,21 @@ export default {
           ? this.routeByDir[d].map((p) => ({ lat: p.latitude, lng: p.longitude }))
           : (this.stopsByDir[d] || []).map((st) => ({ lat: parseFloat(st.latitude), lng: parseFloat(st.longitude) }))
         // 走向几何端点常与首末站有数百米偏差（高德只画到路口 / 桥尾，离真实站点尚远），
-        // 把首末站真实坐标补到走向两端，保证连线真正接上起终点；无独立几何时走向即站序，无需补
+        // 把首末站真实坐标补到走向两端，保证连线真正接上起终点。
+        // 注意：routeByDir 可能相对站序反向（装载时按 amap.reversed 反转，见 loadAllStops），
+        // 所以必须按「就近」判断几何首端对应哪个终点站，否则会把首末站接反、拉出横跨全线的长直线。
         const stopsArr = this.stopsByDir[d] || []
         if (hasRoute && stopsArr.length >= 2) {
-          const f = stopsArr[0]
-          const l = stopsArr[stopsArr.length - 1]
-          src.unshift({ lat: parseFloat(f.latitude), lng: parseFloat(f.longitude) })
-          src.push({ lat: parseFloat(l.latitude), lng: parseFloat(l.longitude) })
+          const toPt = (st) => ({ lat: parseFloat(st.latitude), lng: parseFloat(st.longitude) })
+          const first = toPt(stopsArr[0])
+          const last = toPt(stopsArr[stopsArr.length - 1])
+          const g0 = src[0]
+          const dist2 = (a, b) => (a.lat - b.lat) ** 2 + (a.lng - b.lng) ** 2
+          const headIsFirst = dist2(g0, first) <= dist2(g0, last)
+          const head = headIsFirst ? first : last
+          const tail = headIsFirst ? last : first
+          src.unshift(head)
+          src.push(tail)
         }
         const raw = src.filter((p) => !isNaN(p.lat) && !isNaN(p.lng)).map((p) => ({ x: sx(p.lng), y: sy(p.lat) }))
         // 同向重合时 dir1 反向偏移，保证两条线分居两侧都能看见
