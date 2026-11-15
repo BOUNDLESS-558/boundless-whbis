@@ -35,6 +35,7 @@
  */
 import fs from 'node:fs'
 import path from 'node:path'
+import crypto from 'node:crypto'
 import RC from './_loadRouteClean.mjs'
 import { gcj02ToWgs84, wgs84ToGcj02, haversine, maxExcursion } from './_geo.mjs'
 
@@ -78,6 +79,34 @@ const OSRM_DELAY = Math.max(0, Number(argOf('osrm-delay', 300)))
 const NO_ROUTE = has('no-route')
 const FORCE = has('force')
 const DRY = has('dry')
+// 增量变化检测：强制重新探测上游 /line，按站点序列签名与基线比对，
+// 仅对「站点变化的线路」刷新 stops 并登记到 .changed-lines.txt，
+// 供 scan-routes-amap.mjs --only-changed 增量重拉高德走向（省配额，实现「线路更新后获取最新走向」）。
+const DETECT = has('detect-changes')
+const SIG_PATH = path.resolve(argOf('sig', 'scripts/.stops-sig.json'))
+const CHANGED_PATH = path.resolve(argOf('changed', 'scripts/.changed-lines.txt'))
+const sigStore = {}
+let sigSnapshot = ''
+function loadSig() {
+  try {
+    const j = JSON.parse(fs.readFileSync(SIG_PATH, 'utf8'))
+    if (j && typeof j === 'object') Object.assign(sigStore, j)
+  } catch (e) { /* 首次运行：空基线 */ }
+  sigSnapshot = JSON.stringify(sigStore)
+}
+function saveSig() {
+  if (DRY) return
+  const snap = JSON.stringify(sigStore)
+  if (snap === sigSnapshot) return
+  sigSnapshot = snap
+  try { fs.mkdirSync(path.dirname(SIG_PATH), { recursive: true }); fs.writeFileSync(SIG_PATH, snap + '\n', 'utf8') } catch (e) {}
+}
+// 站点序列签名：站 id 优先，回退站名，避免纯改名（同 id）误判为变化
+function sigOf(stops) {
+  const s = (stops || []).map((x) => `${x.stopId || ''}:${x.stopName || ''}`).join('|')
+  return crypto.createHash('md5').update(s).digest('hex').slice(0, 16)
+}
+const changedSet = new Set()
 // 算法版本：v3 = stripLoops 多回环切除 + 保护环线；v4 = 坏 leg「加 1/3、2/3 途经点重试」
 // 修复（消灭 211 型直线弦）。旧资产（algo 低于本版本）会被全部重算刷新。
 const VERSION = 4
@@ -419,14 +448,47 @@ for (const l of lib.lines || []) {
 }
 const all = LIMIT ? todo.slice(0, LIMIT) : todo
 if (!DRY) fs.mkdirSync(OUT, { recursive: true })
+loadSig()
 
 const stats = { total: all.length, done: 0, skipped: 0, reused: 0, probed: 0, failed: 0,
-  empty: 0, removed: 0, snapped: 0, fallback: 0, probeErr: 0 }
-console.log(`线路资产：${all.length} 个方向，${NO_ROUTE ? '不' : ''}算路，并发 ${CONCURRENCY}，OSRM 间隔 ${OSRM_DELAY}ms${DRY ? '（dry，不落盘）' : ''}`)
+  empty: 0, removed: 0, snapped: 0, fallback: 0, probeErr: 0, changed: 0 }
+console.log(`线路资产：${all.length} 个方向，${NO_ROUTE ? '不' : ''}算路，并发 ${CONCURRENCY}，OSRM 间隔 ${OSRM_DELAY}ms${DRY ? '（dry，不落盘）' : ''}${DETECT ? '，增量检测开启' : ''}`)
 
 let doneCount = 0
 await pool(all, async (t) => {
-  const prev = FORCE ? null : rowOf(t.no, t.dir)
+  let prev = FORCE ? null : rowOf(t.no, t.dir)
+  // ── 增量模式：强制重新探测上游 /line，按站点签名变化刷新 stops 并登记变化线路 ──
+  if (DETECT) {
+    const r = await probe(t.code, t.dir)
+    if (!r.ok) { stats.failed++; stats.probeErr++; return }   // 临时故障：下轮重试
+    const { stops } = cleanStops(r.stops)
+    const sig = sigOf(stops)
+    // 首轮无基线：用现有资产 stops 的签名作基线，避免一上来全量重拉
+    const baseline = (sigStore[t.no] && sigStore[t.no][String(t.dir)]) || (prev ? sigOf(prev.stops) : null)
+    sigStore[t.no] = sigStore[t.no] || {}
+    sigStore[t.no][String(t.dir)] = sig
+    // 仅当上游站点充足且与基线不一致时才视为变化：刷新 stops 并登记；
+    // 上游临时返回空站（stops<2）不误判为变化，避免把正常线清成 empty。
+    if (stops.length >= 2 && baseline !== sig) {
+      changedSet.add(t.no)
+      stats.changed++
+      // 仅刷新 stops/base，保留原 route（高德几何交给 scan-routes-amap；OSRM 几何下方按需重算）
+      putRow(t.no, t.dir, {
+        ...(prev || {}),
+        base: r.base,
+        stops: slimStops(stops),
+        // amap 线保留高德 route（稍后由 scan-routes-amap 刷新）；osrm 线清空以触发下方 OSRM 重算
+        snapped: (prev && prev.source === 'amap') ? prev.snapped : false,
+        source: prev ? prev.source : 'osrm',
+        route: (prev && prev.source === 'amap') ? prev.route : [],
+        attempts: (prev && prev.source === 'amap') ? prev.attempts : 0,
+        clean: prev ? prev.clean : null,
+      })
+      prev = rowOf(t.no, t.dir)   // 用刷新后的行继续下方逻辑
+    }
+    // 落到下方既有 OSRM 逻辑：changed 的 osrm 线会用新 stops 重算几何；
+    // 不变 / 已 amap 的线走既有跳过条件，不重复算路（省配额）。
+  }
   // A+B 混合：高德官方轨迹（source:'amap'）是更优源，本脚本（B）永不覆盖它，
   // 哪怕 --force 也不动——要刷新 amap 行请单独跑 scan-routes-amap.mjs。
   if (prev && prev.source === 'amap') { stats.skipped++; return }
@@ -503,8 +565,18 @@ await flushTail
 flushDirty()
 process.stdout.write('\n')
 
+if (DETECT) {
+  saveSig()
+  if (!DRY) {
+    fs.mkdirSync(path.dirname(CHANGED_PATH), { recursive: true })
+    const lines = [...changedSet].sort((a, b) => Number(a) - Number(b))
+    fs.writeFileSync(CHANGED_PATH, lines.join('\n') + (lines.length ? '\n' : ''), 'utf8')
+  }
+}
+
 const files = [...SHARDS.keys()].filter((k) => !DRY && fs.existsSync(shardPath(k)))
 console.log(`\n完成：新增/更新 ${stats.done} 个方向，跳过 ${stats.skipped}，复用站点 ${stats.reused}，新拉 /line ${stats.probed}`)
+if (DETECT) console.log(`增量检测：站点变化的线路 ${stats.changed} 条${DRY ? '（dry 不落盘）' : `，已写入 ${path.relative(process.cwd(), CHANGED_PATH)}`}`)
 console.log(`清洗剔除 ${stats.removed} 个错误站点；贴路成功 ${stats.snapped}，回退干净连线 ${stats.fallback + (NO_ROUTE ? stats.done : 0)}`)
 console.log(`分片 ${files.length} 个，本次写出 ${(writeBytes / 1024).toFixed(1)} KB${DRY ? '（dry 未落盘）' : ''}`)
 if (stats.empty) console.log(`上游无有效站点 ${stats.empty} 个方向：已记 empty，运行时仍回退实时 /line，后续不再重复拉取`)

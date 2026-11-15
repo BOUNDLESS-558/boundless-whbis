@@ -7,7 +7,8 @@
  * 用官方轨迹替换 B（OSRM 驾车近似）的几何，根治截图里那种规整矩形方框。
  *
  * 关键约束：
- *   - Key 只在我本地一次性采集时用（环境变量 AMAP_KEY），不进前端代码、不提交仓库。
+ *   - Key 通过环境变量 AMAP_KEY（含签名 AMAP_SECRET）提供，不进前端代码、不提交仓库；
+ *     CI 下由仓库 Secrets 注入（见 .github/workflows/daily-collect.yml），每 6h 自动跑本步。
  *   - 坐标口径：高德返回的是 GCJ-02，与上游 /line、资产落盘口径一致 → 直接存，无需转换。
  *   - 只写 source:'amap' 的行；已为 amap 的行默认跳过（--force 才重写）。绝不删除 B 的结果：
  *     高德没收录的线路（D/K 定制线等）A 不写，原 OSRM 行保持不动。
@@ -18,6 +19,13 @@
  *   node scripts/scan-routes-amap.mjs                          # 全量（按免费额度限速）
  *   node scripts/scan-routes-amap.mjs --city 武汉 --delay 1100 # 控制 QPS（免费 1000~5000/日）
  *   node scripts/scan-routes-amap.mjs --retry-unmatched         # 只重试未命中的线，done 的不动
+ *   node scripts/scan-routes-amap.mjs --only-changed scripts/.changed-lines.txt
+ *        # 增量重拉：仅对 scan-routes.mjs --detect-changes 登记的「站点变化的线路」刷新高德走向
+ *        # （配合 auto-collect 每 6h 跑：上游站点一变，本步自动重拉最新走向）
+ *
+ * 增量说明：auto-collect 默认（非全量）会先跑 `scan-routes.mjs --detect-changes` 探测
+ * 上游 /line 站点变化、写 .changed-lines.txt，再以此文件驱动本步只重拉变化线路，
+ * 既实现「线路更新后获取最新走向」，又把高德日配额消耗压到「变化线路」量级。
  *
  * 断点续跑：scripts/.amap-progress.json 记录每条线的采集结果（done / partial /
  * no-match / not-found），已记录的线直接跳过，高德未收录 / 方向匹配不上的也不会每轮重打。
@@ -86,6 +94,8 @@ const MAX_LINES = Math.max(0, Number(argOf('max-lines', 0)))
 const CI_LOG = has('ci-log') || !!process.env.GITHUB_ACTIONS
 const FORCE = has('force')
 const DRY = has('dry')
+// 增量重拉：只读 scan-routes.mjs --detect-changes 产出的「变化线路清单」，对这些线强制重拉高德走向
+const ONLY_CHANGED = argOf('only-changed', '')
 // 只重试「未命中」的线路（partial / no-match / not-found），已 done 的不动，比 --force 省额度
 const RETRY_UNMATCHED = has('retry-unmatched')
 // 采集进度台账：记录每条线已尝试的结果，避免「高德未收录 / 方向未匹配」的线路每轮重复消耗日配额。
@@ -341,9 +351,23 @@ if (!fs.existsSync(LIB)) { console.error('找不到线路库：' + LIB); process
 const lib = JSON.parse(fs.readFileSync(LIB, 'utf8'))
 const lines = (lib.lines || []).filter((l) => l.status !== '停运' && l.stops)
 const todo = ONLY.length ? lines.filter((l) => ONLY.includes(String(l.no))) : lines
+
+// 增量重拉：只处理 scan-routes.mjs --detect-changes 登记的「站点变化的线路」
+let changedLines = null
+if (ONLY_CHANGED) {
+  try {
+    const txt = fs.readFileSync(ONLY_CHANGED, 'utf8')
+    changedLines = new Set(txt.split(/[\s,]+/).map((s) => s.trim()).filter(Boolean))
+  } catch (e) { changedLines = new Set() }
+  if (changedLines.size === 0) {
+    console.log(`（--only-changed ${ONLY_CHANGED} 无变化线路，跳过高德重拉）`)
+    process.exit(0)
+  }
+}
+const todoFinal = changedLines ? todo.filter((l) => changedLines.has(String(l.no))) : todo
 if (!DRY) fs.mkdirSync(OUT, { recursive: true })
 
-const stats = { total: todo.length, done: 0, skipped: 0, matched: 0, probe: 0,
+const stats = { total: todoFinal.length, done: 0, skipped: 0, matched: 0, probe: 0,
   amapMiss: 0, dirMiss: 0, fallback: 0 }
 
 // 台账初始化：首次运行时按现有资产回填「所有方向已是 amap」的线路，
@@ -361,11 +385,11 @@ for (const l of lines) {   // 用全量库回填，而非本轮 todo：--only �
 }
 saveProgress()
 const loggedBefore = Object.keys(progress.lines).length
-console.log(`高德采集：候选 ${todo.length} 条线，城市 ${CITYNAME}，间隔 ${DELAY}ms${DRY ? '（dry，不落盘）' : ''}`)
+console.log(`高德采集：候选 ${todoFinal.length} 条线${changedLines ? '（增量重拉）' : ''}，城市 ${CITYNAME}，间隔 ${DELAY}ms${DRY ? '（dry，不落盘）' : ''}`)
 console.log(`进度台账 ${path.relative(process.cwd(), PROGRESS)}：已记录 ${loggedBefore} 条线（本次回填 ${seeded} 条）`)
 
 let doneCount = 0
-for (const l of todo) {
+for (const l of todoFinal) {
   if (FALLBACK_EXHAUSTED) break
   if (MAX_LINES && doneCount >= MAX_LINES) {
     console.log(`\n已达本轮上限 --max-lines ${MAX_LINES}，提前结束；台账已落盘，下轮自动续采。`)
@@ -374,15 +398,20 @@ for (const l of todo) {
   const no = String(l.no)
   const dirs = (l.dirs && l.dirs.length ? l.dirs : [0]).map(Number)
 
-  // 台账命中即跳过：包括「高德未收录」「方向未匹配」这些过去每轮都会重打的线路
-  if (isLogged(no)) { stats.skipped++; continue }
+  // 增量重拉：清单内线路强制重拉（无视台账 / 已 amap），实现「线路更新后获取最新走向」
+  if (changedLines) {
+    // 不跳过，直接走下方高德查询
+  } else {
+    // 台账命中即跳过：包括「高德未收录」「方向未匹配」这些过去每轮都会重打的线路
+    if (isLogged(no)) { stats.skipped++; continue }
 
-  // 双保险：台账被手删时，资产本身已全是 amap 的线也不重打
-  if (!FORCE && dirs.every((d) => { const r = rowOf(no, d); return r && r.source === 'amap' })) {
-    mark(no, 'done')
-    saveProgress()
-    stats.skipped++
-    continue
+    // 双保险：台账被手删时，资产本身已全是 amap 的线也不重打
+    if (!FORCE && dirs.every((d) => { const r = rowOf(no, d); return r && r.source === 'amap' })) {
+      mark(no, 'done')
+      saveProgress()
+      stats.skipped++
+      continue
+    }
   }
 
   const buslines = await queryAmap(no)
@@ -400,7 +429,8 @@ for (const l of todo) {
   let transient = false   // /line 探测失败属临时故障 → 不记账，下轮重试
   for (const d of dirs) {
     const prev = rowOf(no, d)
-    if (!FORCE && prev && prev.source === 'amap') { stats.skipped++; continue }
+    // 增量重拉时强制重写（含原已 amap 的方向）；否则遵守「amap 不覆盖」
+    if (!changedLines && !FORCE && prev && prev.source === 'amap') { stats.skipped++; continue }
 
     // 取该方向的清洗后站点（优先复用现有资产，缺则补 /line）
     let base, rawStops

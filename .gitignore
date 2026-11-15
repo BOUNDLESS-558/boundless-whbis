@@ -25,3 +25,6 @@ dist
 
 # 预置账号明文清单（含 13 位口令）：仅本地存储，不入库、不进 H5 产物、不推远端
 accounts.txt
+
+# 增量采集中间产物（每轮自动生成，仅本机/CI 运行用，不入库）
+scripts/.changed-lines.txt

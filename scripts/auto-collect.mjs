@@ -72,13 +72,19 @@ if (FULL_SCAN) {
 }
 
 // ── 2. 走向几何（B：OSRM 免 Key 驾车路网近似；高德未收录的线路兜底）──
-step('走向几何（OSRM 贴路）', ['scripts/scan-routes.mjs', '--delay', '60', '--osrm-delay', '400'])
+//   非全量轮次开启 --detect-changes：强制重探上游 /line，按站点签名变化登记「变化线路」
+//   （scripts/.changed-lines.txt），供步骤 3 增量重拉高德走向（实现「线路更新后获取最新走向」）。
+if (FULL_SCAN) {
+  step('走向几何（OSRM 贴路）', ['scripts/scan-routes.mjs', '--delay', '60', '--osrm-delay', '400'])
+} else {
+  step('走向几何 + 增量检测（OSRM 贴路）', ['scripts/scan-routes.mjs', '--delay', '60', '--osrm-delay', '400', '--detect-changes'])
+}
 
 // ── 3~6. 高德相关（有 Key 才跑，失败不阻断）──
 // 高德 Web 服务 Key 相关（需 AMAP_KEY）
 if (AMAP_KEY) {
   step('非集团线路（蔡城/木兰/汉奇）', ['scripts/scan-foreign.mjs', '--delay', '1200'], { optional: true })
-  step('高德官方轨迹（A 源）', ['scripts/scan-routes-amap.mjs', '--delay', '1100', '--ci-log'], { optional: true })
+  step('高德官方轨迹（A 源 · 增量重拉变化线路）', ['scripts/scan-routes-amap.mjs', '--only-changed', 'scripts/.changed-lines.txt', '--delay', '1100', '--ci-log'], { optional: true })
   step('高德 POI id 回填', ['scripts/scan-amap-ids.mjs'], { optional: true })
 } else {
   console.log('\n（跳过高德 Key 步骤：未配置 AMAP_KEY）')
@@ -106,6 +112,7 @@ const DATA_PATHS = [
   'src/static/lines/manifest.json',
   'reports',
   'scripts/.amap-progress.json',
+  'scripts/.stops-sig.json',
 ]
 // 部分路径（如 .amap-progress.json）仅在对应采集步骤运行时才生成；CI 未配 AMAP_KEY 时该文件不存在。
 // 直接 git add 会因 pathspec 不匹配整体报错退出（status 128），故先过滤出实际存在的路径再 add，
