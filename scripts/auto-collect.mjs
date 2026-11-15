@@ -123,6 +123,28 @@ if (hasStagedChanges()) {
   if (!pushBranch) {
     try { const b = git(['rev-parse', '--abbrev-ref', 'HEAD']); pushBranch = b === 'HEAD' ? 'main' : b } catch { pushBranch = 'main' }
   }
+  // 先 fetch 远端，避免非 fast-forward 被拒（远端可能有其他 CI 轮次或人工提交）
+  try {
+    git(['fetch', 'origin', pushBranch])
+    console.log(`· 已 fetch 远端 ${pushBranch}`)
+  } catch (e) {
+    console.log(`· fetch 失败（继续尝试推送）：${e.message}`)
+  }
+  // 远端有新提交时先 rebase 本地改动，再推送
+  try {
+    git(['rebase', `origin/${pushBranch}`])
+    console.log(`· 已 rebase 到 origin/${pushBranch}`)
+  } catch (e) {
+    console.log(`· rebase 冲突，回退并改用 merge：${e.message}`)
+    try { git(['rebase', '--abort']) } catch {}
+    try {
+      git(['merge', '--no-edit', `origin/${pushBranch}`])
+      console.log(`· 已 merge origin/${pushBranch}`)
+    } catch (me) {
+      console.error('× merge 也失败，放弃推送：' + me.message)
+      throw me
+    }
+  }
   git(['push', 'origin', `HEAD:refs/heads/${pushBranch}`])
   console.log(`· 数据已提交并推送到分支 ${pushBranch}`)
 } else {
