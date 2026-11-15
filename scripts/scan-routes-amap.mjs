@@ -346,6 +346,28 @@ function matchBusline(buslines, firstStop, lastStop) {
   return { polyline: best.bl.polyline, busstops: best.bl.busstops || [], reversed: best.reversed, id: best.bl.id }
 }
 
+/** 两点球面近似距离（米），用于几何方向判定 */
+function distM(a, b) {
+  return Math.hypot((a.lng - b.lng) * 111320 * Math.cos(a.lat * Math.PI / 180), (a.lat - b.lat) * 110540)
+}
+/**
+ * 几何方向判定：用「清洗后站点」的首末坐标判断 polyline 是否需要反转。
+ * 站名匹配（matchBusline）在「线路改线 / 起讫站改名」时会失效（如 646 阳新路公交停车场
+ * 改官堤路公交场站），此时回退到该方法：head 靠近首站且 tail 靠近末站 → 不反转；反之反转。
+ * 用精确坐标比站名更可靠（站名可能改、坐标不会凭空对不上）。
+ */
+function decideReverseByStops(pts, stops) {
+  if (!pts.length || !stops || stops.length < 2) return { need: false, ok: false }
+  const head = pts[0], tail = pts[pts.length - 1]
+  const s0 = { lng: +stops[0].longitude, lat: +stops[0].latitude }
+  const s1 = { lng: +stops[stops.length - 1].longitude, lat: +stops[stops.length - 1].latitude }
+  const normal = distM(head, s0) + distM(tail, s1)
+  const reversed = distM(head, s1) + distM(tail, s0)
+  // 两端都离得很远（>3km）说明这条 polyline 与本方向站点根本不是同一条线，判失败
+  if (normal > 6000 && reversed > 6000) return { need: false, ok: false }
+  return { need: reversed < normal, ok: true }
+}
+
 // ── 主流程 ──
 if (!fs.existsSync(LIB)) { console.error('找不到线路库：' + LIB); process.exit(1) }
 const lib = JSON.parse(fs.readFileSync(LIB, 'utf8'))
@@ -459,18 +481,41 @@ for (const l of todoFinal) {
       lastStop = (rawStops[rawStops.length - 1] && rawStops[rawStops.length - 1].stopName) || lastStop
       m = matchBusline(buslines, firstStop, lastStop)
     }
-    if (!m) { stats.dirMiss++; stats.fallback++; unresolved++; continue }
 
-    const pts = parsePolyline(m.polyline)
-    if (pts.length < 2) { stats.dirMiss++; stats.fallback++; unresolved++; continue }
+    let pts, reversed, amapId, amapName
+    if (m) {
+      // 站名匹配成功：沿用高德 busline 的 reversed 标记
+      pts = parsePolyline(m.polyline)
+      reversed = m.reversed
+      amapId = m.id || null
+      amapName = (buslines[0] && buslines[0].name) || null
+    } else {
+      // 站名匹配失败（常见于线路改线 / 起讫站改名）：用资产已存的稳定 lineid 直查该方向
+      // polyline，再按最新站点坐标做几何方向判定。没有 id 才真正放弃。
+      const oldId = prev && prev.amap && (prev.amap.id || (prev.amap.newbus && prev.amap.newbus.id))
+      if (!oldId) { stats.dirMiss++; stats.fallback++; unresolved++; continue }
+      const j = await amapGet('/v3/bus/lineid', { id: String(oldId), city: CITYNAME, extensions: 'all' })
+      if (isQuotaOut(j)) { FALLBACK_EXHAUSTED = true; break }
+      const bl = j && Array.isArray(j.buslines) && j.buslines[0]
+      if (!bl || !bl.polyline) { stats.dirMiss++; stats.fallback++; unresolved++; continue }
+      pts = parsePolyline(bl.polyline)
+      const dec = decideReverseByStops(pts, stops)
+      if (!dec.ok) { stats.dirMiss++; stats.fallback++; unresolved++; continue }
+      reversed = dec.need
+      amapId = String(oldId)
+      amapName = bl.name || null
+      stats.fallback++
+    }
+    if (!pts || pts.length < 2) { stats.dirMiss++; stats.fallback++; unresolved++; continue }
     // 高德 polyline 本就优化过，只做极轻抽稀去掉浮点抖动，不丢走向细节
-    // reversed=true 表示该方向的起讫站与高德 busline 相反（往返同路的线路，高德常只给
-    // 一条 polyline，两个方向都会匹配到它）。必须反转点序，否则上下行几何同向重合，
-    // 「全部」视角里后画的玫红会整条盖掉青蓝，方向箭头也反了。
+    // reversed=true 表示该方向的起讫站与高德 busline 相反。必须反转点序，否则上下行几何
+    // 同向重合，「全部」视角里后画的玫红会整条盖掉青蓝，方向箭头也反了。
     const route = simplify(pts, 0.00001)
-    const dirRoute = m.reversed ? route.slice().reverse() : route
+    const dirRoute = reversed ? route.slice().reverse() : route
     if (dirRoute.length < 2) { stats.dirMiss++; stats.fallback++; unresolved++; continue }
 
+    const lats = route.map((p) => p.lat), lngs = route.map((p) => p.lng)
+    const bounds = `${Math.min(...lngs).toFixed(6)};${Math.min(...lats).toFixed(6)};${Math.max(...lngs).toFixed(6)};${Math.max(...lats).toFixed(6)}`
     putRow(no, d, {
       base,
       stops: slimStops(stops),
@@ -478,7 +523,8 @@ for (const l of todoFinal) {
       snapped: true,
       source: 'amap',
       algo: AMAP_ALGO,
-      amap: { name: (m.busstops && buslines[0] && buslines[0].name) || null, reversed: m.reversed, id: m.id || null },
+      // 保留上一行 amap 的既有元数据（如 newbus），只刷新会变的字段，避免丢失来源信息
+      amap: { ...((prev && prev.amap) || {}), name: amapName, reversed, id: amapId, ...(prev && prev.amap && prev.amap.newbus ? { newbus: { ...prev.amap.newbus, bounds, length: prev.amap.newbus.length } } : {}) },
       clean: prev && prev.clean,
     })
     stats.matched++

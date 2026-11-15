@@ -44,6 +44,38 @@
       <view class="lc-btn" :class="{ busy }" @click="submit">
         {{ busy ? '处理中…' : '登 录' }}
       </view>
+
+      <!-- 忘记密码：免旧密码重设（账号复用上方输入，使用门槛非安全机制） -->
+      <view class="lc-foot">
+        <text class="lc-foot-t" @click="toggleReset">{{ resetOpen ? '返回登录' : '忘记密码？重设密码（无需旧密码）' }}</text>
+      </view>
+      <view v-if="resetOpen" class="lc-reset">
+        <view class="lc-field">
+          <text class="lc-icon">🔑</text>
+          <input
+            class="lc-input"
+            v-model="resetNew"
+            :password="!showResetPass"
+            type="text"
+            placeholder="新密码（6~32 位）"
+            placeholder-class="lc-ph"
+          />
+          <view class="lc-eye" :class="{ on: showResetPass }" @click="showResetPass = !showResetPass" v-html="showResetPass ? svgEyeOn : svgEyeOff" />
+        </view>
+        <view class="lc-field">
+          <text class="lc-icon">🔑</text>
+          <input
+            class="lc-input"
+            v-model="resetConfirm"
+            :password="!showResetPass"
+            type="text"
+            placeholder="确认新密码"
+            placeholder-class="lc-ph"
+            @confirm="submitReset"
+          />
+        </view>
+        <view class="lc-btn" :class="{ busy }" @click="submitReset">重设并登录</view>
+      </view>
     </view>
 
     <!-- 纯前端门槛说明（诚实标注，不装安全机制） -->
@@ -53,7 +85,7 @@
 
 <script>
 import { assetUrl } from '../../utils/asset.js'
-import { login, isLoggedIn, saveRemember, loadRemember, clearRemember } from '../../utils/auth.js'
+import { login, isLoggedIn, setPassword, saveRemember, loadRemember, clearRemember } from '../../utils/auth.js'
 
 const HOME = '/pages/map/map'
 
@@ -65,6 +97,11 @@ export default {
       password: '',
       remember: false,
       showPass: false,
+      // 免旧密码重设：忘记密码时在登录页直接设新密码（账号复用上方输入）
+      resetOpen: false,
+      resetNew: '',
+      resetConfirm: '',
+      showResetPass: false,
       // 眼睛图标：单色描边 SVG，跟随文字色（currentColor）、1em 尺寸，避免彩色 emoji 突兀
       svgEyeOn: '<svg viewBox="0 0 24 24" width="1em" height="1em" style="display:block" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3.5-6.2 10-6.2S22 12 22 12s-3.5 6.2-10 6.2S2 12 2 12Z"/><circle cx="12" cy="12" r="2.7"/></svg>',
       svgEyeOff: '<svg viewBox="0 0 24 24" width="1em" height="1em" style="display:block" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="m4 4 16 16"/><path d="M9.9 5.1A10.8 10.8 0 0 1 12 5c6.5 0 10 7 10 7a17.8 17.8 0 0 1-2.7 3.5M6.3 6.5A16.4 16.4 0 0 0 2 12s3.5 7 10 7a10.6 10.6 0 0 0 4.4-.9"/><path d="M9.9 9.9a2.9 2.9 0 0 0 4.2 4.2"/></svg>',
@@ -117,6 +154,37 @@ export default {
       } finally {
         this.busy = false
       }
+    },
+    toggleReset() {
+      this.resetOpen = !this.resetOpen
+      if (!this.resetOpen) {
+        this.resetNew = ''
+        this.resetConfirm = ''
+        this.showResetPass = false
+      }
+    },
+    async submitReset() {
+      if (this.busy) return
+      if (!this.account) {
+        uni.showToast({ title: '请先输入账号', icon: 'none' })
+        return
+      }
+      if (!this.resetNew || this.resetNew !== this.resetConfirm) {
+        uni.showToast({ title: '两次输入的新密码不一致', icon: 'none' })
+        return
+      }
+      const r = setPassword(this.account, this.resetNew)
+      if (!r.ok) {
+        uni.showToast({ title: r.error || '重设失败', icon: 'none' })
+        return
+      }
+      // 重设成功：用新密码直接登录，并同步「记住我」（若开启）
+      this.password = this.resetNew
+      this.resetOpen = false
+      this.resetNew = ''
+      this.resetConfirm = ''
+      this.showResetPass = false
+      await this.submit()
     },
     goAfterLogin() {
       // H5 带 redirect 时登录后原位恢复；App 端无此参数，直接进首页。
@@ -308,6 +376,10 @@ export default {
 .lc-btn.busy {
   filter: brightness(0.7);
   pointer-events: none;
+}
+/* ---- 免旧密码重设 ---- */
+.lc-reset {
+  margin-top: 8rpx;
 }
 /* ---- 底部切换 ---- */
 .lc-foot {

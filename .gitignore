@@ -28,3 +28,5 @@ accounts.txt
 
 # 增量采集中间产物（每轮自动生成，仅本机/CI 运行用，不入库）
 scripts/.changed-lines.txt
+# 高德采集进度台账（运行时产物，CI 每轮从资产自动回填，不入库）
+scripts/.amap-progress.json

@@ -190,12 +190,8 @@
             <text class="acct-sec-chev" :class="{ folded: !acctSec.pwd }">▾</text>
           </view>
           <view v-show="acctSec.pwd" class="acct-sec-body">
-            <view class="acct-tip">{{ pwdCustom ? '已设置自定义密码，下次登录用新密码；也可恢复为预置口令' : '当前用预置口令登录，可修改为自己的密码（仅存本机哈希）' }}</view>
-            <!-- 眼睛按钮内嵌输入框右侧：当前密码独立开关；新密码与确认密码共用一个关联开关 -->
-            <view class="acct-pwd-field">
-              <input class="acct-name-input acct-pwd-input" v-model="pwdOld" :password="!pwdShowOld" type="text" placeholder="当前密码" placeholder-class="acct-name-ph" />
-              <view class="acct-eye" :class="{ on: pwdShowOld }" @click="pwdShowOld = !pwdShowOld" v-html="pwdShowOld ? svgEyeOn : svgEyeOff" />
-            </view>
+            <view class="acct-tip">{{ pwdCustom ? '已设置自定义密码，下次登录用新密码；也可恢复为预置口令' : '当前用预置口令登录，可修改为自己的密码（仅存本机哈希）' }}；无需填写旧密码即可修改</view>
+            <!-- 眼睛按钮内嵌输入框右侧：新密码与确认密码共用一个关联开关 -->
             <view class="acct-pwd-field">
               <input class="acct-name-input acct-pwd-input" v-model="pwdNew" :password="!pwdShowNew" type="text" placeholder="新密码（6~32 位）" placeholder-class="acct-name-ph" />
               <view class="acct-eye" :class="{ on: pwdShowNew }" @click="pwdShowNew = !pwdShowNew" v-html="pwdShowNew ? svgEyeOn : svgEyeOff" />
@@ -451,11 +447,9 @@ export default {
       refreshDefault: 15,
       sessionDays: 30,
       sessionExpText: '',
-      // 登录密码修改：窗内输入缓冲 + 是否已自定义 + 明文可见开关（当前密码独立；新密码/确认密码关联）
-      pwdOld: '',
+      // 登录密码修改：窗内输入缓冲 + 是否已自定义 + 明文可见开关（新密码/确认密码关联；无需旧密码）
       pwdNew: '',
       pwdConfirm: '',
-      pwdShowOld: false,
       pwdShowNew: false,
       // 眼睛图标：单色描边 SVG，跟随文字色（currentColor）、1em 尺寸，避免彩色 emoji 在暗色面板上突兀
       svgEyeOn: '<svg viewBox="0 0 24 24" width="1em" height="1em" style="display:block" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3.5-6.2 10-6.2S22 12 22 12s-3.5 6.2-10 6.2S2 12 2 12Z"/><circle cx="12" cy="12" r="2.7"/></svg>',
@@ -785,10 +779,8 @@ export default {
       ensureFontPreviews()
       this.refreshSessionText()
       // 密码表单每次开窗都清空，并回填「是否已自定义」
-      this.pwdOld = ''
       this.pwdNew = ''
       this.pwdConfirm = ''
-      this.pwdShowOld = false
       this.pwdShowNew = false
       this.pwdCustom = hasCustomPass(this.account)
       this.accountShow = true
@@ -915,39 +907,33 @@ export default {
       const pad = (x) => String(x).padStart(2, '0')
       this.sessionExpText = `已登录 · ${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} 到期`
     },
-    // 修改登录密码：验当前密码 + 两次新密码一致，成功后清空输入并标记已自定义
+    // 修改登录密码：无需旧密码，仅校验两次新密码一致；成功后清空输入并标记已自定义
     onChangePwd() {
-      if (!this.pwdOld || !this.pwdNew || !this.pwdConfirm) {
-        uni.showToast({ title: '请填写当前密码与新密码', icon: 'none' })
+      if (!this.pwdNew || !this.pwdConfirm) {
+        uni.showToast({ title: '请填写新密码', icon: 'none' })
         return
       }
       if (this.pwdNew !== this.pwdConfirm) {
         uni.showToast({ title: '两次输入的新密码不一致', icon: 'none' })
         return
       }
-      const r = changePassword(this.account, this.pwdOld, this.pwdNew)
+      const r = changePassword(this.account, this.pwdNew)
       if (!r.ok) {
         uni.showToast({ title: r.error || '修改失败', icon: 'none' })
         return
       }
-      this.pwdOld = ''
       this.pwdNew = ''
       this.pwdConfirm = ''
       this.pwdCustom = true
       uni.showToast({ title: '密码已修改', icon: 'success' })
     },
-    // 恢复默认口令：需先在「当前密码」输入验证身份，否则不受理（防误锁）
+    // 恢复默认口令：无需旧密码，直接恢复为预置口令
     onResetPwd() {
-      if (!this.pwdOld) {
-        uni.showToast({ title: '请先填写当前密码以验证身份', icon: 'none' })
-        return
-      }
-      const r = resetPassword(this.account, this.pwdOld)
+      const r = resetPassword(this.account)
       if (!r.ok) {
         uni.showToast({ title: r.error || '恢复失败', icon: 'none' })
         return
       }
-      this.pwdOld = ''
       this.pwdNew = ''
       this.pwdConfirm = ''
       this.pwdCustom = false

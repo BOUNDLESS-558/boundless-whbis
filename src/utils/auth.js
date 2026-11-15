@@ -33,7 +33,7 @@ export const EMBEDDED_ACCOUNTS = [
   'tomboyfreak',
   'WH6120GD',
   'wuhanbus585',
-  'BOUNDELSS_558',
+  'BOUNDLESS_558',
   'l296625',
   'wxid_byqyi6k0nr3r22',
   'WG6120BEVHR3',
@@ -124,16 +124,13 @@ export function setPassword(account, newPass) {
   return { ok: true }
 }
 
-/** 改密：先验当前密码再设新密码 */
-export function changePassword(account, oldPass, newPass) {
-  if (!verifyPass(account, oldPass)) return { ok: false, error: '当前密码不正确' }
-  if (String(oldPass) === String(newPass)) return { ok: false, error: '新密码不能与当前密码相同' }
+/** 改密：无需旧密码，直接设新密码（使用门槛非安全机制，忘记密码也能重设） */
+export function changePassword(account, newPass) {
   return setPassword(account, newPass)
 }
 
-/** 恢复默认口令：删覆盖条目，回到 genPass 预置口令（需先验当前密码） */
-export function resetPassword(account, oldPass) {
-  if (!verifyPass(account, oldPass)) return { ok: false, error: '当前密码不正确' }
+/** 恢复默认口令：删覆盖条目，回到 genPass 预置口令（无需旧密码） */
+export function resetPassword(account) {
   const acc = normAccount(account)
   const o = readOverrides()
   if (o[acc]) {
@@ -259,7 +256,9 @@ function b64dec(str) {
     const c3 = B64.indexOf(clean[i + 3])
     bytes.push((c0 << 2) | (c1 >> 4))
     if (clean[i + 2] && c2 !== -1) bytes.push(((c1 & 15) << 4) | (c2 >> 2))
-    if (clean[i + 3] && c3 !== -1) bytes.push(((c2 & 15) << 6) | c3)
+    // 第 3 个字节只取 c2 的低 2 位（&3）；写成 &15 会解出 >255 的字节，
+    // 导致 XOR 还原错乱、bytesUtf8 抛 URIError，loadRemember 被 catch 吞掉返回 null（记住我失效）。
+    if (clean[i + 3] && c3 !== -1) bytes.push(((c2 & 3) << 6) | c3)
   }
   return bytes
 }
@@ -287,17 +286,21 @@ function xor(a, k) {
 
 export function saveRemember(account, password) {
   const norm = normAccount(account)
+  const raw = String(account == null ? '' : account).trim()
   if (!norm || !password) return false
   const inB = utf8Bytes(password)
   const ct = xor(inB, deriveKeystream(norm, inB.length))
-  return writeStore(REMEMBER_KEY, { a: norm, c: b64enc(ct) })
+  // a 存「原始大小写」账号供登录页原样回填（BOUNDLESS_558 不会被拉成小写）；
+  // 密钥流仍按归一账号派生，与 loadRemember 的 normAccount(v.a) 一致，旧存档也能解。
+  return writeStore(REMEMBER_KEY, { a: raw || norm, c: b64enc(ct) })
 }
 export function loadRemember() {
   const v = readStore(REMEMBER_KEY)
   if (!v || !v.a || !v.c) return null
   try {
     const ct = b64dec(v.c)
-    const pt = xor(ct, deriveKeystream(v.a, ct.length))
+    // 密钥流按归一账号派生：兼容旧存档（a 曾是小写 norm）与新存档（a 为原始大小写）
+    const pt = xor(ct, deriveKeystream(normAccount(v.a), ct.length))
     return { account: v.a, password: bytesUtf8(pt) }
   } catch (e) {
     return null
