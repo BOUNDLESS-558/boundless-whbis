@@ -1,17 +1,24 @@
 {
   "city": "420100",
   "cityName": "武汉",
-  "updated": "2026-11-09T03:38:09.880Z",
+  "updated": "2026-11-15T00:34:52.510Z",
   "source": "customized.wuhanbus.com /line 枚举探测",
   "probe": {
     "from": 1,
     "to": 999,
     "prefixes": [],
-    "dir1Verified": true,
-    "scanned": 31,
-    "hit": 31
+    "dir1Verified": false,
+    "scanned": 3,
+    "hit": 0,
+    "append": {
+      "at": "2026-11-15T00:34:52.510Z",
+      "from": 1,
+      "to": 999,
+      "scanned": 0,
+      "hit": 0
+    }
   },
-  "count": 1263,
+  "count": 1265,
   "lines": [
     {
       "no": "1",
@@ -4532,6 +4539,38 @@
       "code": "407",
       "status": "营运",
       "org": "武汉市公共交通集团有限责任公司第六营运公司"
+    },
+    {
+      "no": "408内环",
+      "code": "408内环",
+      "name": "408内环",
+      "start": "二七路二七横路",
+      "end": "二七路二七横路",
+      "early": "07:00",
+      "last": "21:30",
+      "price": "2",
+      "stops": 35,
+      "type": 0,
+      "dirs": [
+        0
+      ],
+      "status": "营运"
+    },
+    {
+      "no": "408外环",
+      "code": "408外环",
+      "name": "408外环",
+      "start": "二七路二七横路",
+      "end": "二七路二七横路",
+      "early": "07:00",
+      "last": "21:30",
+      "price": "2",
+      "stops": 35,
+      "type": 0,
+      "dirs": [
+        0
+      ],
+      "status": "营运"
     },
     {
       "no": "411",

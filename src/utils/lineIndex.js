@@ -33,6 +33,16 @@ export function normNo(s) {
   return out.replace(/[\s\-_.·]/g, '').toUpperCase()
 }
 
+/**
+ * 环线别名：官方把 408 拆成「408内环 / 408外环」两个独立 lineCode，但乘客习惯搜「408路」。
+ * 给这类线路补一个 `408路内环` 形态的 alt，让 408 / 408内 / 408路 / 408路内环 都能命中，
+ * 而 no 仍保持官方编码（查询要用 420100-408内环-0，不能改成 408）。
+ */
+const loopAlias = (no) => {
+  const m = /^(\d+)(内环|外环|内线|外线)$/.exec(String(no == null ? '' : no))
+  return m ? normNo(`${m[1]}路${m[2]}`) : ''
+}
+
 // 预计算索引，避免每次输入都遍历原始字段
 // key = 线路号（唯一，必有）；alt = 描述名（D 线很多是“起点-终点”，顺带支持按站名搜）
 // status = 静态基座（scan-lines.mjs 落盘：停运/营运）；early/last 供 lineStatus() 实时判「营运中 / 已收班」
@@ -41,7 +51,8 @@ const INDEX = DB.lines.map((l) => ({
   code: l.code || l.no,
   name: l.name,
   key: normNo(l.no),
-  alt: normNo(l.name === l.no ? '' : l.name),
+  // 环线：name 与 no 相同（都是「408内环」），原本 alt 为空，补上「408路内环」别名
+  alt: [normNo(l.name === l.no ? '' : l.name), loopAlias(l.no)].filter(Boolean).join(' '),
   start: l.start || '',
   end: l.end || '',
   stops: l.stops || 0,
@@ -56,7 +67,14 @@ const INDEX = DB.lines.map((l) => ({
   last: l.last || '',
   // 所属营运公司全名（scan-org.mjs 自 8684 采集；D 线等未收录为空）
   org: l.org || '',
-  order: /^\d+$/.test(l.no) ? Number(l.no) : Number((l.no.match(/\d+$/) || [0])[0]) + 100000,
+  // 环线（408内环 / 408外环）：按数字部分紧邻 408 排，别因为没有尾部数字掉到 100000 区末尾
+  order: (() => {
+    const s = String(l.no)
+    if (/^\d+$/.test(s)) return Number(s)
+    const loop = /^(\d+)(内环|外环|内线|外线)$/.exec(s)
+    if (loop) return Number(loop[1]) + (loop[2].startsWith('内') ? 0.1 : 0.2)
+    return Number((s.match(/\d+$/) || [0])[0]) + 100000
+  })(),
 }))
 
 // 非集团线路：字段与 INDEX 对齐，另带 companyKey / sourceType / realtime 供 UI 区分

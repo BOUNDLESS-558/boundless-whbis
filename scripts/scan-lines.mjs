@@ -66,6 +66,24 @@ if (BAD_PREFIX.length) {
   console.error(`前缀 ${BAD_PREFIX.join(', ')} 不是本集团线路，已拒绝执行。可用前缀只有：${PREFIX_OK.join(' / ')}`)
   process.exit(1)
 }
+// 环线编码（2026-11-15 实测）：官方 /line 对「408路」这类内外环线路，用的是
+// 420100-408内环-0 / 420100-408外环-0 两个**独立** lineCode，纯数字 420100-408-0
+// 返回「线路找不到」。纯数字枚举永远扫不到它们，故提供 --loops 生成环线候选：
+//   node scripts/scan-lines.mjs --codes 408 --loops --merge   # 精确补录 408 内外环
+//   node scripts/scan-lines.mjs --loops --merge               # 全量环线发现（低频，低频！候选 ×3）
+// --loop-suffixes 可自定义后缀；环线只有 dir0，建议配合 --no-dir1 省一半请求。
+const LOOP_SUFFIXES = String(argOf('loop-suffixes', '内环,外环')).split(',').map((s) => s.trim()).filter(Boolean)
+const LOOPS = has('loops')
+// 环线线路号形态：数字号 + 中文环线后缀。注意别放开成任意中文后缀，避免脏数据混入。
+const LOOP_NO = /^(\d+)(内环|外环|内线|外线)$/
+/** 排序键：环线按数字部分紧邻原号排（408内环→408.1），别落到中文区末尾 */
+const numKey = (s) => {
+  const str = String(s == null ? '' : s)
+  const m = /^(\d+)/.exec(str)
+  if (!m) return NaN
+  const loop = LOOP_NO.exec(str)
+  return loop ? Number(m[1]) + (loop[2].startsWith('内') ? 0.1 : 0.2) : Number(m[1])
+}
 const VERIFY_DIR1 = !has('no-dir1')
 const MERGE = has('merge')
 // 只对现有 JSON 重跑第 6 步（编号规整 / 白名单 / 去重），不联网；改完后处理逻辑时用它
@@ -225,12 +243,18 @@ if (NORMALIZE_ONLY) {
   if (!fs.existsSync(OUT)) { console.error('找不到已有 JSON：' + OUT); process.exit(1) }
   console.log('仅重算已有 JSON（不联网）')
 } else if (CODES.length) {
-  candidates.push(...CODES)
-  console.log(`精确候选 ${candidates.length} 条（${CODES.join(', ')}），并发 ${CONCURRENCY}，间隔 ${DELAY}ms`)
+  for (const c of CODES) {
+    candidates.push(c)
+    if (LOOPS) for (const s of LOOP_SUFFIXES) candidates.push(c + s)
+  }
+  console.log(`精确候选 ${candidates.length} 条（${candidates.join(', ')}），并发 ${CONCURRENCY}，间隔 ${DELAY}ms`)
 } else {
-  for (let n = FROM; n <= TO; n++) candidates.push(String(n))
+  for (let n = FROM; n <= TO; n++) {
+    candidates.push(String(n))
+    if (LOOPS) for (const s of LOOP_SUFFIXES) candidates.push(n + s)
+  }
   for (const p of PREFIXES) for (let n = FROM; n <= TO; n++) candidates.push(p + n)
-  console.log(`扫描范围 ${FROM}~${TO}${PREFIXES.length ? ' + 前缀 [' + PREFIXES.join(', ') + ']' : ''}，候选 ${candidates.length} 条，并发 ${CONCURRENCY}，间隔 ${DELAY}ms`)
+  console.log(`扫描范围 ${FROM}~${TO}${PREFIXES.length ? ' + 前缀 [' + PREFIXES.join(', ') + ']' : ''}${LOOPS ? ' + 环线 [' + LOOP_SUFFIXES.join('/') + ']' : ''}，候选 ${candidates.length} 条，并发 ${CONCURRENCY}，间隔 ${DELAY}ms`)
 }
 
 // 2) 探测方向 0
@@ -253,6 +277,15 @@ const hits = candidates.length ? await pool(candidates, async (code) => {
   }
   return r
 }, CONCURRENCY) : []
+// 网络全断时绝不写盘：命中 0 + 有「非不存在」类失败说明是上游故障/限流，
+// 此时 --merge 会把 probe 元数据（扫描范围/命中数）覆盖成本轮的 0，且让旧库看起来"刚扫过"。
+if (candidates.length && !found.length && fs.existsSync(OUT)) {
+  const netFail = Object.entries(reasons).some(([k]) => k === 'net' || k === 'biz' || k === 'retry-exhausted')
+  if (netFail) {
+    console.error('× 本轮 0 命中且存在网络/业务异常，判定为上游故障，拒绝写盘（保护已有线路库与 probe 元数据）')
+    process.exit(2)
+  }
+}
 if (candidates.length) {
   process.stdout.write('\n')
   console.log(`方向 0 完成：命中 ${found.length} 条，耗时 ${((Date.now() - t0) / 1000).toFixed(1)}s`)
@@ -289,12 +322,12 @@ if (VERIFY_DIR1 && found.length) {
 
 // 4) 归一化 + 排序
 const byNo = (a, b) => {
-  const na = Number(a.no)
-  const nb = Number(b.no)
-  if (!isNaN(na) && !isNaN(nb)) return na - nb
+  const na = numKey(a.no)
+  const nb = numKey(b.no)
+  if (!isNaN(na) && !isNaN(nb)) return na - nb || String(a.no).localeCompare(String(b.no), 'zh-Hans-CN')
   if (!isNaN(na)) return -1
   if (!isNaN(nb)) return 1
-  return a.no.localeCompare(b.no, 'zh-Hans-CN')
+  return String(a.no).localeCompare(String(b.no), 'zh-Hans-CN')
 }
 const fresh = found.map((f) => ({
   no: f.code,
@@ -347,8 +380,11 @@ if (MERGE && oldDoc) {
 // 6) 编号规整 + 白名单 + 去重
 // ⚠ 后端 lineCode 是内部编码，lineName 才是真实线路号：1001→电1、2001→J1、81→H81。
 // 若只按 lineCode 判断，J/H 线会以数字编号溜进库里，还会和「电1」重复。
-const isLegalNo = (no) => /^\d+$/.test(no) || PREFIX_OK.some((p) => no.startsWith(p))
-const NAME_OK = new RegExp('^(\\d+|电\\d+|BRT\\d+|K\\d+|D\\d+|YX\\d+)$')
+// 环线（408内环 / 408外环）是官方真实线路号，必须放行：否则 --loops 扫到了也会被剔除。
+// 同时保留 FOREIGN 正则的语义——N408 / W408 这类字母前缀别名仍按「非本集团」剔除，
+// 避免同一个环线在库里出现中文号 + 字母别名两份重复记录。
+const isLegalNo = (no) => /^\d+$/.test(no) || LOOP_NO.test(no) || PREFIX_OK.some((p) => no.startsWith(p))
+const NAME_OK = new RegExp('^(\\d+|电\\d+|BRT\\d+|K\\d+|D\\d+|YX\\d+|\\d+(内环|外环|内线|外线))$')
 // H81 / J1：字母前缀不在白名单 → 非本集团；YX 是集团夜行线，必须放行
 const FOREIGN = /^(?!BRT|K|D|YX)([A-Za-z]+)\d/
 const JUNK = /测试|内部/
@@ -399,12 +435,27 @@ for (const l of merged) {
 const offCount = merged.filter((l) => l.status === '停运').length
 console.log(`运行状态：营运 ${merged.length - offCount} 条 / 停运（无站点数据）${offCount} 条`)
 
+// --merge 小样本（--codes / --from--to 补录）只更新数据，不把 probe 的「全量扫描范围」
+// 覆盖成本轮的几个候选；同时记一条 append 说明本轮补了什么，便于追溯。
+const prevProbe = MERGE && oldDoc && oldDoc.probe ? oldDoc.probe : null
+const isPartial = MERGE && !!prevProbe && (CODES.length || LOOPS || FROM > 1 || TO < 999 || NORMALIZE_ONLY)
 const out = {
   city: CITY,
   cityName: '武汉',
   updated: new Date().toISOString(),
   source: 'customized.wuhanbus.com /line 枚举探测',
-  probe: {
+  probe: isPartial ? {
+    ...prevProbe,
+    append: {
+      at: new Date().toISOString(),
+      codes: CODES.length ? CODES : undefined,
+      loops: LOOPS ? LOOP_SUFFIXES : undefined,
+      from: CODES.length ? undefined : FROM,
+      to: CODES.length ? undefined : TO,
+      scanned: candidates.length,
+      hit: fresh.length,
+    },
+  } : {
     from: FROM,
     to: TO,
     prefixes: PREFIXES,

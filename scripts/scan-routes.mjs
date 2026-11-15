@@ -189,6 +189,15 @@ function isSane(gcj, stopsGcj) {
  */
 function stripLoops(pts, minSeg = 4000, closeDist = 80, maxCuts = 8) {
   if (!pts || pts.length < 10) return { pts: pts || [], removed: 0 }
+  // ⚠ 闭合环线（408内环/408外环等，首尾同站）整条就是「绕一圈回到起点」，
+  // 任何基于「绕行 >4km 且回到附近」的启发式都会把它当成异常回环删掉。
+  // 实测 35 点被删成 3 点：第一次 cut 落在末尾被保护条件挡下，但循环继续推进 i 后，
+  // 从 i=1/2/3… 出发又会找到中段 cut，于是整条环被逐段吃掉。
+  // 首尾重合（<200m）且线路足够长 → 判定为真实闭环，直接保留全部点，不做回环剔除。
+  const span = pts.reduce((s, p, i) => i ? s + haversine(pts[i - 1], p) : 0, 0)
+  if (haversine(pts[0], pts[pts.length - 1]) < 200 && span > minSeg) {
+    return { pts, removed: 0 }
+  }
   const out = [pts[0]]
   let removed = 0
   let cuts = 0
@@ -417,7 +426,11 @@ await pool(all, async (t) => {
   let snapped = false
   if (!NO_ROUTE) {
     const r = await routeAlongRoads(stops)
-    if (r && r.length > 1) { route = r; snapped = true; stats.snapped++ }
+    // 退化保险：贴路结果至少要覆盖站点序列的多数（允许抽稀掉一半），且不少于 3 点。
+    // 否则宁可标 snapped:false 回退站点连线，让运行时继续补算——
+    // 绝不把「2 个重合点」当成有效贴路写盘，那会让前端跳过补算画出「一个点」。
+    const minPts = Math.max(3, Math.ceil(stops.length / 2))
+    if (r && r.length >= minPts) { route = r; snapped = true; stats.snapped++ }
     else stats.fallback++
   }
   // 没贴路也要给一条「干净的站点连线」：运行时画实线，且不会像旧链路那样混进长弦
