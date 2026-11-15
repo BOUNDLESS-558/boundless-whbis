@@ -107,7 +107,9 @@ const DATA_PATHS = [
   'reports',
   'scripts/.amap-progress.json',
 ]
-git(['add', ...DATA_PATHS])
+// 部分路径（如 .amap-progress.json）仅在对应采集步骤运行时才生成；CI 未配 AMAP_KEY 时
+// 该文件不存在，git add 会因 pathspec 不匹配整体报错退出。--ignore-missing 让缺失路径被跳过。
+git(['add', '--ignore-missing', ...DATA_PATHS])
 if (hasStagedChanges()) {
   console.log('\n' + git(['diff', '--cached', '--stat']))
   git(['config', 'user.name', 'github-actions[bot]'])
