@@ -35,6 +35,14 @@ const argv = process.argv.slice(2)
 const DRY = argv.includes('--dry')
 const FORCE = argv.includes('--force')
 
+// buspedia 未收录、但已由用户核实确认的营运公司（线路号 → 公司全名）。
+// 手动映射优先级高于 buspedia：重跑脚本也能保留，不会被覆盖丢失。
+const GROUP_PREFIX = '武汉市公共交通集团有限责任公司'
+const MANUAL_ORG = {
+  '355': GROUP_PREFIX + '第一营运公司', // 用户核实：355 路属一公司（buspedia 未收录）
+  '408': GROUP_PREFIX + '第一营运公司', // 用户核实：408 路属一公司（buspedia 实际有，此处兜底）
+}
+
 const db = JSON.parse(fs.readFileSync(FILE, 'utf8'))
 const lines = db.lines || []
 
@@ -107,7 +115,6 @@ function parseNuxtData(html) {
 }
 
 // —— 3. 构建 线路名 → 公司全名 映射 ——
-const GROUP_PREFIX = '武汉市公共交通集团有限责任公司'
 // 公司名归一：「第X运营公司」→「第X营运公司」
 function normalizeCompany(name) {
   if (!name) return ''
@@ -161,9 +168,12 @@ const html = await fetchPage()
 const [categories, routes] = parseNuxtData(html)
 console.log(`buspedia 数据：${routes.length} 条线路，${categories.length} 个分类`)
 const mapping = buildMapping([categories, routes])
-console.log(`有效映射：${mapping.size} 条`)
+// 手动核实映射覆盖同名单（优先级最高，重跑不丢）
+for (const [no, company] of Object.entries(MANUAL_ORG)) mapping.set(no.toUpperCase(), company)
+console.log(`有效映射：${mapping.size} 条（含手动核实 ${Object.keys(MANUAL_ORG).length} 条）`)
 
 let hit = 0, skip = 0, miss = 0
+const hitNos = []
 for (const l of lines) {
   if (l.org && !FORCE) { skip++; continue }
   const key = String(l.no).toUpperCase()
@@ -171,6 +181,7 @@ for (const l of lines) {
   if (company) {
     l.org = company
     hit++
+    hitNos.push(l.no)
   } else {
     miss++
   }
@@ -187,6 +198,7 @@ for (const l of lines) {
 }
 console.log('\n==== 采集结果 ====')
 console.log(`本轮：命中 ${hit} / 跳过(已有) ${skip} / 未命中 ${miss}`)
+console.log('命中线路号：' + hitNos.join(', '))
 console.log('全库 org 分布：', JSON.stringify(dist), '（空 ' + lines.filter((l) => !l.org).length + ' 条）')
 
 if (DRY) {
@@ -194,7 +206,7 @@ if (DRY) {
 } else if (hit > 0) {
   db.updated = new Date().toISOString()
   fs.writeFileSync(FILE, JSON.stringify(db, null, 2) + '\n', 'utf8')
-  console.log(`√ 已写回 ${path.relative(process.cwd(), FILE)}（新增/更新 ${hit + hqHit} 条 org）`)
+  console.log(`√ 已写回 ${path.relative(process.cwd(), FILE)}（新增/更新 ${hit} 条 org）`)
 } else {
   console.log('无新增命中，不写文件')
 }
