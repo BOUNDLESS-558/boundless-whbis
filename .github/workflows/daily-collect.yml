@@ -8,6 +8,8 @@ name: 每日自动采集与部署
 #   Pages 发布源仍是明确的 pages 分支，改默认分支不影响站点。
 #   未改默认分支前，可手动在 Actions 页面对本工作流点「Run workflow」触发（会使用 main 上的文件）。
 on:
+  push:
+    branches: [main]
   schedule:
     # 北京时间 00:00–06:00 = UTC 16:00–22:00（前一天）。GitHub cron 只能给单个时刻，
     # 故分散多档错峰，任何一档因延迟偏移仍落在 0~6 点窗口内：
