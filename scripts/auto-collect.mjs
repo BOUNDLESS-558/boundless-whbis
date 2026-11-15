@@ -112,9 +112,15 @@ if (hasStagedChanges()) {
   console.log('\n' + git(['diff', '--cached', '--stat']))
   git(['config', 'user.name', 'github-actions[bot]'])
   git(['config', 'user.email', '41898282+github-actions[bot]@users.noreply.github.com'])
-  git(['commit', '-m', `data: 自动采集更新 ${new Date().toISOString().slice(0, 10)}`])
-  git(['push', 'origin', 'HEAD'])
-  console.log('· 数据已提交并推送到当前分支')
+  git(['commit', '-m', `数据: 自动采集更新 ${new Date().toISOString().slice(0, 10)}`])
+  // CI 下 actions/checkout 多为 detached HEAD，不能用 `git push origin HEAD`（会报
+  // “not currently on a branch”）。显式指定远端分支引用，本地无 GITHUB_REF_NAME 时回退当前分支/main。
+  let pushBranch = process.env.GITHUB_REF_NAME
+  if (!pushBranch) {
+    try { const b = git(['rev-parse', '--abbrev-ref', 'HEAD']); pushBranch = b === 'HEAD' ? 'main' : b } catch { pushBranch = 'main' }
+  }
+  git(['push', 'origin', `HEAD:refs/heads/${pushBranch}`])
+  console.log(`· 数据已提交并推送到分支 ${pushBranch}`)
 } else {
   console.log('\n· 数据无变化，跳过提交')
 }
