@@ -541,11 +541,15 @@
             <!-- 所属营运公司徽标：紧跟在线路号后方，公司色描边 + 半透明底，
                  一眼看出这条换乘线是哪家在跑（公交集团 / 蔡城 / 木兰 / 汉奇） -->
             <view
-              class="st-org"
-              v-if="t.company && t.company.label"
+              class="org-tag"
+              :class="{ foreign: t.orgTag && t.orgTag.isForeign }"
+              v-if="t.orgTag"
               :title="t.company.full || t.company.label"
-              :style="{ borderColor: (t.company.color || '#6366f1') + '55', color: t.company.color || '#6366f1' }"
-            >{{ t.company.label }}</view>
+            >
+              <image v-if="t.orgTag.isForeign" class="org-logo" :src="t.orgTag.logo" mode="aspectFit" />
+              <text v-else class="org-no">{{ t.orgTag.no }}</text>
+              <text class="org-name" :title="t.company.label">{{ t.orgTag.short }}</text>
+            </view>
             <text class="st-cur" v-if="t.cur">当前</text>
             <text class="st-go" v-else>↗</text>
           </view>
@@ -3351,6 +3355,25 @@ export default {
         const l = lib.get(String(d.no)) || {}
         // 已停运线路不展示在换乘列表里：无在运车辆，走向也只是历史档案
         if (l.status === '停运') return
+        // 所属营运公司徽标：全站统一走 companyOf（永不返回 null），
+        // 站点换乘卡里线路号后方就靠它一眼看出是哪家在跑
+        const company = companyOf(l)
+        // 把 companyOf 的 label 解析成 org-tag 风格需要的 { no, short, isForeign }
+        const cLabel = company.label || ''
+        const cMatch = cLabel.match(/公交集团·([一二三四五六七八九])营运公司/)
+        const cnToArabic = { '一': 1, '二': 2, '三': 3, '四': 4, '五': 5, '六': 6, '七': 7, '八': 8, '九': 9 }
+        let orgTag
+        if (cMatch) {
+          orgTag = { no: cnToArabic[cMatch[1]] || cMatch[1], short: cMatch[1] + '公司', isForeign: false }
+        } else if (company.key === 'CC') {
+          orgTag = { no: 'C', short: cLabel, isForeign: true, logo: company.logo }
+        } else if (company.key === 'ML') {
+          orgTag = { no: 'M', short: cLabel, isForeign: true, logo: company.logo }
+        } else if (company.key === 'HQ') {
+          orgTag = { no: 'H', short: cLabel, isForeign: true, logo: company.logo }
+        } else {
+          orgTag = { no: '?', short: cLabel, isForeign: false }
+        }
         list.push({
           no: d.no,
           code: d.code,
@@ -3358,9 +3381,8 @@ export default {
           end: l.end || '',
           order: l.order != null ? l.order : 999999,
           cur: String(d.no) === curNo,
-          // 所属营运公司徽标：全站统一走 companyOf（永不返回 null），
-          // 站点换乘卡里线路号后方就靠它一眼看出是哪家在跑
-          company: companyOf(l),
+          company,
+          orgTag,
         })
       })
       list.sort((a, b) => a.order - b.order || (a.cur ? -1 : 1))
@@ -4980,24 +5002,8 @@ export default {
   background: rgba(252, 211, 77, 0.92);
   color: #0b1020;
 }
-/* 换乘卡里线路号后方的所属公司徽标：小胶囊，公司色描边 + 半透明底 + 同色文字。
-   宽度有上限，超长公司名（如「公交集团·三营运公司」）省略截断，全名在 title 里 */
-.st-org {
-  flex: 0 0 auto;
-  max-width: 46%;
-  box-sizing: border-box;
-  padding: 2rpx 8rpx;
-  margin: 0 2rpx;
-  border-radius: 20rpx;
-  border: 1rpx solid;
-  font-size: 17rpx;
-  font-weight: 600;
-  line-height: 22rpx;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  opacity: 0.95;
-}
+/* 换乘卡里线路号后方的所属公司徽标：统一走 .org-tag（金色圆圈+公司名），
+  非集团线加 .foreign（白边+logo）。全名在 title 里 */
 /* 第二行：乘客最关心的「开往哪」。只允许一行显示，超长终点站名以省略号截断，
    保证两列卡片网格等高整齐；完整起讫站见卡片 title / .st-end title */
 .st-end {
