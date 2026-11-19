@@ -57,10 +57,12 @@ const DELAY = Math.max(0, Number(argOf('delay', 120)))
 const PREFIXES = String(argOf('prefix', '')).split(',').map((s) => s.trim()).filter(Boolean)
 // 精确候选：给 YX 这类「内部编码与线路名不同」的号段补录用，避免为了几条线把 1~999 全扫一遍
 const CODES = String(argOf('codes', '')).split(',').map((s) => s.trim()).filter(Boolean)
-// 线路号形态白名单：纯数字 / 电 / BRT / K / D / YX 是本集团营运线路。
+// 线路号形态白名单：纯数字 / 电 / BRT / K / D / YX / H 是本集团营运线路。
 // YX = 集团夜行公交（用户 2026-11-09 要求并入线路库）。
-// 其余字母前缀（J、P、T、V、G、H、Z…）即使接口能返回数据也不是本集团线路，扫了纯属浪费请求。
-const PREFIX_OK = ['电', 'BRT', 'K', 'D', 'YX']
+// H = 惠民公交（用户 2026-11-20 确认归武汉集团；后端内部编码 81~99，对外号 H81~H99，
+//     buspedia 也归在集团 zek3io 下、自编号首位 1~7 是集团分公司号）。
+// 其余字母前缀（J、P、T、V、G、Z…）即使接口能返回数据也不是本集团线路，扫了纯属浪费请求。
+const PREFIX_OK = ['电', 'BRT', 'K', 'D', 'YX', 'H']
 const BAD_PREFIX = PREFIXES.filter((p) => !PREFIX_OK.includes(p))
 if (BAD_PREFIX.length) {
   console.error(`前缀 ${BAD_PREFIX.join(', ')} 不是本集团线路，已拒绝执行。可用前缀只有：${PREFIX_OK.join(' / ')}`)
@@ -384,9 +386,9 @@ if (MERGE && oldDoc) {
 // 同时保留 FOREIGN 正则的语义——N408 / W408 这类字母前缀别名仍按「非本集团」剔除，
 // 避免同一个环线在库里出现中文号 + 字母别名两份重复记录。
 const isLegalNo = (no) => /^\d+$/.test(no) || LOOP_NO.test(no) || PREFIX_OK.some((p) => no.startsWith(p))
-const NAME_OK = new RegExp('^(\\d+|电\\d+|BRT\\d+|K\\d+|D\\d+|YX\\d+|\\d+(内环|外环|内线|外线))$')
-// H81 / J1：字母前缀不在白名单 → 非本集团；YX 是集团夜行线，必须放行
-const FOREIGN = /^(?!BRT|K|D|YX)([A-Za-z]+)\d/
+const NAME_OK = new RegExp('^(\\d+|电\\d+|BRT\\d+|K\\d+|D\\d+|YX\\d+|H\\d+|\\d+(内环|外环|内线|外线))$')
+// H（惠民公交，归集团）、YX（夜行）等白名单前缀必须放行；J1 / N408 等其余字母前缀 → 非本集团
+const FOREIGN = /^(?!BRT|K|D|YX|H)([A-Za-z]+)\d/
 const JUNK = /测试|内部/
 const kept = []
 const dropped = []
