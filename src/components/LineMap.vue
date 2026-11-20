@@ -1956,7 +1956,9 @@ export default {
       for (const dir of todo) {
         const stops = pointsOf(cleanStops(this.stopsByDir[dir] || []).stops)
         try {
-          const pts = await fetchRoadRoute(stops, `${this.lineNo}-${dir}`)
+          const res = await fetchRoadRoute(stops, `${this.lineNo}-${dir}`)
+          // fetchRoadRoute 返回 { points, stats }，须取 .points（历史 bug：当数组用导致补算永远不生效）
+          const pts = Array.isArray(res) ? res : (res && res.points)
           // 等待期间高德官方轨迹可能已就位：此时不再用 OSRM 结果覆盖更精确的轨迹
           if (this.amapOfficial[dir]) continue
           if (pts && pts.length > 1) {

@@ -20,6 +20,7 @@
  */
 import { execFileSync } from 'node:child_process'
 import fs from 'node:fs'
+import path from 'node:path'
 
 const ROOT = process.cwd()
 const has = (k) => process.env[k] && String(process.env[k]).length > 0
@@ -62,6 +63,58 @@ function hasStagedChanges() {
   } catch {
     return true // 非 0 = 有变化
   }
+}
+
+// ── 规则：标注「非 API 获取、走 OSRM 兜底」的线路 ──
+// 集团线路走向有两条来源（见 AGENTS.md「线路静态资产优先」）：
+//   source='amap' —— 高德公交 API 官方轨迹（A，优选）；
+//   source='osrm' —— 高德未收录时，用 OSRM 驾车路网近似的兜底走向（B，非 API 获取）。
+// 本函数每轮采集后扫描所有资产分片，把任一方向 source='osrm' 的线路导出到
+// reports/osrm-lines.json，随 reports 目录一起提交，便于明确追溯这些线路。
+function writeOsrmLineReport() {
+  const linesRoot = path.join(ROOT, 'src/static/lines')
+  const groups = [
+    { dir: 'jt', label: '公交集团' },
+    { dir: 'cc', label: '蔡城公交' },
+    { dir: 'ml', label: '木兰公交' },
+    { dir: 'hq', label: '汉奇公交' },
+  ]
+  const rows = []
+  for (const { dir, label } of groups) {
+    const full = path.join(linesRoot, dir)
+    if (!fs.existsSync(full)) continue
+    for (const file of fs.readdirSync(full).filter((f) => f.endsWith('.json'))) {
+      let data
+      try {
+        data = JSON.parse(fs.readFileSync(path.join(full, file), 'utf8'))
+      } catch {
+        continue
+      }
+      for (const no of Object.keys(data.lines || {})) {
+        const line = data.lines[no]
+        const dirs = (line && line.dirs) || {}
+        const osrmDirs = ['0', '1'].filter((k) => dirs[k] && dirs[k].source === 'osrm')
+        if (!osrmDirs.length) continue
+        rows.push({
+          no,
+          name: (line && (line.name || line.lineName)) || '',
+          company: label,
+          shard: `${dir}/${file}`,
+          osrmDirs, // '0'=上行, '1'=下行；数组表示该方向为 OSRM 兜底（非 API）
+        })
+      }
+    }
+  }
+  rows.sort((a, b) => String(a.no).localeCompare(String(b.no), undefined, { numeric: true }))
+  const report = {
+    updatedAt: new Date().toISOString(),
+    rule: 'source=osrm 表示该方向走向由 OSRM 驾车路网近似生成，非高德公交 API 官方轨迹（API 未收录时的兜底）。',
+    total: rows.length,
+    lines: rows,
+  }
+  fs.mkdirSync(path.join(ROOT, 'reports'), { recursive: true })
+  fs.writeFileSync(path.join(ROOT, 'reports/osrm-lines.json'), JSON.stringify(report, null, 2) + '\n')
+  return rows.length
 }
 
 // ── 1. 线路枚举：全量(周) / 仅规范化(日) ──
@@ -112,6 +165,10 @@ step('非集团线网底图', ['scripts/build-foreign-net.mjs'])
 
 // ── 8. 交叉验证（官方 vs 高德，输出质量报告）──
 step('交叉验证报告', ['scripts/validate-cross.mjs'], { optional: true })
+
+// ── 8.5 规则：导出 OSRM 兜底（非 API 获取）线路清单 ──
+//   明确注明哪些线路任一方向 source=osrm，随 reports 一起提交，便于排查 646 这类问题。
+console.log(`\n=== OSRM 兜底线路清单 ===\n· 非 API 获取线路 ${writeOsrmLineReport()} 条 → reports/osrm-lines.json`)
 
 // ── 9. 提交数据到当前分支（main）──
 const DATA_PATHS = [
