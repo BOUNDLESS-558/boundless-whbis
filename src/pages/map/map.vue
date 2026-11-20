@@ -323,7 +323,8 @@
 
             <view class="amap-sub-div"></view>
 
-            <view class="amap-sub-label">高德地图 KEY <text class="amap-sub-hint">官方公交轨迹 · 走向更精确</text></view>
+            <view class="amap-sub-label">高德地图 KEY</view>
+            <view class="amap-sub-hint">官方公交轨迹 · 走向更精确</view>
             <view class="amap-apply">
               <text class="amap-apply-txt">还没有 KEY？前往高德开放平台免费申请（Web端 JS API 类型）</text>
               <text class="amap-apply-link" @click="openAmapApply">立即申请 ›</text>
@@ -346,9 +347,9 @@
             </view>
 
             <view class="amap-quota">
-              <view class="amap-quota-row">
-                <text class="amap-quota-k">本机今日已查询</text>
-                <text class="amap-quota-v">{{ amapUsageToday }} 次</text>
+              <view class="amap-quota-head">
+                <text class="amap-quota-title">今日用量</text>
+                <text class="amap-quota-big">{{ amapUsageToday }}<text class="amap-quota-unit"> 次</text></text>
               </view>
               <view class="amap-quota-row">
                 <text class="amap-quota-k">高德每日免费额度</text>
@@ -357,10 +358,8 @@
               <text class="amap-quota-link" @click="openAmapQuota">查看实时用量 / 额度明细 ›</text>
             </view>
 
-            <view class="acct-tip acct-tip-warn">
-              填 KEY 后线路走向改用高德官方公交轨迹，通常比免 Key 的 OSRM 贴路更精确；KEY 与高德账号绑定，
-              调用可能按高德规则计费或占用免费配额，费用与额度以高德平台为准。本机计数仅供参考，不代表实际账单。
-              留空则始终走免 Key 方案。
+            <view class="amap-note">
+              填 KEY 后线路走向改用高德官方公交轨迹，通常比免 Key 的 OSRM 贴路更精确；KEY 与高德账号绑定，调用可能按高德规则计费或占用免费配额，费用与额度以高德平台为准。本机计数仅供参考，不代表实际账单。留空则始终走免 Key 方案。
             </view>
           </view>
 
@@ -1494,8 +1493,8 @@ export default {
 /* 分段选择器（有效期 / 刷新 / 皮肤共用）：凹槽底 + 选中靛蓝胶囊 */
 .acct-seg {
   display: flex;
-  gap: 8rpx;
-  padding: 6rpx;
+  gap: 0;
+  padding: 4rpx;
   border-radius: 14rpx;
   background: rgba(255, 255, 255, 0.05);
   border: 2rpx solid rgba(255, 255, 255, 0.08);
@@ -1505,15 +1504,19 @@ export default {
   height: 56rpx;
   line-height: 56rpx;
   text-align: center;
-  border-radius: 10rpx;
+  border-radius: 11rpx;
   font-size: 23rpx;
-  color: rgba(255, 255, 255, 0.6);
+  font-weight: 500;
+  color: rgba(255, 255, 255, 0.5);
   cursor: pointer;
-  transition: background 0.18s, color 0.18s;
+  transition: background 0.18s, color 0.18s, box-shadow 0.18s;
   white-space: nowrap;
 }
+.acct-seg-item:not(:last-child) {
+  margin-right: 4rpx;
+}
 .acct-seg-item:hover {
-  color: rgba(255, 255, 255, 0.85);
+  color: rgba(255, 255, 255, 0.8);
 }
 .acct-seg-item.on {
   color: #fff;
@@ -1529,18 +1532,18 @@ export default {
   gap: 12rpx;
   padding: 14rpx 18rpx;
   border-radius: 14rpx;
-  background: rgba(var(--ac-rgb), 0.1);
-  border: 2rpx solid rgba(var(--ac-rgb), 0.28);
+  background: rgba(255, 255, 255, 0.04);
+  border: 2rpx solid rgba(255, 255, 255, 0.08);
 }
 .amap-apply-txt {
   flex: 1;
   font-size: 21rpx;
   line-height: 1.5;
-  color: rgba(255, 255, 255, 0.78);
+  color: rgba(255, 255, 255, 0.7);
 }
 .amap-apply-link {
   flex: 0 0 auto;
-  font-size: 23rpx;
+  font-size: 22rpx;
   font-weight: 700;
   color: var(--ac-hi);
   cursor: pointer;
@@ -1554,8 +1557,8 @@ export default {
   padding: 0 18rpx;
   height: 72rpx;
   border-radius: 14rpx;
-  background: rgba(255, 255, 255, 0.05);
-  border: 2rpx solid rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.04);
+  border: 2rpx solid rgba(255, 255, 255, 0.08);
 }
 .amap-input {
   flex: 1;
@@ -1567,20 +1570,27 @@ export default {
 .amap-btn-row {
   display: flex;
   gap: 12rpx;
-  margin-top: 14rpx;
+  margin-top: 16rpx;
 }
 .amap-btn {
   flex: 1;
-  height: 64rpx;
-  line-height: 64rpx;
+  height: 60rpx;
+  line-height: 60rpx;
   text-align: center;
   border-radius: 14rpx;
-  font-size: 23rpx;
-  color: rgba(255, 255, 255, 0.75);
-  background: rgba(255, 255, 255, 0.08);
+  font-size: 22rpx;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.7);
+  background: rgba(255, 255, 255, 0.06);
   cursor: pointer;
+  transition: background 0.18s, color 0.18s;
+}
+.amap-btn:not(.primary):hover {
+  background: rgba(255, 255, 255, 0.12);
+  color: #fff;
 }
 .amap-btn.primary {
+  flex: 1.4;
   color: #fff;
   font-weight: 700;
   background: linear-gradient(135deg, var(--ac), var(--ac-hi));
@@ -1588,64 +1598,93 @@ export default {
 }
 /* 合并分区内的小标题 / 分隔 */
 .amap-sub-label {
-  display: flex;
-  align-items: baseline;
-  gap: 12rpx;
   font-size: 23rpx;
   font-weight: 700;
   color: rgba(255, 255, 255, 0.85);
-  margin: 4rpx 0 12rpx;
+  margin: 6rpx 0 8rpx;
 }
 .amap-sub-hint {
+  display: block;
   font-size: 20rpx;
   font-weight: 400;
   color: rgba(var(--ac-rgb), 0.95);
+  margin-bottom: 14rpx;
 }
 .amap-sub-div {
   height: 2rpx;
-  margin: 24rpx 0;
+  margin: 28rpx 0 22rpx;
   background: rgba(255, 255, 255, 0.08);
 }
 /* 每日额度信息卡 */
 .amap-quota {
-  margin-top: 16rpx;
-  padding: 16rpx 18rpx;
-  border-radius: 14rpx;
+  margin-top: 18rpx;
+  padding: 18rpx 20rpx;
+  border-radius: 16rpx;
   background: rgba(255, 255, 255, 0.04);
   border: 2rpx solid rgba(255, 255, 255, 0.08);
+}
+.amap-quota-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  margin-bottom: 12rpx;
+}
+.amap-quota-title {
+  font-size: 21rpx;
+  color: rgba(255, 255, 255, 0.5);
+  letter-spacing: 1rpx;
+}
+.amap-quota-big {
+  font-size: 40rpx;
+  font-weight: 800;
+  color: var(--ac-hi);
+  line-height: 1;
+}
+.amap-quota-unit {
+  font-size: 20rpx;
+  font-weight: 500;
+  color: rgba(255, 255, 255, 0.55);
 }
 .amap-quota-row {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 12rpx;
-  padding: 4rpx 0;
+  padding: 6rpx 0;
 }
 .amap-quota-k {
-  font-size: 22rpx;
-  color: rgba(255, 255, 255, 0.55);
+  font-size: 21rpx;
+  color: rgba(255, 255, 255, 0.5);
 }
 .amap-quota-v {
-  font-size: 24rpx;
-  font-weight: 700;
-  color: var(--ac-hi);
+  font-size: 22rpx;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.7);
 }
 .amap-quota-v.dim {
-  font-size: 21rpx;
+  font-size: 20rpx;
   font-weight: 400;
-  color: rgba(255, 255, 255, 0.5);
+  color: rgba(255, 255, 255, 0.45);
 }
 .amap-quota-link {
   display: block;
-  margin-top: 10rpx;
+  margin-top: 12rpx;
   padding-top: 10rpx;
   border-top: 2rpx solid rgba(255, 255, 255, 0.06);
-  font-size: 21rpx;
+  font-size: 20rpx;
   color: var(--ac-hi);
   cursor: pointer;
 }
-.acct-tip-warn {
-  color: rgba(255, 196, 128, 0.7);
+/* 费用说明：独立卡片，长文更易读 */
+.amap-note {
+  margin-top: 16rpx;
+  padding: 14rpx 18rpx;
+  border-radius: 14rpx;
+  background: rgba(255, 196, 128, 0.06);
+  border: 2rpx solid rgba(255, 196, 128, 0.14);
+  font-size: 20rpx;
+  line-height: 1.6;
+  color: rgba(255, 196, 128, 0.72);
 }
 /* 主题色行：预设色点 + 调色盘（彩虹锥形渐变标识） */
 .ac-row {

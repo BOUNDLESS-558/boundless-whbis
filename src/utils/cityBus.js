@@ -28,6 +28,7 @@
 import { fetchRealTime } from './api.js'
 import { decryptBusId } from './busId.js'
 import { md5 } from './md5.js'
+import { parseBusNo, formatBusNo } from './busNumber.js'
 import { allLines } from './lineIndex.js'
 import { assetUrl } from './asset.js'
 import { APP_CONFIG } from '../config.js'
@@ -409,10 +410,24 @@ export function snapshotAge(snap) {
  * @param {Array} buses 快照里的车辆数组
  */
 export function findBusByOrgId(orgId, buses) {
-  const q = String(orgId == null ? '' : orgId).trim()
+  let q = String(orgId == null ? '' : orgId).trim()
   if (!q || !Array.isArray(buses) || !buses.length) return null
+  // 地图标签显示的是完整编号（含车型字母，如 325F311 / T19H6230），
+  // 快照里 busId=MD5(纯数字)、orgId 为纯数字。先尝试原样，再反查成纯数字。
   const hash = md5(q)
-  return buses.find((b) => b.busId === hash) || buses.find((b) => b.orgId === q) || null
+  let hit = buses.find((b) => b.busId === hash) || buses.find((b) => b.orgId === q)
+  if (hit) return hit
+  const plain = parseBusNo(q)
+  if (plain && plain !== q) {
+    const plainHash = md5(plain)
+    hit = buses.find((b) => b.busId === plainHash) || buses.find((b) => b.orgId === plain)
+  }
+  if (hit) return hit
+  // 最后按「每辆车的显示编号」直配：地图标签就是 formatBusNo(orgId)，
+  // 用户照着标签输入时这条一定命中，不依赖映射表反查是否覆盖该编号
+  const upper = q.toUpperCase()
+  hit = buses.find((b) => b.orgId && formatBusNo(b.orgId).toUpperCase() === upper)
+  return hit || null
 }
 
 /**

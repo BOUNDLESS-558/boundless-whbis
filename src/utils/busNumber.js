@@ -29,6 +29,12 @@ function ensureLoaded() {
         try {
           const body = typeof res.data === 'string' ? JSON.parse(res.data) : res.data
           MAP = (body && body.byNum) || {}
+          // byFull 供完整编号反查纯数字用（键转大写便于大小写无关匹配）
+          if (body && body.byFull && MAP) {
+            const bf = Object.create(null)
+            Object.keys(body.byFull).forEach((k) => { bf[k.toUpperCase()] = body.byFull[k] })
+            MAP.__byFull = bf
+          }
         } catch (e) { MAP = {} }
       },
       fail: () => { MAP = {} },
@@ -57,6 +63,34 @@ export function formatBusNo(orgId) {
   if (!MAP) return String(orgId)
   const list = MAP[String(orgId)]
   return (list && list.length) ? list[0] : String(orgId)
+}
+
+/**
+ * 把完整编号（含车型字母，如 325F311 / T19H6230）反查回纯数字自编号。
+ * 用于「自编号查车」：地图标签显示的是完整编号，而快照里的 busId = MD5(纯数字)。
+ * 只有拿到纯数字才能正向 MD5 命中车辆；映射表未就绪/无映射时返回原输入。
+ * @param {string} full 用户输入的完整编号
+ * @returns {string} 纯数字自编号（找不到则原样返回）
+ */
+export function parseBusNo(full) {
+  if (!full || !MAP) return full
+  const q = String(full).trim()
+  // 已是纯数字直接返回
+  if (/^\d+$/.test(q)) return q
+  // 精确匹配：byNum[纯数字] = [完整编号, ...]
+  const upper = q.toUpperCase()
+  for (const num in MAP) {
+    const list = MAP[num]
+    if (Array.isArray(list) && list.some((s) => typeof s === 'string' && s.toUpperCase() === upper)) return num
+  }
+  // byFull 里也带 num/company/batch，可作为兜底（部分完整编号只在 byFull 里）
+  const fullMap = MAP.__byFull
+  if (fullMap && fullMap[upper]) {
+    const meta = fullMap[upper]
+    const num = String(meta.company || '') + String(meta.batch || '') + String(meta.num || '')
+    if (/^\d+$/.test(num)) return num
+  }
+  return q
 }
 
 /** 映射表就绪回调（用于 UI 二次刷新） */

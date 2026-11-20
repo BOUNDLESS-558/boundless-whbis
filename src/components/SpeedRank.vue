@@ -7,9 +7,11 @@
         <text class="rank-title">🏁 车速榜</text>
         <text class="rank-sub">{{ stampText }} · 全局 {{ total }} 辆</text>
       </view>
-      <view class="rank-head-ops">
-        <view class="rank-mini fold-btn" :class="{ folded: folded }" :title="folded ? '展开' : '折叠'" @click.stop="toggleFold">▾</view>
-        <view class="rank-mini" title="关闭" @click.stop="$emit('close')">✕</view>
+      <view class="rank-head-ops" @click.stop>
+        <!-- 复制榜单：档位（文字 / Excel / 图片）与全站共享，左半按当前档位复制 -->
+        <CopyPill label="复制" :disabled="!hasData" @copy="copyRank" />
+        <view class="rank-mini fold-btn" :class="{ folded: folded }" :title="folded ? '展开' : '折叠'" @click="toggleFold">▾</view>
+        <view class="rank-mini" title="关闭" @click="$emit('close')">✕</view>
       </view>
     </view>
 
@@ -39,32 +41,37 @@
           :class="{ top1: r.rank === 1, top2: r.rank === 2, top3: r.rank === 3 }"
           @click="$emit('pick', r.bus)"
         >
-          <text class="rk-no">{{ r.rank }}</text>
+          <!-- 名次徽章：前三名金银铜实心，其余淡描边 -->
+          <view class="rk-rank">
+            <text class="rk-no">{{ r.rank }}</text>
+          </view>
+          <!-- 主体两行：① 线路 / 方向 / 自编号（车主标识）② 走向 · 公司 · 时刻（次要信息合并） -->
           <view class="rk-main">
             <view class="rk-line1">
-              <text class="rk-line">{{ r.no }} 路</text>
+              <text class="rk-line">{{ r.no }}</text>
+              <text class="rk-line-unit">路</text>
               <text class="rk-dir" :class="'d' + r.dir">{{ r.dir === 0 ? '上行' : '下行' }}</text>
-              <text class="rk-org">{{ r.orgId ? fmtNo(r.orgId) : '编号还原中' }}</text>
+              <text class="rk-org" :title="'自编号 ' + (r.orgId ? fmtNo(r.orgId) : '还原中')">{{ r.orgId ? fmtNo(r.orgId) : '编号还原中' }}</text>
             </view>
-            <!-- 走向：起点站开往终点站（下行已按方向反转） -->
             <view class="rk-line2">
               <text class="rk-route" :title="r.routeText">{{ r.routeText }}</text>
-            </view>
-            <!-- 所属营运公司 + GPS 时刻 -->
-            <view class="rk-line3">
-              <text class="rk-company" :title="r.company">{{ r.company }}</text>
+              <text class="rk-sep">·</text>
+              <text class="rk-company" :title="r.company">{{ shortCompany(r.company) }}</text>
+              <text class="rk-sep">·</text>
               <text class="rk-time">{{ r.time }}</text>
             </view>
           </view>
+          <!-- 速度：榜单主指标，右侧大数字；快慢用左侧细色条表达，数字统一高亮避免满屏红字像报警 -->
           <view class="rk-speed-wrap">
-            <text class="rk-speed" :style="{ color: bandColor(r.band) }">{{ r.speed }}</text>
+            <text class="rk-band" :style="{ background: bandColor(r.band) }"></text>
+            <text class="rk-speed">{{ r.speed }}</text>
             <text class="rk-unit">km/h</text>
             <text class="rk-drift" v-if="r.drift" title="速度异常，疑似 GPS 漂移">⚠</text>
           </view>
         </view>
         <view class="rank-foot">
-          <text>按当前快照的车速从高到低排序，点任意一行查看车辆详情并定位</text>
-          <text v-if="driftCount" class="rank-foot-warn">⚠ {{ driftCount }} 辆疑似 GPS 漂移（&gt;{{ driftSpeed }} km/h），保留在榜仅供参考</text>
+          <text>按当前快照车速从高到低排序 · 点行看详情并定位</text>
+          <text v-if="driftCount" class="rank-foot-warn">⚠ {{ driftCount }} 辆疑似 GPS 漂移（&gt;{{ driftSpeed }} km/h），保留仅供参考</text>
         </view>
       </view>
     </view>
@@ -75,12 +82,15 @@
 import { RANK_LIMITS, DEFAULT_RANK_LIMIT, DRIFT_SPEED, rankBySpeed } from '../utils/speedRank.js'
 import { SPEED_BANDS } from '../utils/cityBus.js'
 import { formatBusNo, onBusNumberReady } from '../utils/busNumber.js'
+import { copyTable } from '../utils/clipboard.js'
+import CopyPill from './CopyPill.vue'
 
 const RANK_LIMIT_KEY = 'whbis:rank-limit'
 const RANK_FOLD_KEY = 'whbis:rank-folded'
 
 export default {
   name: 'SpeedRank',
+  components: { CopyPill },
   props: {
     // 全市快照车辆（已去重）；父组件传入，本组件只读
     buses: { type: Array, default: () => [] },
@@ -147,9 +157,43 @@ export default {
       const b = SPEED_BANDS[band]
       return b ? b.color : '#e2e8f0'
     },
+    // 公司名缩短：武汉公交集团第一公司 → 一公司（title 保留全称），省横向空间
+    shortCompany(c) {
+      const s = String(c || '')
+      const m = s.match(/公交集团第?([一二三四五六七八九\d]+)公司/)
+      if (m) return `${m[1]}公司`
+      return s.replace('武汉公交集团', '') || s
+    },
     fmtNo(orgId) {
       void this.mapVersion // 依赖版本号，映射就绪后重渲染
       return formatBusNo(orgId)
+    },
+    // 复制榜单：档位由 CopyPill 的全站设置决定（文字 / Excel / 图片），数据取自当前 rows
+    copyRank() {
+      if (!this.rows.length) {
+        uni.showToast({ title: '暂无可复制的榜单数据', icon: 'none' })
+        return
+      }
+      const dirName = (d) => (d === 0 ? '上行' : d === 1 ? '下行' : '—')
+      const rows = this.rows.map((r) => [
+        String(r.rank),
+        r.no,
+        dirName(r.dir),
+        r.orgId ? this.fmtNo(r.orgId) : '',
+        String(r.speed),
+        r.from && r.to ? `${r.from} → ${r.to}` : (r.routeText || ''),
+        r.company || '',
+        r.time || '',
+        r.drift ? '疑似漂移' : '',
+      ])
+      copyTable({
+        title: `车速榜 前 ${this.limit} 名 · ${this.stampText} · 全局 ${this.total} 辆`,
+        columns: ['名次', '线路', '方向', '自编号', '车速(km/h)', '走向', '营运公司', 'GPS时刻', '备注'],
+        rows,
+        toast: `已复制车速榜前 ${this.limit} 名`,
+        imageToast: `已复制车速榜前 ${this.limit} 名为图片`,
+        excelToast: `已复制车速榜前 ${this.limit} 名为 Excel 表格`,
+      })
     },
   },
 }
@@ -175,7 +219,7 @@ export default {
   border: 2rpx solid rgba(255, 255, 255, 0.16);
   border-radius: 28rpx;
   box-shadow: 0 24rpx 64rpx rgba(0, 0, 0, 0.48);
-  overflow: hidden;
+  /* 不用 overflow:hidden：头部复制胶囊的下拉要能溢出显示；列表自身已裁剪滚动 */
 }
 /* 折叠后只剩标题一条，不再留大片空壳 */
 .rank-card.folded {
@@ -214,6 +258,7 @@ export default {
 .rank-head-ops {
   flex: 0 0 auto;
   display: flex;
+  align-items: center;
   gap: 8rpx;
 }
 .rank-mini {
@@ -296,42 +341,62 @@ export default {
   display: flex;
   align-items: center;
   gap: 14rpx;
-  /* 三行信息（线路 / 走向 / 公司+时间），略收紧纵向留白保持一屏能看多行 */
-  padding: 11rpx 12rpx;
+  padding: 12rpx 12rpx;
   border-bottom: 2rpx solid rgba(255, 255, 255, 0.06);
   border-radius: 12rpx;
   cursor: pointer;
   transition: background 0.15s;
 }
 .rank-row:hover { background: rgba(255, 255, 255, 0.07); }
-.rk-no {
-  flex: 0 0 46rpx;
-  text-align: center;
-  font-size: 26rpx;
-  font-weight: 800;
-  color: rgba(255, 255, 255, 0.4);
+/* 名次徽章：40rpx 圆角方块，前三名金银铜实心，其余冷灰描边 */
+.rk-rank {
+  flex: 0 0 40rpx;
+  width: 40rpx;
+  height: 40rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 12rpx;
+  background: rgba(255, 255, 255, 0.05);
+  border: 2rpx solid rgba(255, 255, 255, 0.1);
 }
-.rank-row.top1 .rk-no { color: #fcd34d; font-size: 30rpx; }
+.rk-no {
+  font-size: 24rpx;
+  font-weight: 800;
+  color: rgba(255, 255, 255, 0.5);
+  font-variant-numeric: tabular-nums;
+}
+.rank-row.top1 .rk-rank { background: rgba(252, 211, 77, 0.18); border-color: rgba(252, 211, 77, 0.5); }
+.rank-row.top1 .rk-no { color: #fcd34d; font-size: 27rpx; }
+.rank-row.top2 .rk-rank { background: rgba(226, 232, 240, 0.14); border-color: rgba(226, 232, 240, 0.4); }
 .rank-row.top2 .rk-no { color: #e2e8f0; }
+.rank-row.top3 .rk-rank { background: rgba(253, 186, 116, 0.16); border-color: rgba(253, 186, 116, 0.45); }
 .rank-row.top3 .rk-no { color: #fdba74; }
 .rk-main {
   flex: 1 1 auto;
   min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: 6rpx;
+  gap: 8rpx;
 }
 .rk-line1 {
   display: flex;
   align-items: center;
-  gap: 10rpx;
+  gap: 8rpx;
   min-width: 0;
 }
+/* 线路号为主：去掉「路」字挤压，数字更大更白；「路」作小字后缀 */
 .rk-line {
-  font-size: 25rpx;
-  font-weight: 700;
+  font-size: 27rpx;
+  font-weight: 800;
+  line-height: 1;
   color: #fff;
   white-space: nowrap;
+}
+.rk-line-unit {
+  font-size: 18rpx;
+  color: rgba(255, 255, 255, 0.4);
+  margin-left: -4rpx;
 }
 .rk-dir {
   flex: 0 0 auto;
@@ -346,13 +411,19 @@ export default {
   overflow: hidden;
   white-space: nowrap;
   text-overflow: ellipsis;
-  font-size: 20rpx;
+  font-size: 19rpx;
+  font-weight: 600;
   color: #fcd34d;
+  padding-left: 8rpx;
+  border-left: 2rpx solid rgba(255, 255, 255, 0.1);
 }
-/* 走向：站名往往很长，整行单行省略，完整内容放 title */
+/* 次行：走向（弹性省略）· 公司简称 · 时刻，整行单行。完整走向放 title */
 .rk-line2 {
   display: flex;
+  align-items: center;
+  gap: 8rpx;
   min-width: 0;
+  font-size: 18rpx;
 }
 .rk-route {
   flex: 1 1 auto;
@@ -360,37 +431,38 @@ export default {
   overflow: hidden;
   white-space: nowrap;
   text-overflow: ellipsis;
-  font-size: 19rpx;
-  color: rgba(255, 255, 255, 0.62);
+  color: rgba(255, 255, 255, 0.58);
 }
-/* 营运公司 + GPS 时刻：公司用冷灰，与自编号的琥珀区分开，避免一行三种亮色 */
-.rk-line3 {
-  display: flex;
-  align-items: center;
-  gap: 12rpx;
-  min-width: 0;
-  font-size: 18rpx;
-}
+.rk-sep { flex: 0 0 auto; color: rgba(255, 255, 255, 0.22); }
 .rk-company {
-  flex: 1 1 auto;
-  min-width: 0;
-  overflow: hidden;
+  flex: 0 0 auto;
+  color: rgba(255, 255, 255, 0.38);
   white-space: nowrap;
-  text-overflow: ellipsis;
-  color: rgba(255, 255, 255, 0.4);
 }
-.rk-time { flex: 0 0 auto; color: rgba(255, 255, 255, 0.36); }
+.rk-time { flex: 0 0 auto; color: rgba(255, 255, 255, 0.32); font-variant-numeric: tabular-nums; }
 .rk-speed-wrap {
   flex: 0 0 auto;
   display: flex;
-  align-items: baseline;
-  gap: 4rpx;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 6rpx;
+}
+/* 快慢用细色条表达（沿地图分档色），数字统一主题高亮：避免榜单顶部一片红字像报警 */
+.rk-band {
+  flex: 0 0 auto;
+  width: 6rpx;
+  height: 34rpx;
+  border-radius: 3rpx;
+  opacity: 0.9;
 }
 .rk-speed {
-  font-size: 36rpx;
+  font-size: 38rpx;
   font-weight: 800;
   line-height: 1;
+  color: var(--ac-hi);
   font-variant-numeric: tabular-nums;
+  min-width: 60rpx;
+  text-align: right;
 }
 .rk-unit { font-size: 18rpx; color: rgba(255, 255, 255, 0.45); }
 .rk-drift { font-size: 18rpx; margin-left: 4rpx; }

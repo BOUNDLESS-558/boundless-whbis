@@ -260,17 +260,11 @@
         </view>
       </view>
 
-      <!-- ④ 视图工具：缩放 / 全览 / 站名 两种模式通用（原生地图下分别调 scale、自适应、切 marker 站名）；
-           「底图」只切自绘模式的高德瓦片层，原生 <map> 底图无法隐藏，故仅自绘模式显示 -->
-      <view class="ctrl-div"></view>
-      <view class="ctrl-view">
-        <view class="tool-btn sq" @click="zoomBy(0.6)" title="放大">＋</view>
-        <view class="tool-btn sq" @click="zoomBy(-0.6)" title="缩小">－</view>
-        <view class="tool-btn sm" @click="resetView" :title="cityOn ? '全览全市在运车辆' : '全览整条线路'">⤢ 全览</view>
-        <view class="tool-btn sm" :class="{ on: showStopLabels }" @click="toggleLabels">站名</view>
-        <view class="tool-btn sm" v-if="!useMap" :class="{ on: showBaseMap }" @click="toggleBaseMap">底图</view>
-      </view>
-      <view class="view-alert" v-if="routeAlert && !cityOn">{{ routeAlert }}</view>
+      <!-- ④ 走向提示：线路态计算中/失败时挂在方向行下方。
+           视图工具（缩放/全览/站名/底图）已统一移到地图右下角浮动条，不再占控制卡 -->
+      <template v-if="!cityOn">
+        <view class="view-alert" v-if="routeAlert">{{ routeAlert }}</view>
+      </template>
 
       <!-- 全市公交区：指标区（数字重 / 标签轻）+ 次操作键行。
            线路号与自编号通查不在这里：顶栏搜索是全站唯一查询入口，全市态下查询=就地
@@ -306,10 +300,11 @@
           <view class="cc-bar" v-if="cityBusy"><view class="cc-bar-in" :style="{ width: cityProgress + '%' }"></view></view>
         </view>
         <view class="ctrl-city-row">
-          <view class="cc-btn ghost" v-if="!cityBusy" :title="'重新拉取全网（约 ' + cityCost + ' 个请求）'" @click="runCity(true)">↻ 重扫</view>
-          <view class="cc-btn ghost" v-else title="中止本轮拉取（保留已扫到的部分结果）" @click="cancelCity">✕ 中止</view>
-          <view class="cc-btn ghost" :class="{ on: cityFollow > 0 }" :title="cityFollowTitle" @click="cycleCityFollow">{{ cityFollowLabel }}</view>
-          <view class="cc-btn ghost" :class="{ on: cityShowOrgId }" title="近景给每辆车标出自编号" @click="toggleCityTags">自编号</view>
+          <view class="cc-btn" v-if="!cityBusy" :title="'重新拉取全网（约 ' + cityCost + ' 个请求）'" @click="runCity(true)">↻ 重扫</view>
+          <view class="cc-btn" v-else title="中止本轮拉取（保留已扫到的部分结果）" @click="cancelCity">✕ 中止</view>
+          <view class="cc-btn" :class="{ on: cityFollow > 0 }" :title="cityFollowTitle" @click="cycleCityFollow">{{ cityFollowLabel }}</view>
+          <view class="cc-btn" :class="{ on: cityShowOrgId }" title="近景给每辆车标出编号标签" @click="toggleCityTags">编号标签</view>
+          <view class="cc-btn ghost" :class="{ on: orgSearchOpen }" title="按车辆自编号在全市快照里查车并定位（本地反查，不发请求）" @click="toggleOrgSearch">🔍 查车</view>
           <view class="cc-btn ghost" :class="{ on: rankOpen }" title="按车速从高到低列出全局在运车辆（纯本地排序，不发请求）" @click="toggleRank">🏁 车速榜</view>
         </view>
       </block>
@@ -337,6 +332,53 @@
       @fold="onRankFold"
       @close="closeRank"
     />
+
+    <!-- 视图工具：缩放 / 全览 / 站名 / 底图，两种模式通用。从控制卡移到地图右下角浮动条，
+         让控制卡专注承载信息与数据操作（原方案把 10 个按钮堆成两排，杂乱且易溢出） -->
+    <view class="view-tools-float">
+      <view class="vt-btn" @click="zoomBy(0.6)" title="放大">＋</view>
+      <view class="vt-btn" @click="zoomBy(-0.6)" title="缩小">－</view>
+      <view class="vt-sep"></view>
+      <view class="vt-btn wide" @click="resetView" :title="cityOn ? '全览全市在运车辆' : '全览整条线路'">全览</view>
+      <view class="vt-btn wide" :class="{ on: showStopLabels }" @click="toggleLabels" title="显示/隐藏站名">站名</view>
+      <view class="vt-btn wide" v-if="!useMap" :class="{ on: showBaseMap }" @click="toggleBaseMap" title="显示/隐藏底图">底图</view>
+    </view>
+
+    <!-- 自编号查车：全市快照本地反查（自编号 → MD5 正算 busId），与车速榜互斥同占右上。
+         不另发请求；命中即选中车辆详情并在地图上定位，未命中给出明确提示 -->
+    <view class="org-search" v-if="cityOn && orgSearchOpen">
+      <view class="os-head">
+        <text class="os-title">🔍 自编号查车</text>
+        <view class="os-close" @click="closeOrgSearch" title="关闭">✕</view>
+      </view>
+      <view class="os-body">
+        <view class="os-input-row">
+          <input
+            class="os-input"
+            v-model="orgSearchInput"
+            type="text"
+            placeholder="输入车辆自编号，如 3240 / 325F311"
+            confirm-type="search"
+            @confirm="doOrgSearch"
+          />
+          <view class="os-go" @click="doOrgSearch">查车</view>
+        </view>
+        <view class="os-tip">基于当前全市快照（{{ cityBuses.length }} 辆）本地查找，不额外发请求；收班车不在快照内</view>
+        <view class="os-result" v-if="orgSearchHit" @click="onOrgHitPick">
+          <view class="osr-line">
+            <text class="osr-no">{{ orgSearchHit.no }} 路</text>
+            <text class="osr-dir" :class="'d' + orgSearchHit.dir">{{ orgSearchHit.dir === 0 ? '上行' : '下行' }}</text>
+            <text class="osr-org">{{ orgSearchHit.orgId ? fmtNo(orgSearchHit.orgId) : '—' }}</text>
+          </view>
+          <view class="osr-route">{{ orgSearchHit.routeText || (orgSearchHit.startName + ' → ' + orgSearchHit.endName) }}</view>
+          <view class="osr-meta">
+            <text>{{ orgSearchHit.speed != null ? orgSearchHit.speed + ' km/h' : '速度未知' }}</text>
+            <text class="osr-locate">点此定位 ›</text>
+          </view>
+        </view>
+        <view class="os-miss" v-else-if="orgSearchMsg">{{ orgSearchMsg }}</view>
+      </view>
+    </view>
 
     <!-- 右侧栏：实时车辆面板在上，发车时刻表面板独立挂在它下方（两张卡各自成块，不共用一个面板壳）。
          全市态整栏隐藏：这里的内容属于「当前这一条线」，与全市分布不是一个作用域，且要把画面让给车点 -->
@@ -865,6 +907,11 @@ export default {
       })(),
       // 榜单是否折叠（由 SpeedRank 抛回）：折叠后只剩标题一条，不该继续占用右侧绘制区
       rankFolded: false,
+      // 自编号查车浮窗：基于已扫到的全市快照本地反查，与车速榜互斥（同占右上绘制区）
+      orgSearchOpen: false,
+      orgSearchInput: '',
+      orgSearchHit: null,
+      orgSearchMsg: '',
       // 按线路号筛选（缩小到某条线的车，不重新请求）
       cityFilterNo: '',
       // 自动跟随间隔（分钟，0=手动）
@@ -1324,6 +1371,10 @@ export default {
     // 榜单浮窗出现/收起会改变右侧可绘制区，重新量一次占位
     rankOpen() {
       if (!this.rankOpen) this.rankFolded = false
+      this.$nextTick(() => this.measureUi())
+    },
+    // 自编号查车浮窗出现/收起同样改变右侧可绘制区，重新量占位
+    orgSearchOpen() {
       this.$nextTick(() => this.measureUi())
     },
     // 全市公交视图：宿主顶部分段是唯一入口，本组件不再自带开关
@@ -2718,9 +2769,28 @@ export default {
         if (!el) return
         // 节点已挂手柄时只需再校正一次高度：单线路/全市切换后内容变高，
         // 记忆里较小的旧高度要把卡片撑到内容高，否则底部按钮会溢到卡片外
-        if (el.__rs) { if (el.__rs.refit) el.__rs.refit(); return }
-        el.__rs = createResizable(el, sp.opts)
-        ;(this._resizers || (this._resizers = [])).push(el.__rs)
+        if (el.__rs) {
+          if (el.__rs.refit) el.__rs.refit()
+        } else {
+          el.__rs = createResizable(el, sp.opts)
+          ;(this._resizers || (this._resizers = [])).push(el.__rs)
+        }
+        // 控制卡内容会随全市按钮换行 / 筛选芯片 / 进度条动态变高。
+        // 固定 height + clip:false 时这些变化不会自动撑开卡片，底部按钮会溢出到卡外；
+        // 用 ResizeObserver 盯住内容区，高度一变就 refit（refit 只放大不缩小，不影响用户手动调高）。
+        // 每次 setup 都重新绑定：全市节点是 v-if 动态出现/消失的，旧观察目标会被卸载。
+        if (sp.sel === '.ctrl' && typeof ResizeObserver !== 'undefined') {
+          const targets = [el.querySelector('.ctrl-city'), el.querySelector('.ctrl-city-row')].filter(Boolean)
+          const sig = targets.map((n) => n.className).join('|')
+          // 目标集合变了（切换全市态）才重建 observer，避免重复触发
+          if (el.__roSig !== sig) {
+            if (el.__ro) el.__ro.disconnect()
+            const ro = new ResizeObserver(() => { if (el.__rs && el.__rs.refit) el.__rs.refit() })
+            targets.forEach((n) => ro.observe(n))
+            el.__ro = ro
+            el.__roSig = sig
+          }
+        }
       })
     },
     // 量取控制卡 / 右侧栏（车辆面板 + 时刻表面板）/ 图例实际占位（此项目样式用 rpx，不能用固定 px 推算）
@@ -3430,6 +3500,57 @@ export default {
       }
       this.selectBus(bus)
       this.focusBus(bus)
+    },
+
+    // —— 自编号查车（基于全市快照本地反查，零请求）——
+    toggleOrgSearch() {
+      // 与车速榜互斥：两者同占右上绘制区，避免叠在一起
+      if (!this.orgSearchOpen) this.rankOpen = false
+      this.orgSearchOpen = !this.orgSearchOpen
+      this.$nextTick(() => this.measureUi())
+    },
+    closeOrgSearch() {
+      this.orgSearchOpen = false
+      this.$nextTick(() => this.measureUi())
+    },
+    doOrgSearch() {
+      const q = String(this.orgSearchInput || '').trim()
+      if (!q) {
+        this.orgSearchHit = null
+        this.orgSearchMsg = '请输入车辆自编号'
+        return
+      }
+      if (!this.cityBuses.length) {
+        this.orgSearchHit = null
+        this.orgSearchMsg = '当前没有全市快照，请先在控制卡点「↻ 重扫」'
+        return
+      }
+      const bus = findBusByOrgId(q, this.cityBuses)
+      if (!bus) {
+        this.orgSearchHit = null
+        this.orgSearchMsg = `快照（${this.cityBuses.length} 辆）里没有找到「${q}」；收班车或超过快照时段的车辆不在其中`
+        return
+      }
+      const rt = routeOf(bus.no, bus.dir)
+      this.orgSearchMsg = ''
+      // 展示用的轻量对象：复用车速榜同一套走向/公司口径
+      this.orgSearchHit = {
+        ...bus,
+        routeText: rt.known ? rt.text : (bus.lineName || '走向未知'),
+        company: orgCompanyOf(bus),
+      }
+    },
+    // 点命中卡片：详情窗 + 精确定位；为避免筛选把目标藏起来，先清掉线路筛选
+    onOrgHitPick() {
+      const bus = this.orgSearchHit
+      if (!bus) return
+      if (this.cityFilterNo) {
+        this.cityFilterNo = ''
+        this.cityHitLine = null
+      }
+      this.selectBus(bus)
+      this.focusBus(bus)
+      this.closeOrgSearch()
     },
     // 选中站点：弹出站点详情窗，并异步匹配可换乘线路（两窗互斥，同时只显示一扇）
     selectStop(stop) {
@@ -4845,64 +4966,6 @@ export default {
   font-size: 26rpx;
   padding: 40rpx 0;
 }
-/* 视图工具行按钮：次操作（浅底）统一高度与圆角 */
-.tool-btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  height: 60rpx;
-  padding: 0 22rpx;
-  box-sizing: border-box;
-  font-size: 22rpx;
-  line-height: 1;
-  white-space: nowrap;
-  color: rgba(255, 255, 255, 0.86);
-  background: rgba(255, 255, 255, 0.07);
-  border: 2rpx solid rgba(255, 255, 255, 0.1);
-  border-radius: 14rpx;
-  cursor: pointer;
-  transition: background 0.18s, border-color 0.18s, transform 0.12s;
-}
-.tool-btn:hover {
-  background: rgba(255, 255, 255, 0.14);
-  border-color: rgba(255, 255, 255, 0.2);
-}
-.tool-btn:active {
-  transform: scale(0.97);
-}
-.tool-btn.busy {
-  opacity: 0.65;
-  pointer-events: none;
-}
-/* 视图工具行（挂在方向行下方）：方形缩放键 + 三个标签键，高度统一 56rpx */
-.ctrl-view {
-  display: flex;
-  align-items: center;
-  gap: 10rpx;
-  flex-wrap: wrap;
-}
-.tool-btn.sq {
-  flex: 0 0 auto;
-  width: 56rpx;
-  height: 56rpx;
-  padding: 0;
-  font-size: 26rpx;
-}
-.tool-btn.sm {
-  flex: 0 0 auto;
-  height: 56rpx;
-  padding: 0 20rpx;
-  font-size: 21rpx;
-}
-/* 已开启（站名 / 底图）：统一用靛蓝——青蓝已被征用为上行色，不能再当普通开关色用 */
-.tool-btn.on {
-  color: var(--ac-text);
-  background: rgba(var(--ac-rgb), 0.22);
-  border-color: rgba(var(--ac-rgb), 0.55);
-}
-.tool-btn.on:hover {
-  background: rgba(var(--ac-rgb), 0.32);
-}
 /* 走向尚未贴路（计算中/失败）的提示，避免把站间直连当成真实走向 */
 .view-alert {
   align-self: flex-start;
@@ -5482,7 +5545,10 @@ export default {
   display: flex;
   flex-direction: column;
   gap: 8rpx;
-  padding: 2rpx 10rpx 0;
+  padding: 14rpx 16rpx;
+  border-radius: 16rpx;
+  background: rgba(255, 255, 255, 0.035);
+  border: 2rpx solid rgba(255, 255, 255, 0.06);
 }
 /* 指标组：数字重、标签轻，靠字号与透明度分层；格子之间一条极淡竖线断开，不各自套背景 */
 .cc-figs {
@@ -5586,15 +5652,60 @@ export default {
   background: linear-gradient(90deg, var(--ac), var(--ac-2));
   transition: width 0.25s ease-out;
 }
-/* 全市次操作键行（重扫 / 自动跟随 / 自编号），窄屏允许换行 */
+/* 全市数据操作行：只留扫描 / 跟随 / 编号标签 / 查车 / 车速榜，视图工具已移到右下浮动条。
+   与上方信息区之间一条极淡分隔线 */
 .ctrl-city-row {
   display: flex;
   align-items: center;
-  gap: 10rpx;
+  gap: 8rpx;
   flex-wrap: wrap;
-  padding: 0 4rpx 2rpx;
+  margin-top: 12rpx;
+  padding: 12rpx 4rpx 2rpx;
+  border-top: 2rpx solid rgba(255, 255, 255, 0.07);
 }
-/* 与视图工具行的 .tool-btn.sm 同尺寸，保持卡片内动作键一致 */
+/* 视图工具浮动条：贴地图右下角，两种模式共用，控制卡不再堆按钮 */
+.view-tools-float {
+  position: absolute;
+  right: 24rpx;
+  bottom: 24rpx;
+  z-index: 12;
+  display: flex;
+  align-items: center;
+  gap: 6rpx;
+  padding: 8rpx;
+  border-radius: 18rpx;
+  background: rgba(11, 16, 32, 0.78);
+  backdrop-filter: blur(20px) saturate(160%);
+  -webkit-backdrop-filter: blur(20px) saturate(160%);
+  border: 2rpx solid rgba(255, 255, 255, 0.12);
+  box-shadow: 0 12rpx 32rpx rgba(0, 0, 0, 0.38);
+}
+.vt-btn {
+  min-width: 56rpx;
+  height: 56rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 12rpx;
+  box-sizing: border-box;
+  border-radius: 12rpx;
+  font-size: 26rpx;
+  color: rgba(255, 255, 255, 0.8);
+  background: rgba(255, 255, 255, 0.06);
+  cursor: pointer;
+  transition: background 0.16s, color 0.16s;
+}
+.vt-btn.wide { font-size: 21rpx; white-space: nowrap; }
+.vt-btn:hover { background: rgba(255, 255, 255, 0.14); color: #fff; }
+.vt-btn.on { color: var(--ac-text); background: rgba(var(--ac-rgb), 0.28); }
+.vt-sep {
+  flex: 0 0 auto;
+  width: 2rpx;
+  height: 28rpx;
+  margin: 0 2rpx;
+  background: rgba(255, 255, 255, 0.14);
+}
+/* 数据操作键尺寸 */
 .cc-btn {
   flex: 0 0 auto;
   display: inline-flex;
@@ -5628,6 +5739,128 @@ export default {
   color: var(--ac-text);
   background: rgba(var(--ac-rgb), 0.22);
   border-color: rgba(var(--ac-rgb), 0.55);
+}
+/* 自编号查车浮窗：与车速榜同处右上，玻璃浮窗语言一致 */
+.org-search {
+  position: absolute;
+  top: 24rpx;
+  right: 24rpx;
+  width: 720rpx;
+  max-width: calc(100vw - 48rpx);
+  z-index: 23;
+  box-sizing: border-box;
+  border-radius: 28rpx;
+  background: rgba(11, 16, 32, 0.9);
+  backdrop-filter: blur(30px) saturate(180%);
+  -webkit-backdrop-filter: blur(30px) saturate(180%);
+  border: 2rpx solid rgba(255, 255, 255, 0.16);
+  box-shadow: 0 24rpx 64rpx rgba(0, 0, 0, 0.48);
+  overflow: hidden;
+}
+.os-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12rpx;
+  padding: 20rpx 24rpx 16rpx;
+  border-bottom: 2rpx solid rgba(255, 255, 255, 0.1);
+}
+.os-title { font-size: 27rpx; font-weight: 800; color: #fff; }
+.os-close {
+  min-width: 44rpx;
+  height: 44rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 12rpx;
+  font-size: 24rpx;
+  color: rgba(255, 255, 255, 0.66);
+  background: rgba(255, 255, 255, 0.07);
+  cursor: pointer;
+}
+.os-close:hover { color: #fff; background: rgba(var(--ac-rgb), 0.24); }
+.os-body { padding: 20rpx 24rpx 24rpx; }
+.os-input-row {
+  display: flex;
+  gap: 12rpx;
+}
+.os-input {
+  flex: 1;
+  min-width: 0;
+  height: 72rpx;
+  padding: 0 20rpx;
+  box-sizing: border-box;
+  border-radius: 14rpx;
+  font-size: 23rpx;
+  color: #fff;
+  background: rgba(255, 255, 255, 0.05);
+  border: 2rpx solid rgba(255, 255, 255, 0.1);
+}
+.os-go {
+  flex: 0 0 auto;
+  min-width: 120rpx;
+  height: 72rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 14rpx;
+  font-size: 23rpx;
+  font-weight: 700;
+  color: #fff;
+  background: linear-gradient(135deg, var(--ac), var(--ac-hi));
+  cursor: pointer;
+}
+.os-tip {
+  margin-top: 14rpx;
+  font-size: 19rpx;
+  line-height: 1.6;
+  color: rgba(255, 255, 255, 0.42);
+}
+.os-result {
+  margin-top: 18rpx;
+  padding: 18rpx 20rpx;
+  border-radius: 16rpx;
+  background: rgba(var(--ac-rgb), 0.1);
+  border: 2rpx solid rgba(var(--ac-rgb), 0.35);
+  cursor: pointer;
+  transition: background 0.18s;
+}
+.os-result:hover { background: rgba(var(--ac-rgb), 0.18); }
+.osr-line {
+  display: flex;
+  align-items: center;
+  gap: 10rpx;
+  min-width: 0;
+}
+.osr-no { font-size: 27rpx; font-weight: 800; color: #fff; white-space: nowrap; }
+.osr-dir { padding: 1rpx 9rpx; border-radius: 7rpx; font-size: 18rpx; }
+.osr-dir.d0 { color: #67e8f9; background: rgba(6, 182, 212, 0.18); }
+.osr-dir.d1 { color: #fda4af; background: rgba(225, 29, 72, 0.18); }
+.osr-org { font-size: 20rpx; font-weight: 600; color: #fcd34d; white-space: nowrap; }
+.osr-route {
+  margin-top: 10rpx;
+  font-size: 20rpx;
+  line-height: 1.5;
+  color: rgba(255, 255, 255, 0.66);
+}
+.osr-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 10rpx;
+  font-size: 19rpx;
+  color: rgba(255, 255, 255, 0.5);
+}
+.osr-locate { color: var(--ac-hi); font-weight: 600; }
+.os-miss {
+  margin-top: 18rpx;
+  padding: 16rpx 18rpx;
+  border-radius: 14rpx;
+  background: rgba(255, 196, 128, 0.06);
+  border: 2rpx solid rgba(255, 196, 128, 0.16);
+  font-size: 20rpx;
+  line-height: 1.6;
+  color: rgba(255, 196, 128, 0.8);
 }
 /* 车速图例：贴左下角，与线路态的走向图例互斥（同样进 fitRect 的可绘制区计算） */
 .city-legend {
