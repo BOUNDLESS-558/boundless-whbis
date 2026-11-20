@@ -456,10 +456,15 @@
                 <view class="bus-left">
                   <!-- ★ 自编号（由 MD5 加密值还原，补全车型字母，如 325F311） -->
                   <view class="bus-org">{{ bus.orgId ? fmtNo(bus.orgId) : '未知' }}</view>
+                  <!-- 所在站点：K-d Tree 最近一站，与复制/Tooltip 同口径；MD5 沉底作备查 -->
+                  <view class="bus-stop">📍 {{ nearStopOf(bus) }}</view>
                   <view class="bus-hash">{{ bus.busNo }}</view>
                 </view>
                 <view class="bus-right">
-                  <view class="bus-speed">⚡ {{ bus.gpsSpeed }} km/h</view>
+                  <view class="bus-speed">
+                    <text class="bus-state" :class="busStateCls(bus)">{{ busStateText(bus) }}</text>
+                    <text class="bus-kmh">{{ bus.gpsSpeed }} km/h</text>
+                  </view>
                   <view class="bus-time">🕐 {{ bus.time }}</view>
                 </view>
               </view>
@@ -472,7 +477,8 @@
       <!-- 发车时刻表面板（原独立整屏视图移到这里）：上行与下行同屏各一组，不随控制卡视角二选一；
            自带折叠键（与车辆面板同一枚圆键），两张卡各自成块、各折各的 -->
       <view class="plan-side" v-if="lineNo">
-        <LinePlan :line-no="lineNo" />
+        <!-- 传在线车辆标识：发车时刻据此判断班次是否已实际发出，消除过点残留的「待发」 -->
+        <LinePlan :line-no="lineNo" :online-bus-keys="onlineBusKeys" />
       </view>
     </view>
 
@@ -1039,6 +1045,18 @@ export default {
     // 未设置时按有无 Key 自动选择（保持旧行为）
     useMap() {
       return useNativeMap()
+    },
+    // 当前在线车辆的身份标识集合（busId MD5 + 还原的纯数字自编号），传给发车时刻面板：
+    // 班次若能在此集合命中，说明车已实际在线运行（可能提前发出），不再标「待发」。
+    onlineBusKeys() {
+      const keys = []
+      for (const d of [0, 1]) {
+        for (const b of (this.busesByDir[d] || [])) {
+          if (b.busId) keys.push(b.busId)
+          if (b.orgId) keys.push(b.orgId)
+        }
+      }
+      return keys
     },
     // 当前视角方向下的车辆列表（元素含 dir 字段 0/1）
     shownBuses() {
@@ -4058,6 +4076,11 @@ export default {
     busStateText(bus) {
       return busStateOf(bus)
     },
+    // 运行状态配色：到站=绿 / 行驶=青 / 停靠=琥珀，与详情窗文案同口径
+    busStateCls(bus) {
+      if (bus.arrived === '1') return 'arrived'
+      return parseFloat(bus.gpsSpeed) > 0 ? 'moving' : 'stopped'
+    },
     // 车辆所处站点名（与该方向站点序列最近的一站，K-d Tree O(log N)）。
     // 只返回站名这一个值：复制表格的「所在站点」单元格直接用它，不含坐标/换行，避免破坏 TSV/图片表格。
     nearStopOf(b) {
@@ -5022,12 +5045,13 @@ export default {
   align-items: center;
   justify-content: space-between;
   border-top: 2rpx solid rgba(255, 255, 255, 0.08);
-  padding: 22rpx 0;
+  padding: 16rpx 0;
 }
 .bus-left {
   display: flex;
   flex-direction: column;
   min-width: 0;
+  flex: 1 1 auto;
 }
 .bus-org {
   font-size: 34rpx;
@@ -5035,10 +5059,19 @@ export default {
   color: var(--ac-hi);
   font-variant-numeric: tabular-nums;
 }
+/* 所在站点：介于自编号与 MD5 之间的次要信息，青灰醒目但不抢主色 */
+.bus-stop {
+  font-size: 21rpx;
+  color: rgba(255, 255, 255, 0.62);
+  margin-top: 3rpx;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 .bus-hash {
-  font-size: 19rpx;
-  color: rgba(255, 255, 255, 0.35);
-  margin-top: 4rpx;
+  font-size: 18rpx;
+  color: rgba(255, 255, 255, 0.3);
+  margin-top: 3rpx;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -5050,10 +5083,28 @@ export default {
   margin-left: 16rpx;
 }
 .bus-speed {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8rpx;
   color: #67e8f9;
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
+.bus-kmh { white-space: nowrap; }
+/* 运行状态徽标：到站绿 / 行驶青 / 停靠琥珀，字号小于速度，不抢主信息 */
+.bus-state {
+  padding: 1rpx 10rpx;
+  border-radius: 8rpx;
+  font-size: 19rpx;
+  line-height: 1.5;
+  font-weight: 700;
+  background: rgba(255, 255, 255, 0.08);
+  color: rgba(255, 255, 255, 0.7);
+}
+.bus-state.arrived { color: #6ee7b7; background: rgba(16, 185, 129, 0.16); }
+.bus-state.moving { color: #67e8f9; background: rgba(6, 182, 212, 0.16); }
+.bus-state.stopped { color: #fcd34d; background: rgba(245, 158, 11, 0.14); }
 .bus-time {
   margin-top: 6rpx;
   color: rgba(255, 255, 255, 0.55);

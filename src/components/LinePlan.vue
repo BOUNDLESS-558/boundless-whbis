@@ -25,10 +25,14 @@
           <text class="pg-count">{{ g.plans.length }} 班</text>
         </view>
 
-        <view class="plan-row" v-for="(p, i) in g.plans" :key="p.busId || i">
+        <view class="plan-row" v-for="(p, i) in g.plans" :key="p.busId || i" :title="planTip(p, g)">
           <!-- 左：车辆自编号（沿用车辆面板 .bus-org 字体：主色 800 等宽数字，无图标无胶囊）；右：发车时间 -->
           <text class="plan-org" v-if="p.bus">{{ fmtNo(p.bus) }}</text>
-          <text class="plan-time">{{ p.planStartTime || '--' }}</text>
+          <view class="plan-time-wrap">
+            <text class="plan-badge departed" v-if="planStatus(p) === 'departed'">已发</text>
+            <text class="plan-badge pending" v-else-if="planStatus(p) === 'pending'">待发</text>
+            <text class="plan-time">{{ p.planStartTime || '--' }}</text>
+          </view>
         </view>
 
         <view class="plan-empty" v-if="!g.plans.length">
@@ -46,6 +50,7 @@ import { buildLineCode } from '../config.js'
 import { isLoopLine } from '../utils/lineIndex.js'
 import { copyTable } from '../utils/clipboard.js'
 import { formatBusNo, onBusNumberReady } from '../utils/busNumber.js'
+import { orgCompanyOf } from '../utils/speedRank.js'
 import CopyPill from './CopyPill.vue'
 
 // 方向常量：0 上行 / 1 下行（两方向同屏，顺序与地图控制卡一致）
@@ -56,6 +61,8 @@ export default {
   components: { CopyPill },
   props: {
     lineNo: { type: String, default: '' },
+    // 当前在线车辆标识（busId MD5 + 纯数字自编号），用于判定班次是否已实际发出
+    onlineBusKeys: { type: Array, default: () => [] },
   },
   data() {
     return {
@@ -65,6 +72,9 @@ export default {
       // 双方向各存一份：/detailPlanTime 按方向（lineId 末位 0|1）分别拉
       plansByDir: { 0: [], 1: [] },
       loading: false,
+      // 已发出班次的持久记录：key=班次 id（busId 优先，退化用 bus|时间），value=true。
+      // 一旦车在线命中就记下，到终点下线后不再复活；换线路时清空。
+      departedIds: {},
       // 折叠只收班次列表，标题行常驻（与实时车辆面板的 ▾ 同一语义）
       collapsed: false,
     }
@@ -74,10 +84,11 @@ export default {
     isLoop() {
       return isLoopLine(this.lineNo)
     },
-    // 各方向按计划发车时间升序（后端 startOrder 不可靠，班次序号由排序生成）
+    // 各方向按计划发车时间升序、并剔除已发班次（后端 startOrder 不可靠，序号由排序生成）
     sortedByDir() {
       const by = (a, b) => (a.planStartTime || '').localeCompare(b.planStartTime || '')
-      return { 0: [...this.plansByDir[0]].sort(by), 1: [...this.plansByDir[1]].sort(by) }
+      const visible = (arr) => arr.filter((p) => !this.isDeparted(p)).sort(by)
+      return { 0: visible(this.plansByDir[0]), 1: visible(this.plansByDir[1]) }
     },
     // 展示分组：普通线路分上行/下行两组；环形线合并为一组「环形」
     // （去重，避免两方向返回同一班次时重复列出）
@@ -109,11 +120,16 @@ export default {
     },
   },
   watch: {
-    // 换线路：丢弃上一条的班次再拉
+    // 换线路：丢弃上一条的班次与已发记录再拉
     lineNo(v) {
       if (!v) return
       this.plansByDir = { 0: [], 1: [] }
+      this.departedIds = {}
       this.loadPlan()
+    },
+    // 在线车辆刷新：新上线的车即时补记为已发，班次随即从时刻表移除
+    onlineBusKeys() {
+      this.markDeparted()
     },
   },
   mounted() {
@@ -128,6 +144,69 @@ export default {
     fmtNo(orgId) {
       void this.mapVersion
       return formatBusNo(orgId)
+    },
+    // 班次稳定 id：优先 busId（MD5，跨刷新稳定），缺失时退化用 自编号|发车时刻
+    planKey(p) {
+      return p.busId || `${p.bus || ''}|${p.planStartTime || ''}`
+    },
+    // 已发班次是否应从时刻表移除：命中持久 departedIds，或当前在线（watch 会补记，避免渲染时序漏判）
+    isDeparted(p) {
+      return !!this.departedIds[this.planKey(p)] || this.isBusOnline(p)
+    },
+    // 扫描班次：凡当前在线的，记入 departedIds 永久标记为已发（车下线后不复活）。
+    // 在 onlineBusKeys 变化时调用；返回是否有新增，便于按需跳过无谓渲染。
+    markDeparted() {
+      const keys = this.onlineBusKeys || []
+      if (!keys.length) return
+      let changed = false
+      for (const d of [0, 1]) {
+        for (const p of (this.plansByDir[d] || [])) {
+          if (!this.departedIds[this.planKey(p)] && this.isBusOnline(p)) {
+            this.$set(this.departedIds, this.planKey(p), true)
+            changed = true
+          }
+        }
+      }
+      return changed
+    },
+    // 该班次是否「待发」：计划发车时间晚于当前时刻（当天未到点）。
+    // planStartTime 为 HH:MM，只比时刻不比日期；已过点的班次不标。
+    isPending(p) {
+      const t = String(p.planStartTime || '').trim()
+      const m = t.match(/^(\d{1,2}):(\d{2})$/)
+      if (!m) return false
+      const now = new Date()
+      const hh = parseInt(m[1], 10)
+      const mm = parseInt(m[2], 10)
+      // 与当前时刻比较：晚于当前即待发；同分钟及以上已过点
+      return (hh > now.getHours()) || (hh === now.getHours() && mm > now.getMinutes())
+    },
+    // 班次车辆是否已在线运行：用 busId(MD5) 或还原的纯数字自编号命中在线集合。
+    // 已在线说明车实际上路（可能提前发车），此时不能再显示「待发」。
+    isBusOnline(p) {
+      const keys = this.onlineBusKeys || []
+      if (!keys.length) return false
+      const id = String(p.busId || '').toLowerCase()
+      const no = String(p.bus || '')
+      return keys.some((k) => {
+        const s = String(k)
+        return (id && s.toLowerCase() === id) || (no && s === no)
+      })
+    },
+    // 班次综合状态：departed=已在线（含提前发出）/ pending=未在线且未到点 / ''=已过点且未在线
+    planStatus(p) {
+      if (this.isBusOnline(p)) return 'departed'
+      return this.isPending(p) ? 'pending' : ''
+    },
+    // 班次行悬浮提示：与实时车辆面板 busTip 同构（原生 title）。
+    // 计划发车无实时位置/速度，展示方向 / 完整自编号 / 营运公司 / 发车时刻 / MD5 原值备查。
+    planTip(p, g) {
+      const no = p.bus ? this.fmtNo(p.bus) : (p.orgBusNo || '未知编号')
+      const company = p.bus ? orgCompanyOf({ orgId: p.bus }) : '未知公司'
+      const dir = g && g.name ? g.name : this.dirLabel(p.dir)
+      const time = p.planStartTime || '--'
+      const hash = p.busId ? `\n车辆编号：${p.busId}` : ''
+      return `${dir} · ${no} · ${company}\n计划发车：${time}${hash}`
     },
     // 单个方向的计划发车（/detailPlanTime 用 lineId，格式与 lineCode 相同）
     async fetchDir(no, dir) {
@@ -155,6 +234,8 @@ export default {
       if (token !== this._planToken) return // 已切线路，丢弃过期响应
       this.plansByDir = { 0: up, 1: down }
       this.loading = false
+      // 班次刚到时在线车辆可能早已就位（watch 不会因它再变），主动标记一次避免漏判
+      this.markDeparted()
     },
     // 方向文案：环形线统一「环形」，普通线路「上行 / 下行」
     dirLabel(dir) {
@@ -322,9 +403,8 @@ export default {
   border-top: 2rpx solid rgba(255, 255, 255, 0.08);
 }
 /* 主数据：发车时间 — 与车辆面板 .bus-org 同色（var(--ac-hi)）、同字重，
-   tabular-nums 保证数字对齐不跳动 */
+   tabular-nums 保证数字对齐不跳动。flex 交给外层 .plan-time-wrap，徽标不会被挤出 */
 .plan-time {
-  flex: 1;
   min-width: 0;
   text-align: right;
   font-size: 42rpx;
@@ -332,7 +412,35 @@ export default {
   color: var(--ac-hi);
   font-variant-numeric: tabular-nums;
   letter-spacing: 1rpx;
-  line-height: 1;
+}
+/* 时间 + 待发徽标：整块靠右，flex:1 承接行剩余宽度 */
+.plan-time-wrap {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10rpx;
+}
+/* 状态徽标：小胶囊紧贴时间左侧，不占主色也不抢数字。
+   pending=待发（琥珀）/ departed=已发（绿，车辆已在线，含提前发出） */
+.plan-badge {
+  flex: 0 0 auto;
+  padding: 2rpx 12rpx;
+  border-radius: 10rpx;
+  font-size: 19rpx;
+  font-weight: 700;
+  line-height: 1.4;
+}
+.plan-badge.pending {
+  color: #fcd34d;
+  background: rgba(252, 211, 77, 0.14);
+  border: 1rpx solid rgba(252, 211, 77, 0.3);
+}
+.plan-badge.departed {
+  color: #6ee7b7;
+  background: rgba(16, 185, 129, 0.14);
+  border: 1rpx solid rgba(16, 185, 129, 0.32);
 }
 /* 车辆自编号：直接沿用车辆面板 .bus-org 的字体风格（34rpx / 800 / 主色 / 等宽数字），
    去掉胶囊底与图标，纯文字与右侧时间共用同一套字体语言 */

@@ -42,12 +42,15 @@ class Node {
   }
 }
 
-/** 选择第 k 小元素的分区（原地，不复制数组，节省内存） */
-function selectK(arr, k) {
+// 切分轴名：0=lat，1=lng（与节点 axis 的语义一致）
+const AXIS_KEY = ['lat', 'lng']
+
+/** 选择第 k 小元素（按轴 axis 的坐标值分区，原地不复制） */
+function selectK(arr, k, axis) {
   let lo = 0
   let hi = arr.length - 1
   while (lo <= hi) {
-    const pivotIdx = partition(arr, lo, hi, k)
+    const pivotIdx = partition(arr, lo, hi, k, axis)
     if (pivotIdx === k) return arr[k]
     if (pivotIdx < k) lo = pivotIdx + 1
     else hi = pivotIdx - 1
@@ -55,12 +58,12 @@ function selectK(arr, k) {
   return arr[k]
 }
 
-function partition(arr, lo, hi, pivotVal) {
+function partition(arr, lo, hi, pivotVal, axis) {
+  const key = AXIS_KEY[axis]
   const pivot = arr[pivotVal]
-  const idx = arr[pivotVal].axis // 临时挂到对象上作比较键
   let store = lo
   for (let i = lo; i < hi; i++) {
-    if (arr[i][idx] <= pivot[idx]) {
+    if (arr[i][key] <= pivot[key]) {
       ;[arr[store], arr[i]] = [arr[i], arr[store]]
       store++
     }
@@ -77,13 +80,23 @@ function partition(arr, lo, hi, pivotVal) {
  */
 function buildTree(points, depth) {
   if (!points || points.length === 0) return null
-  const pts = Array.from(points).map((p, i) => ({ ...p, _i: i })) // 保留原索引
+  // _i 由调用方（build）预先赋好（原始下标）；这里仅浅拷贝隔离，
+  // 绝不能用局部下标覆盖 _i，否则递归切分后子数组会丢失原始映射。
+  const pts = Array.from(points)
   const axis = depth % 2 // 偶数层按 lat，奇数层按 lng 切分
-  const mid = selectK(pts, Math.floor(pts.length / 2))
+  const mid = selectK(pts, Math.floor(pts.length / 2), axis)
   const root = new Node({ lat: mid.lat, lng: mid.lng, _i: mid._i }, axis)
   root.left = buildTree(pts.slice(0, Math.floor(pts.length / 2)), depth + 1)
   root.right = buildTree(pts.slice(Math.floor(pts.length / 2) + 1), depth + 1)
   return root
+}
+
+/** 经纬度差 → 米（与 distM 同量纲，用于剪枝比较；轴 0=lat 轴 1=lng） */
+function diffMeters(diff, axis, baseLat) {
+  const toRad = (d) => (d * Math.PI) / 180
+  return axis === 0
+    ? toRad(diff) * R
+    : toRad(diff) * R * Math.cos(toRad(baseLat))
 }
 
 /** 沿某一路径搜索所有候选近邻 —— 经典 KD-Tree nearest neighbor 算法 */
@@ -93,13 +106,16 @@ function searchNearest(node, target, bestSoFar) {
   if (dist < bestSoFar.dist) {
     bestSoFar = { point: node.point, dist, index: node.point._i }
   }
-  const axis = node.axis
-  const diff = target[axis] - node.point[axis]
+  // axis 是数字 0/1；通过 AXIS_KEY 映射为属性名再取值
+  const axKey = AXIS_KEY[node.axis]
+  const diff = target[axKey] - node.point[axKey]
   const next = diff <= 0 ? node.left : node.right
   const other = diff <= 0 ? node.right : node.left
   bestSoFar = searchNearest(next, target, bestSoFar)
-  // 若超球与分割面相交则仍需搜索另一侧
-  if (diff * diff < bestSoFar.dist) {
+  // 仅当「目标到分割面的距离 < 当前最优半径」时才需搜另一侧。
+  // 两侧必须同量纲（米）：差值先换算成米再平方，与 bestSoFar.dist² 比较。
+  const d = diffMeters(diff, node.axis, target.lat)
+  if (d * d < bestSoFar.dist * bestSoFar.dist) {
     bestSoFar = searchNearest(other, target, bestSoFar)
   }
   return bestSoFar
@@ -115,7 +131,9 @@ function searchNearest(node, target, bestSoFar) {
  */
 export function build(points) {
   if (!Array.isArray(points) || points.length < 2) return { tree: null, points }
-  return { tree: buildTree(points.map((p) => ({ lat: p.lat, lng: p.lng, _i: p.i }))), points }
+  // buildTree 需要 depth 起始值 0；_i 用局部下标 i（调用方保证 points 顺序与 stopsByDir 一致）
+  const pts = points.map((p, i) => ({ lat: p.lat, lng: p.lng, _i: i }))
+  return { tree: buildTree(pts, 0), points: pts }
 }
 
 /**
@@ -145,12 +163,13 @@ export function nearby(tree, center, radius, maxCount = 999) {
     const d = distM(center, node.point)
     if (d <= radius) out.push({ point: node.point, dist: d })
     // 先搜较近一侧，再视情况搜较远一侧（早停优化）
-    const axis = node.axis
-    const diff = center[axis] - node.point[axis]
+    const axKey = AXIS_KEY[node.axis]
+    const diff = center[axKey] - node.point[axKey]
     const closer = diff <= 0 ? node.left : node.right
     const farther = diff <= 0 ? node.right : node.left
-    // 当另一侧可能与球体相交时才进入
-    if (diff * diff < radius * radius) {
+    // 当另一侧可能与球体相交时才进入（同样需要同量纲，经纬度差转米）
+    const md = diffMeters(diff, node.axis, center.lat)
+    if (md * md < radius * radius) {
       walk(farther)
     }
     walk(closer)
