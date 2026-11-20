@@ -16,9 +16,17 @@
 
 **目标平台**：Android App + Web（PC/移动浏览器）
 **技术栈**：uni-app 3.x / Vue 3 / Vite 5
-**项目位置**：`D:\Development\Workspaces\boundless-whbis`（Git 仓库根目录，main 分支）
+**项目位置**：`D:\Development\Workspaces\boundless-whbis`（Git 仓库根目录）
 **远端仓库**：`https://github.com/BOUNDLESS-558/boundless-whbis.git`（origin）
 **接口文档**：`武汉公交信息实时查询API接口文档.md`（仓库根目录，UTF-8）
+
+### 分支约定（★ 务必遵守）
+
+- **`main`**：稳定主干，只接收已验证完成的合并，不直接在其上开发。
+- **`BETA`**：**唯一的新功能开发分支**。今后所有功能开发、改动、提交一律在 `BETA` 上进行，**不再为单个功能新建其它分支**（如历史上的 `feat/*` 分支已废弃删除）。
+- **`pages`**：GitHub Pages 部署产物分支（孤立提交，由 `npm run deploy:pages` 自动维护），不用于开发。
+
+工作流：在 `BETA` 上开发并提交 → 验证通过后合并进 `main` → 需要发布网站时用 `npm run deploy:pages`。
 
 ---
 
