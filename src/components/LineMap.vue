@@ -593,7 +593,7 @@ import {
   getRefreshSec, setRefreshSec as saveRefreshSec, onRefreshSecChange, REFRESH_OPTS,
   getMapSource, accentRgba, getAccent,
 } from '../utils/settings.js'
-import { cleanStops, pointsOf, fromFlat } from '../utils/routeClean.js'
+import { cleanStops, dedupLegacyStops, pointsOf, fromFlat } from '../utils/routeClean.js'
 import { loadLineAsset, assetDir } from '../utils/lineAsset.js'
 import { orgCompanyOf, routeOf } from '../utils/speedRank.js'
 import { formatBusNo, onBusNumberReady } from '../utils/busNumber.js'
@@ -1577,7 +1577,8 @@ export default {
         for (const d of [0, 1]) {
           const row = assetDir(asset, d)
           if (!row || !Array.isArray(row.stops) || row.stops.length < 2) continue
-          this.stopsByDir[d] = row.stops
+          // 资产里可能残留改线前的旧站（同序号+同名的新旧两版），渲染前剔除
+          this.stopsByDir[d] = dedupLegacyStops(row.stops)
           const flat = Array.isArray(row.route) && row.route.length >= 4 ? row.route : null
           let geo = flat ? fromFlat(flat) : []
           // 采集端 scan-routes-amap.mjs 已按 amap.reversed 把几何反转后写盘（dirRoute），

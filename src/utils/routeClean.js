@@ -151,6 +151,56 @@ function dropEdgeOutliers(list, far, report) {
 }
 
 /**
+ * 剔除「改线/数据源切换后残留的旧站点」：同一站被两套数据源各采一次，
+ * 表现为相邻两站 stopNo 相同、站名相同或包含（如「余家头」⊂「和平大道余家头」、
+ * 「318国道铁炉村（公交站）」≈「318国道铁炉村」），但坐标差数百米到一两公里
+ * （高德短数字 id = 旧，武汉官方 32 位 MD5 id = 新）。这类站相距远超重合去重阈值（5m），
+ * 又不会整段重复（30m），现有规则都抓不到，会被一并渲染成两个站、走向在两者间绕小弯。
+ * 只认「紧邻两站 + 名字归一后相同或包含」，再分两种置信度：
+ *   同序号 → 距离 <2km 即合并（同序号基本铁定是新旧两版）；
+ *   序号不同 → 距离 <200m 才合并（更保守，避免误删名字相近的真实相邻站）。
+ * 名字完全不同的相邻站、以及环线首尾的同名站（间隔很大，不相邻）都不动。
+ * 保留信息更全的一版：优先官方 MD5 id，其次站名更长的。
+ */
+export function dedupLegacyStops(list, report) {
+  const out = []
+  const rep = report || {}
+  // 括号里若是「东行/西行/去/回/上行/下行/内环/外环」等方向标记，是区分真实站点的关键信息，
+  // 必须保留；其余括号备注（公交站/场站/路名补充）才去掉，避免把不同站误判成同名。
+  const norm = (s) => {
+    let v = String(s == null ? '' : s)
+    v = v.replace(/[（(]([^)）]*)[)）]/g, (m, inner) => /(东行|西行|南行|北行|去|回|上行|下行|内环|外环|反向)/.test(inner) ? m : '')
+    return v.replace(/[\s公交场站台]/g, '').trim()
+  }
+  const isMd5 = (id) => /^[A-F0-9]{32}$/.test(String(id == null ? '' : id))
+  const xy = (s) => ({ lat: parseFloat(s.latitude), lng: parseFloat(s.longitude) })
+  const better = (a, b) => {
+    const am = isMd5(a.stopId), bm = isMd5(b.stopId)
+    if (am !== bm) return am ? a : b
+    return String(a.stopName || '').length >= String(b.stopName || '').length ? a : b
+  }
+  for (const p of list) {
+    const last = out[out.length - 1]
+    if (last && p && p.stopName && last.stopName) {
+      const na = norm(last.stopName), nb = norm(p.stopName)
+      const sameName = na && nb && (na === nb || na.includes(nb) || nb.includes(na))
+      if (sameName) {
+        const la = xy(last), lb = xy(p)
+        const sameNo = p.stopNo != null && p.stopNo === last.stopNo
+        const limit = sameNo ? 2000 : 200
+        if (isFinite(la.lat) && isFinite(lb.lat) && haversine(la, lb) < limit) {
+          out[out.length - 1] = better(last, p)
+          rep.legacyDups = (rep.legacyDups || 0) + 1
+          continue
+        }
+      }
+    }
+    out.push(p)
+  }
+  return out
+}
+
+/**
  * 清洗站点序列
  * @param {Array} raw /line 的 stopDetailList 原样数组（也接受资产里的精简数组）
  * @param {Object} opts { minGap=5(m), outlierFar=3000(m), outlierRatio=0.5, sortByNo=true }
@@ -210,7 +260,9 @@ export function cleanStops(raw, opts) {
     if (d > report.maxJump) report.maxJump = d
   }
   report.maxJump = Math.round(report.maxJump)
-  return { stops: list.map((p) => p.s), report }
+  // 7) 改线/数据源切换残留的旧站：同序号+同名(含)且相距<2km 的新旧两版合成一个
+  const finalStops = dedupLegacyStops(list.map((p) => p.s), report)
+  return { stops: finalStops, report }
 }
 
 /** 几何体检：跳跃 / 回头 / 离群 / 重合，供离线回归测试与生成器统计 */
