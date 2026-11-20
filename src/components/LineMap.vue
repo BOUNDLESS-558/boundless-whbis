@@ -721,9 +721,9 @@ const CITY_TAG_MIN_ZOOM = 13.4
 const CITY_TAG_MIN_SCALE = 15.4
 const CITY_TAG_MAX = 120
 const CN_ORG = ['', '第一', '第二', '第三', '第四', '第五', '第六', '第七', '第八', '第九']
-// 行驶状态：到站 / 已离站 / 行驶 / 停靠
+// 行驶状态：到站 / 离站 / 行驶 / 停靠
 // 注：arrived==='1' 是后台字段，仅表示本次班次已到终点站；中间站不停用此字段。
-// 「已离站」判定：车辆已离开上一站 > DEPARTED_DIST_THRESHOLD，但仍可能因 GPS 延迟显示速度为 0。
+// 「离站」判定：车辆已离开上一站 > DEPARTED_DIST_THRESHOLD，但仍可能因 GPS 延迟显示速度为 0。
 const DEPARTED_DIST_THRESHOLD = 500 // 米：离前一站超过此距离才认为是「已离站」
 function nearStopData(b, stops, kdtree) {
   if (!stops?.length || !kdtree) return { toPrev: Infinity, toCur: Infinity, toNext: Infinity }
@@ -741,8 +741,8 @@ function busStateOf(b, stops, kdtree) {
   if (b.arrived === '1') return '到站'
   const d = nearStopData(b, stops, kdtree)
   const spd = parseFloat(b.gpsSpeed || 0)
-  // 已离开上一站且不在当前站内 → 已离站（填补 GPS 速度未更新时的空窗期）
-  if (d.toPrev > DEPARTED_DIST_THRESHOLD && d.toCur <= d.toNext) return '已离站'
+  // 离站：车辆明显离开上一站（>500m），但 GPS 速度尚未恢复，区别于「停靠」
+  if (d.toPrev > DEPARTED_DIST_THRESHOLD && d.toCur <= d.toNext) return '离站'
   // 停在当前站内（距离 ≤ DEPARTED_DIST_THRESHOLD 且速度为 0）→ 停靠
   if (spd === 0) return '停靠'
   return '行驶'
@@ -4098,7 +4098,7 @@ export default {
     busStateText(bus) {
       return busStateOf(bus, this.stopsByDir[bus.dir], this.kdtrees[bus.dir])
     },
-    // 运行状态配色：到站=绿 / 已离站=橙 / 行驶=青 / 停靠=琥珀，与详情窗文案同口径
+    // 运行状态配色：到站=绿 / 离站=橙 / 行驶=青 / 停靠=琥珀，与详情窗文案同口径
     busStateCls(bus) {
       const s = busStateOf(bus, this.stopsByDir[bus.dir], this.kdtrees[bus.dir])
       return s === '到站' ? 'arrived' : s === '已离站' ? 'departed' : s === '行驶' ? 'moving' : 'stopped'
