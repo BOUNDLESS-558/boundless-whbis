@@ -721,9 +721,31 @@ const CITY_TAG_MIN_ZOOM = 13.4
 const CITY_TAG_MIN_SCALE = 15.4
 const CITY_TAG_MAX = 120
 const CN_ORG = ['', '第一', '第二', '第三', '第四', '第五', '第六', '第七', '第八', '第九']
-// 行驶状态：到站 / 行驶 / 停靠
-function busStateOf(b) {
-  return b.arrived === '1' ? '到站' : (parseFloat(b.gpsSpeed) > 0 ? '行驶' : '停靠')
+// 行驶状态：到站 / 已离站 / 行驶 / 停靠
+// 注：arrived==='1' 是后台字段，仅表示本次班次已到终点站；中间站不停用此字段。
+// 「已离站」判定：车辆已离开上一站 > DEPARTED_DIST_THRESHOLD，但仍可能因 GPS 延迟显示速度为 0。
+const DEPARTED_DIST_THRESHOLD = 500 // 米：离前一站超过此距离才认为是「已离站」
+function nearStopData(b, stops, kdtree) {
+  if (!stops?.length || !kdtree) return { toPrev: Infinity, toCur: Infinity, toNext: Infinity }
+  const target = { lat: parseFloat(b.lat) || 0, lng: parseFloat(b.lng) || 0 }
+  const res = kdtreeNearest(kdtree, target)
+  if (!res || res.index < 0 || res.index >= stops.length) return { toPrev: Infinity, toCur: Infinity, toNext: Infinity }
+  const i = res.index
+  const s = stops[i]
+  const toCur = distance(b.lat, b.lng, s.latitude, s.longitude)
+  const toPrev = stops[i - 1] ? distance(b.lat, b.lng, stops[i - 1].latitude, stops[i - 1].longitude) : Infinity
+  const toNext = stops[i + 1] ? distance(b.lat, b.lng, stops[i + 1].latitude, stops[i + 1].longitude) : Infinity
+  return { toPrev, toCur, toNext }
+}
+function busStateOf(b, stops, kdtree) {
+  if (b.arrived === '1') return '到站'
+  const d = nearStopData(b, stops, kdtree)
+  const spd = parseFloat(b.gpsSpeed || 0)
+  // 已离开上一站且不在当前站内 → 已离站（填补 GPS 速度未更新时的空窗期）
+  if (d.toPrev > DEPARTED_DIST_THRESHOLD && d.toCur <= d.toNext) return '已离站'
+  // 停在当前站内（距离 ≤ DEPARTED_DIST_THRESHOLD 且速度为 0）→ 停靠
+  if (spd === 0) return '停靠'
+  return '行驶'
 }
 
 // —— 自绘走向图的 Web Mercator 投影工具 ——
@@ -4074,12 +4096,12 @@ export default {
       return orgCompanyOf(bus)
     },
     busStateText(bus) {
-      return busStateOf(bus)
+      return busStateOf(bus, this.stopsByDir[bus.dir], this.kdtrees[bus.dir])
     },
-    // 运行状态配色：到站=绿 / 行驶=青 / 停靠=琥珀，与详情窗文案同口径
+    // 运行状态配色：到站=绿 / 已离站=橙 / 行驶=青 / 停靠=琥珀，与详情窗文案同口径
     busStateCls(bus) {
-      if (bus.arrived === '1') return 'arrived'
-      return parseFloat(bus.gpsSpeed) > 0 ? 'moving' : 'stopped'
+      const s = busStateOf(bus, this.stopsByDir[bus.dir], this.kdtrees[bus.dir])
+      return s === '到站' ? 'arrived' : s === '已离站' ? 'departed' : s === '行驶' ? 'moving' : 'stopped'
     },
     /**
      * 计算车辆当前所在站点名。
@@ -4189,7 +4211,7 @@ export default {
           this.nearStopOf(b),
           String(b.time || '--').slice(0, 5),
           `${b.gpsSpeed}km/h`,
-          b.arrived === '1' ? '到站' : '行驶',
+          b.arrived === '1' ? '到站' : busStateOf(b, this.stopsByDir[dir], this.kdtrees[dir]),
           `${b.lat},${b.lng}`,
         ])
         cells.forEach((c) => allRows.push([dirName, ...c]))
@@ -5162,6 +5184,8 @@ export default {
   color: rgba(255, 255, 255, 0.7);
 }
 .bus-state.arrived { color: #6ee7b7; background: rgba(16, 185, 129, 0.16); }
+/* 已离站：车辆明显离开上一站（>500m），但 GPS 速度尚未恢复，区别于「停靠」*/
+.bus-state.departed { color: #fb923c; background: rgba(249, 115, 22, 0.15); }
 .bus-state.moving { color: #67e8f9; background: rgba(6, 182, 212, 0.16); }
 .bus-state.stopped { color: #fcd34d; background: rgba(245, 158, 11, 0.14); }
 .bus-time {
