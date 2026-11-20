@@ -3,7 +3,7 @@
  *
  * 背景：接口还原出的自编号是纯数字（如 325311），但真实车辆编号含车型字母
  *   （如 325F311）。字母由车型决定、不按数字规律变化，只能靠对照表补全。
- * 对照表来源：buspedia.top 车队页采集 → src/static/bus-number-map.json
+ * 对照表来源：buspedia.top 车队页采集 → src/static/data/bus-number-map.json
  *   结构：byNum[去字母数字] = [完整编号, ...]
  *
  * 设计：映射表约 900KB，走 HTTP 缓存懒加载（不 import 进 bundle 拖慢首屏），
@@ -22,7 +22,7 @@ function ensureLoaded() {
   if (pending) return pending
   pending = new Promise((resolve) => {
     uni.request({
-      url: assetUrl('/static/bus-number-map.json'),
+      url: assetUrl('/static/data/bus-number-map.json'),
       method: 'GET',
       timeout: 30000,
       success: (res) => {
