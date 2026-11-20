@@ -259,12 +259,14 @@ export default {
         uni.showToast({ title: `「${hit.no}路」已停运${hit.stopDate ? '（' + hit.stopDate + ' 起）' : ''}`, icon: 'none' })
         return
       }
-      this.$emit('pick', this.buildPick(no, no))
+      // 命中线路库时归一：请求用内部 code（H81→81），展示用对外号 no（H81）
+      this.$emit('pick', this.buildPick(hit ? (hit.code || hit.no) : no, hit ? hit.no : no))
     },
     quickSearch(no) {
       this.closeSuggest()
       this.lineNo = no
-      this.$emit('pick', this.buildPick(no, no))
+      const hit = findLine(no)
+      this.$emit('pick', this.buildPick(hit ? (hit.code || hit.no) : no, hit ? hit.no : no))
     },
   },
 }

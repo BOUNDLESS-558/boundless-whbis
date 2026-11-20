@@ -1500,7 +1500,9 @@ export default {
         uni.showToast({ title: `「${hit.no}路」已停运${hit.stopDate ? '（' + hit.stopDate + ' 起）' : ''}`, icon: 'none' })
         return
       }
-      this.loadByLine(no, this.dirFilter === 2 ? this.direction : this.dirFilter)
+      const dir = this.dirFilter === 2 ? this.direction : this.dirFilter
+      // 命中线路库时归一：请求用内部 code（H81→81），展示用对外号 hit.no
+      this.loadByLine(hit ? (hit.code || hit.no) : no, dir, hit ? hit.no : no)
     },
     /**
      * 双方向几何是否「同向重合」：起终点都相近时，法向偏移会把两条线推向同一侧，
@@ -1541,8 +1543,9 @@ export default {
       uni.showToast({ title: `视角：${this.dirFilterLabel}`, icon: 'none' })
     },
     // 在当前页加载指定线路（重建双方向站点/轨迹/实时车辆）
-    loadByLine(no, dir) {
-      this.lineName = no
+    // no 为请求用的内部编码（81），displayName 为对外展示号（H81）；缺省时展示号=no
+    loadByLine(no, dir, displayName) {
+      this.lineName = displayName || no
       this.lineNo = no
       this.direction = dir
       this.lineCode = buildLineCode(no, dir)

@@ -667,7 +667,8 @@ export default {
       this.writeHomeLine()
       if (sameLine) {
         const c = this.$refs.mapC
-        if (c) c.loadByLine(this.lineNo, this.direction)
+        // 传展示号（H81）避免徽章退回内部码（81）；请求仍用 this.lineNo
+        if (c) c.loadByLine(this.lineNo, this.direction, this.lineName)
       }
     },
     // 分段切换：有线路时是「开窗 / 收窗」，没线路时单条线路类档位不可达（全市公交始终可达）
