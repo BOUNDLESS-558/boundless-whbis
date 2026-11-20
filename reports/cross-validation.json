@@ -1,10 +1,10 @@
 {
-  "generatedAt": "2026-11-20T03:23:10.200Z",
+  "generatedAt": "2026-11-20T03:53:52.394Z",
   "group": {
     "total": 1117,
     "bySource": {
-      "amap": 449,
-      "osrm": 261,
+      "amap": 452,
+      "osrm": 258,
       "none": 407
     },
     "missingRoute": [
