@@ -576,6 +576,7 @@
 import { fetchRealTime, fetchLine, decryptBusId, onBusIdReady } from '../utils/api.js'
 import { fetchRoadRoute } from '../utils/osrm.js'
 import { APP_CONFIG, buildLineCode, useNativeMap } from '../config.js'
+import { getAmapKey, bumpAmapUsage } from '../utils/settings.js'
 import { assetUrl } from '../utils/asset.js'
 import { distance } from '../utils/geo.js'
 import { allLines, findLine, isLoopLine } from '../utils/lineIndex.js'
@@ -793,6 +794,8 @@ export default {
       routeState: { 0: 'idle', 1: 'idle' },
       // 该方向的贴路几何是否来自静态资产且已贴路（是则跳过运行时 OSRM，避免重复请求）
       assetSnapped: { 0: false, 1: false },
+      // 该方向是否已由用户自填高德 KEY 拉到官方公交轨迹（优先于 OSRM，阻止其回写覆盖）
+      amapOfficial: { 0: false, 1: false },
       busesByDir: { 0: [], 1: [] },
       // 当前选中查看详情的车辆（null=不显示详情窗）
       selectedBus: null,
@@ -1438,6 +1441,7 @@ export default {
       this.routeByDir = { 0: [], 1: [] }
       this.routeState = { 0: 'idle', 1: 'idle' }
       this.assetSnapped = { 0: false, 1: false }
+      this.amapOfficial = { 0: false, 1: false }
       this.busesByDir = { 0: [], 1: [] }
       this.selectedBus = null
       this.camInited = false
@@ -1555,6 +1559,7 @@ export default {
       this.routeByDir = { 0: [], 1: [] }
       this.routeState = { 0: 'idle', 1: 'idle' }
       this.assetSnapped = { 0: false, 1: false }
+      this.amapOfficial = { 0: false, 1: false }
       this.busesByDir = { 0: [], 1: [] }
       this.selectedBus = null
       // 新线路需要重新自适应视角（丢弃旧线路记住的视野）
@@ -1619,8 +1624,10 @@ export default {
       if (!this.camInited) this.fitRoute()
       else this.renderSchematic()
       this.planRouteAlongRoads()
-      // 资产未贴路的方向由 OSRM 后台补算（渐进增强）；已贴路的方向直接跳过
+      // 自绘走向：OSRM 立即后台补算（保证无 KEY 时走向即时可用）；
+      // 有用户自填高德 KEY 时并行拉官方轨迹，成功后覆盖 OSRM（取不到则保留 OSRM 结果）
       this.planRouteViaOsrm()
+      this.planRouteViaAmapKey()
     },
     // 等待高德 SDK 核心就绪（限 12s）：uni-app 只加载地图核心，插件需按需再加载
     waitForAMap() {
@@ -1679,6 +1686,55 @@ export default {
         this.renderSchematic()
       }
     },
+    // 用户自填高德 KEY：动态注入 JS API（自绘模式没有原生 <map>，不会自动加载 AMap），
+    // 再用 LineSearch 官方公交轨迹替换 OSRM 贴路，换取更精确的线路走向。
+    // 注入失败 / 超时 / 轨迹不匹配时返回 false，由调用方回退 OSRM；全程静默不打扰用户。
+    loadAmapJsApi(key) {
+      if (window.AMap && typeof window.AMap.plugin === 'function') return Promise.resolve(window.AMap)
+      // 同一 KEY 的注入只发一次，并发请求共享同一个 Promise
+      if (this._amapInject && this._amapInject.key === key) return this._amapInject.promise
+      const promise = new Promise((resolve, reject) => {
+        const t0 = Date.now()
+        const check = () => {
+          if (window.AMap && typeof window.AMap.plugin === 'function') return resolve(window.AMap)
+          if (Date.now() - t0 > 12000) return reject(new Error('AMap 注入超时'))
+          setTimeout(check, 250)
+        }
+        // 安全密钥：高德 JS API 2.0 起 Web 端 key 需配对安全密钥，用户可在 KEY 后用英文逗号附带
+        const [jsKey, jsSecret] = String(key).split(/[,，]/).map((s) => (s || '').trim())
+        if (jsSecret) window._AMapSecurityConfig = { securityJsCode: jsSecret }
+        const script = document.createElement('script')
+        script.src = `https://webapi.amap.com/maps?v=2.0&key=${encodeURIComponent(jsKey)}&plugin=AMap.LineSearch`
+        script.async = true
+        script.onerror = () => { this._amapInject = null; reject(new Error('AMap 脚本加载失败')) }
+        document.head.appendChild(script)
+        check()
+      })
+      this._amapInject = { key, promise }
+      return promise
+    },
+    async planRouteViaAmapKey() {
+      if (this.useMap) return false
+      const key = getAmapKey()
+      if (!key) return false
+      try {
+        const AMap = await this.loadAmapJsApi(key)
+        const official = await this.fetchOfficialLines(AMap)
+        let ok = false
+        for (const dir of [0, 1]) {
+          if (official[dir] && official[dir].length > 1) {
+            this.routeByDir[dir] = official[dir]
+            this.routeState[dir] = 'ok'
+            this.amapOfficial[dir] = true
+            ok = true
+          }
+        }
+        if (ok) this.renderSchematic()
+        return ok
+      } catch (e) {
+        return false
+      }
+    },
     // 无 Key 模式走向吸附：OSRM 免 Key 公共路由，按线路-方向缓存 7 天；失败保持站点连线。
     // 资产已贴路的方向跳过（0 请求）；资产只有「干净站点连线」的方向后台补算，成功即平滑替换，
     // 不把已有实线切成 loading 虚线，避免闪烁。
@@ -1686,7 +1742,7 @@ export default {
       if (this.useMap) return
       const DIRS = [0, 1]
       const todo = DIRS.filter((dir) =>
-        !this.assetSnapped[dir] && cleanStops(this.stopsByDir[dir] || []).stops.length > 1
+        !this.assetSnapped[dir] && !this.amapOfficial[dir] && cleanStops(this.stopsByDir[dir] || []).stops.length > 1
       )
       if (!todo.length) return
       todo.forEach((dir) => {
@@ -1697,6 +1753,8 @@ export default {
         const stops = pointsOf(cleanStops(this.stopsByDir[dir] || []).stops)
         try {
           const pts = await fetchRoadRoute(stops, `${this.lineNo}-${dir}`)
+          // 等待期间高德官方轨迹可能已就位：此时不再用 OSRM 结果覆盖更精确的轨迹
+          if (this.amapOfficial[dir]) continue
           if (pts && pts.length > 1) {
             this.routeByDir[dir] = pts
             this.routeState[dir] = 'ok'
@@ -1796,6 +1854,7 @@ export default {
             if (!n) return false
             return sum / n < 900 && far < n * 0.25
           }
+          bumpAmapUsage() // 本机日用量 +1（仅统计，不影响高德账号实际账单）
           ls.search(this.lineName, (status, result) => {
             if (status !== 'complete') return done()
             const lines = (result && (result.lineInfo || result.lineList)) || []
@@ -1996,6 +2055,19 @@ export default {
     onMapSourceChange() {
       if (this.useMap) return
       this.renderTiles()
+    },
+    // 高德 KEY 变更（设置面板）即时跟随：重置官方轨迹标记后按当前线路重规划。
+    // 清空 KEY 时已有官方轨迹需退回 OSRM/资产；有 KEY 时重新注入（KEY 可能换了）。
+    onAmapKeyChange() {
+      if (this.useMap || !this.lineNo) return
+      this.amapOfficial = { 0: false, 1: false }
+      this._amapInject = null
+      // 清空 KEY 时把已贴路的方向重新交给 OSRM；有 KEY 时高德轨迹并行覆盖
+      const key = getAmapKey()
+      if (!key) this.assetSnapped = { 0: false, 1: false }
+      this.planRouteViaOsrm()
+      if (key) this.planRouteViaAmapKey()
+      else this.renderSchematic()
     },
     // 单击 ↻：立即拉一次（自动刷新模式下也用于手动补一次）
     refreshNow() {

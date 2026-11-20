@@ -302,13 +302,14 @@
 
           <view class="acct-div"></view>
 
-          <!-- 地图来源：自绘走向图底图瓦片源（高德 / 腾讯） -->
+          <!-- 地图来源 + 高德 KEY（合并）：底图瓦片源 + 自填 KEY 拉官方公交真实轨迹 -->
           <view class="acct-sec-head" @click="toggleAcctSection('map')">
-            <text class="acct-sec-title">地图来源</text>
+            <text class="acct-sec-title">地图来源与线路走向</text>
             <text class="acct-sec-sum" v-if="!acctSec.map">{{ acctSecSummary.map }}</text>
             <text class="acct-sec-chev" :class="{ folded: !acctSec.map }">▾</text>
           </view>
           <view v-show="acctSec.map" class="acct-sec-body">
+            <view class="amap-sub-label">底图瓦片源</view>
             <view class="acct-seg">
               <view
                 class="acct-seg-item"
@@ -319,6 +320,48 @@
               >{{ o.label }}</view>
             </view>
             <view class="acct-tip">底图瓦片源，线路走向 / 车辆 / 站点不受影响，改完即时生效</view>
+
+            <view class="amap-sub-div"></view>
+
+            <view class="amap-sub-label">高德地图 KEY <text class="amap-sub-hint">官方公交轨迹 · 走向更精确</text></view>
+            <view class="amap-apply">
+              <text class="amap-apply-txt">还没有 KEY？前往高德开放平台免费申请（Web端 JS API 类型）</text>
+              <text class="amap-apply-link" @click="openAmapApply">立即申请 ›</text>
+            </view>
+            <view class="amap-input-row">
+              <input
+                class="amap-input"
+                v-model="amapKeyInput"
+                type="text"
+                :password="!amapKeyShow"
+                placeholder="粘贴 Web端(JS API) Key；带安全密钥时用英文逗号分隔"
+                confirm-type="done"
+                @confirm="onAmapKeySave"
+              />
+              <view class="acct-eye" :class="{ on: amapKeyShow }" @click="amapKeyShow = !amapKeyShow" v-html="amapKeyShow ? svgEyeOn : svgEyeOff" />
+            </view>
+            <view class="amap-btn-row">
+              <view class="amap-btn primary" @click="onAmapKeySave">保存 KEY</view>
+              <view class="amap-btn" v-if="amapKey" @click="onAmapKeyClear">清空</view>
+            </view>
+
+            <view class="amap-quota">
+              <view class="amap-quota-row">
+                <text class="amap-quota-k">本机今日已查询</text>
+                <text class="amap-quota-v">{{ amapUsageToday }} 次</text>
+              </view>
+              <view class="amap-quota-row">
+                <text class="amap-quota-k">高德每日免费额度</text>
+                <text class="amap-quota-v dim">以账号类型为准</text>
+              </view>
+              <text class="amap-quota-link" @click="openAmapQuota">查看实时用量 / 额度明细 ›</text>
+            </view>
+
+            <view class="acct-tip acct-tip-warn">
+              填 KEY 后线路走向改用高德官方公交轨迹，通常比免 Key 的 OSRM 贴路更精确；KEY 与高德账号绑定，
+              调用可能按高德规则计费或占用免费配额，费用与额度以高德平台为准。本机计数仅供参考，不代表实际账单。
+              留空则始终走免 Key 方案。
+            </view>
           </view>
 
           <view class="acct-div"></view>
@@ -403,6 +446,9 @@ import {
   setDisplayName,
   getSessionDays,
   setSessionDays,
+  getAmapKey,
+  setAmapKey,
+  getAmapUsageToday,
 } from '../../utils/settings.js'
 import { getAvatar, removeAvatar, pickAvatar } from '../../utils/avatar.js'
 import { getMinStopsMode, setMinStopsMode } from '../../utils/settings.js'
@@ -463,6 +509,13 @@ export default {
       // 地图来源：自绘走向图底图瓦片源
       mapSource: 'amap',
       mapSourceOpts: MAP_SOURCE_OPTS,
+      // 高德地图 KEY：自填后拉官方公交真实轨迹，让线路走向更精确（本机记忆）
+      amapKey: '',
+      amapKeyInput: '',
+      amapKeyShow: false,
+      amapUsageToday: 0,
+      amapApplyUrl: 'https://console.amap.com/dev/key/app',
+      amapQuotaUrl: 'https://console.amap.com/dev/statistic',
       // 仿真站牌设计：实时线路走向改用站牌风格（本机记忆）
       simSignboard: false,
       // 界面字体：当前生效档 + 档位列表（preview = 选项卡预览用的 family 串）
@@ -535,7 +588,8 @@ export default {
         skin: skin ? skin.label : '黑色',
         accent: accent ? accent.label : '自定义',
         font: font ? font.label : '系统默认',
-        map: map ? map.label : '高德地图',
+        // 合并分区摘要：底图来源 + KEY 是否已填
+        map: `${map ? map.label : '高德地图'} · KEY ${this.amapKey ? '已填' : '未填'}`,
       }
     },
     // 是否所有分区都已展开（决定快捷按钮文案与方向）
@@ -771,6 +825,9 @@ export default {
       this.accent = getAccent()
       this.refreshDefault = getRefreshSec()
       this.mapSource = getMapSource()
+      this.amapKey = getAmapKey()
+      this.amapKeyInput = this.amapKey
+      this.amapUsageToday = getAmapUsageToday()
       this.sessionDays = getSessionDays()
       this.uiFont = getFont()
       this.simSignboard = getSimSignboard()
@@ -855,6 +912,30 @@ export default {
       const c = this.$refs.mapC
       if (c && typeof c.onMapSourceChange === 'function') c.onMapSourceChange()
       uni.showToast({ title: `地图来源：${key === 'tencent' ? '腾讯地图' : '高德地图'}`, icon: 'none' })
+    },
+    // 高德链接：申请 KEY / 查看用量额度（H5 新标签；App 端调系统浏览器）
+    openAmapUrl(url) {
+      // #ifdef H5
+      window.open(url, '_blank', 'noopener,noreferrer')
+      // #endif
+      // #ifdef APP-PLUS
+      plus.runtime.openURL(url)
+      // #endif
+    },
+    openAmapApply() { this.openAmapUrl(this.amapApplyUrl) },
+    openAmapQuota() { this.openAmapUrl(this.amapQuotaUrl) },
+    // 保存高德 KEY：落库后重置地图的轨迹标记并对当前线路重新规划，立即生效
+    onAmapKeySave() {
+      const key = setAmapKey(this.amapKeyInput)
+      this.amapKey = key
+      this.amapKeyInput = key
+      const c = this.$refs.mapC
+      if (c && typeof c.onAmapKeyChange === 'function') c.onAmapKeyChange()
+      uni.showToast({ title: key ? '高德 KEY 已保存' : '已清空，使用免 Key 方案', icon: 'none' })
+    },
+    onAmapKeyClear() {
+      this.amapKeyInput = ''
+      this.onAmapKeySave()
     },
     // 仿真站牌设计：纯展示开关，落库后由 prop 下发给 LineMap 即时切换
     onSimSignboard(on) {
@@ -1439,6 +1520,132 @@ export default {
   font-weight: 700;
   background: linear-gradient(135deg, var(--ac), var(--ac-hi));
   box-shadow: 0 6rpx 16rpx rgba(var(--ac-rgb), 0.35);
+}
+/* 高德 KEY：申请引导 + 输入框 + 操作按钮 + 费用提示 */
+.amap-apply {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12rpx;
+  padding: 14rpx 18rpx;
+  border-radius: 14rpx;
+  background: rgba(var(--ac-rgb), 0.1);
+  border: 2rpx solid rgba(var(--ac-rgb), 0.28);
+}
+.amap-apply-txt {
+  flex: 1;
+  font-size: 21rpx;
+  line-height: 1.5;
+  color: rgba(255, 255, 255, 0.78);
+}
+.amap-apply-link {
+  flex: 0 0 auto;
+  font-size: 23rpx;
+  font-weight: 700;
+  color: var(--ac-hi);
+  cursor: pointer;
+  white-space: nowrap;
+}
+.amap-input-row {
+  display: flex;
+  align-items: center;
+  gap: 8rpx;
+  margin-top: 14rpx;
+  padding: 0 18rpx;
+  height: 72rpx;
+  border-radius: 14rpx;
+  background: rgba(255, 255, 255, 0.05);
+  border: 2rpx solid rgba(255, 255, 255, 0.1);
+}
+.amap-input {
+  flex: 1;
+  min-width: 0;
+  height: 100%;
+  font-size: 23rpx;
+  color: #fff;
+}
+.amap-btn-row {
+  display: flex;
+  gap: 12rpx;
+  margin-top: 14rpx;
+}
+.amap-btn {
+  flex: 1;
+  height: 64rpx;
+  line-height: 64rpx;
+  text-align: center;
+  border-radius: 14rpx;
+  font-size: 23rpx;
+  color: rgba(255, 255, 255, 0.75);
+  background: rgba(255, 255, 255, 0.08);
+  cursor: pointer;
+}
+.amap-btn.primary {
+  color: #fff;
+  font-weight: 700;
+  background: linear-gradient(135deg, var(--ac), var(--ac-hi));
+  box-shadow: 0 6rpx 16rpx rgba(var(--ac-rgb), 0.3);
+}
+/* 合并分区内的小标题 / 分隔 */
+.amap-sub-label {
+  display: flex;
+  align-items: baseline;
+  gap: 12rpx;
+  font-size: 23rpx;
+  font-weight: 700;
+  color: rgba(255, 255, 255, 0.85);
+  margin: 4rpx 0 12rpx;
+}
+.amap-sub-hint {
+  font-size: 20rpx;
+  font-weight: 400;
+  color: rgba(var(--ac-rgb), 0.95);
+}
+.amap-sub-div {
+  height: 2rpx;
+  margin: 24rpx 0;
+  background: rgba(255, 255, 255, 0.08);
+}
+/* 每日额度信息卡 */
+.amap-quota {
+  margin-top: 16rpx;
+  padding: 16rpx 18rpx;
+  border-radius: 14rpx;
+  background: rgba(255, 255, 255, 0.04);
+  border: 2rpx solid rgba(255, 255, 255, 0.08);
+}
+.amap-quota-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12rpx;
+  padding: 4rpx 0;
+}
+.amap-quota-k {
+  font-size: 22rpx;
+  color: rgba(255, 255, 255, 0.55);
+}
+.amap-quota-v {
+  font-size: 24rpx;
+  font-weight: 700;
+  color: var(--ac-hi);
+}
+.amap-quota-v.dim {
+  font-size: 21rpx;
+  font-weight: 400;
+  color: rgba(255, 255, 255, 0.5);
+}
+.amap-quota-link {
+  display: block;
+  margin-top: 10rpx;
+  padding-top: 10rpx;
+  border-top: 2rpx solid rgba(255, 255, 255, 0.06);
+  font-size: 21rpx;
+  color: var(--ac-hi);
+  cursor: pointer;
+}
+.acct-tip-warn {
+  color: rgba(255, 196, 128, 0.7);
 }
 /* 主题色行：预设色点 + 调色盘（彩虹锥形渐变标识） */
 .ac-row {

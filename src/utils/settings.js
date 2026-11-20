@@ -13,6 +13,8 @@
  * - 登录有效期：会话本体在 auth.js，这里原样转出 get/setSessionDays。
  * - 地图来源：自绘走向图底图瓦片源（高德 / 腾讯）。两者均为 GCJ-02，与公交接口同源零纠偏；
  *   仅影响底图，线路轨迹规划仍走高德 Web 服务。
+ * - 高德地图 KEY：用户自填 Web端(JS API) Key，自绘模式下拉官方公交真实轨迹让走向更精确；
+ *   留空走免 Key 的 OSRM 贴路。
  */
 import { normAccount, getSessionDays, setSessionDays } from './auth.js'
 
@@ -580,4 +582,49 @@ export function getMinStopsMode() {
 export function setMinStopsMode(on) {
   writeRaw(MIN_MODE_KEY, !!on)
   return getMinStopsMode()
+}
+
+// ── 高德地图 Key（用户自填，BYOK） ──
+// H5 端：填入后 LineMap 切换为原生 <map> 渲染，走向 / 车辆 / 站点均走高德 JS API，
+// 比自绘走向图更贴近真实公交轨迹。留空时保持自绘模式（免 Key 的 OSRM 贴路）。
+// 申请地址：https://console.amap.com/dev/#/key （Web端 JS API 类型，个人开发者有免费配额）
+const AMAP_KEY_KEY = 'whbis:amap-key'
+
+export function getAmapKey() {
+  return String(readRaw(AMAP_KEY_KEY, '') || '').trim()
+}
+
+export function setAmapKey(key) {
+  const v = String(key == null ? '' : key).trim()
+  writeRaw(AMAP_KEY_KEY, v)
+  return v
+}
+
+// 高德官方轨迹的日调用计数（本机、按自然日）：每次 LineSearch 查询 +1，跨天自动归零。
+// 只作本机用量参考（不上传、不代表高德账号实际账单），帮用户估算当日配额消耗。
+const AMAP_USAGE_KEY = 'whbis:amap-usage'
+
+function todayStr() {
+  const d = new Date()
+  const p = (n) => String(n).padStart(2, '0')
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`
+}
+
+// 读取本机今日已查询次数
+export function getAmapUsageToday() {
+  let v = null
+  try {
+    v = uni.getStorageSync(AMAP_USAGE_KEY)
+    if (typeof v === 'string') v = JSON.parse(v)
+  } catch (e) { v = null }
+  if (!v || typeof v !== 'object' || v.date !== todayStr()) return 0
+  const n = Number(v.count)
+  return Number.isFinite(n) && n > 0 ? n : 0
+}
+
+// 记一次高德官方轨迹查询，返回自增后的今日次数
+export function bumpAmapUsage() {
+  const n = getAmapUsageToday() + 1
+  writeRaw(AMAP_USAGE_KEY, { date: todayStr(), count: n })
+  return n
 }
