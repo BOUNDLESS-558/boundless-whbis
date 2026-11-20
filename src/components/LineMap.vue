@@ -70,9 +70,9 @@
           stroke-linecap="round"
           stroke-linejoin="round"
         />
-        <!-- 行进方向箭头 -->
+        <!-- 行进方向箭头：实心三角 + 白边，双方向同屏时靠色相+朝向直观区分 -->
         <g v-for="(a, i) in routeArrows" :key="'a' + i" :transform="`translate(${a.x},${a.y}) rotate(${a.deg})`">
-          <path d="M-3,-4.5 L4.5,0 L-3,4.5" fill="none" :stroke="a.color" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" />
+          <path d="M-6,-5 L6,0 L-6,5 Z" fill="#fff" :stroke="a.color" stroke-width="1.8" stroke-linejoin="round" />
         </g>
         <!-- 站点（首末站实心 + 白环，其余空心环取方向色） -->
         <g v-for="(s, i) in svgStops" :key="'s' + i">
@@ -3287,7 +3287,12 @@ export default {
           op: snapped ? 1 : 0.55,
           d: smoothPath(sampled, snapped),
         })
-        ;[0.34, 0.67].forEach((f) => {
+        // 箭头位置：短路线（≤60点）放3个，长路线放5个，间隔均分
+        const nArrows = pts.length <= 60 ? 3 : 5
+        const positions = nArrows === 3
+          ? [0.25, 0.5, 0.75]
+          : [0.18, 0.38, 0.58, 0.78, 0.92]
+        positions.forEach((f) => {
           const i = Math.min(pts.length - 2, Math.max(0, Math.round(f * (pts.length - 1))))
           const a = pts[i]
           const b = pts[i + 1]
