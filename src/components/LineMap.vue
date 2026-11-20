@@ -725,21 +725,49 @@ const CN_ORG = ['', '第一', '第二', '第三', '第四', '第五', '第六', 
 // 注：arrived==='1' 是后台字段，仅表示本次班次已到终点站；中间站不停用此字段。
 // 「离站」判定：车辆已离开上一站 > DEPARTED_DIST_THRESHOLD，但仍可能因 GPS 延迟显示速度为 0。
 const DEPARTED_DIST_THRESHOLD = 500 // 米：离前一站超过此距离才认为是「已离站」
-function nearStopData(b, stops, kdtree) {
+
+/** 把 route 统一为 [{lat,lng}] 格式（处理 [[lng,lat],...] 两种输入） */
+function _normSegs(raw) {
+  if (!Array.isArray(raw) || raw.length < 2) return null
+  const first = raw[0]
+  if (Array.isArray(first) && typeof first[0] === 'number') return raw.map(([ll, la]) => ({ lat: la, lng: ll }))
+  if (first && typeof first.lat === 'number') return raw
+  return null
+}
+
+/**
+ * 在 stops 中找路线投影最近的下标（kdtree 在平行路段误判时用它校正）
+ */
+function _nearestByRoute(stops, segs, lat, lng) {
+  if (!segs || segs.length < 2) return null
+  const proj = projectOnSegs(segs, lat, lng)
+  if (!proj) return null
+  let bestI = -1, bestD = Infinity
+  for (let i = 0; i < stops.length; i++) {
+    const s = stops[i]; if (!s) continue
+    const d = (parseFloat(s.latitude) - proj.lat) ** 2 + (parseFloat(s.longitude) - proj.lng) ** 2
+    if (d < bestD) { bestD = d; bestI = i }
+  }
+  return bestI >= 0 && Math.sqrt(bestD) < 0.006 ? bestI : null // ~660m 容差
+}
+
+function nearStopData(b, stops, kdtree, route) {
   if (!stops?.length || !kdtree) return { toPrev: Infinity, toCur: Infinity, toNext: Infinity }
-  const target = { lat: parseFloat(b.lat) || 0, lng: parseFloat(b.lng) || 0 }
-  const res = kdtreeNearest(kdtree, target)
-  if (!res || res.index < 0 || res.index >= stops.length) return { toPrev: Infinity, toCur: Infinity, toNext: Infinity }
-  const i = res.index
+  const lat = parseFloat(b.lat) || 0, lng = parseFloat(b.lng) || 0
+  const kRes = kdtreeNearest(kdtree, { lat, lng })
+  if (!kRes || kRes.index < 0 || kRes.index >= stops.length) return { toPrev: Infinity, toCur: Infinity, toNext: Infinity }
+  // kdtree 初筛，再用 route 投影校正（修复平行路段误判）
+  const segs = _normSegs(route)
+  const i = (segs ? _nearestByRoute(stops, segs, lat, lng) : null) ?? kRes.index
   const s = stops[i]
-  const toCur = distance(b.lat, b.lng, s.latitude, s.longitude)
-  const toPrev = stops[i - 1] ? distance(b.lat, b.lng, stops[i - 1].latitude, stops[i - 1].longitude) : Infinity
-  const toNext = stops[i + 1] ? distance(b.lat, b.lng, stops[i + 1].latitude, stops[i + 1].longitude) : Infinity
+  const toCur = distance(lat, lng, s.latitude, s.longitude)
+  const toPrev = stops[i - 1] ? distance(lat, lng, stops[i - 1].latitude, stops[i - 1].longitude) : Infinity
+  const toNext = stops[i + 1] ? distance(lat, lng, stops[i + 1].latitude, stops[i + 1].longitude) : Infinity
   return { toPrev, toCur, toNext }
 }
-function busStateOf(b, stops, kdtree) {
+function busStateOf(b, stops, kdtree, route) {
   if (b.arrived === '1') return '到站'
-  const d = nearStopData(b, stops, kdtree)
+  const d = nearStopData(b, stops, kdtree, route)
   const spd = parseFloat(b.gpsSpeed || 0)
   // 离站：车辆明显离开上一站（>500m），但 GPS 速度尚未恢复，区别于「停靠」
   if (d.toPrev > DEPARTED_DIST_THRESHOLD && d.toCur <= d.toNext) return '离站'
@@ -4121,11 +4149,11 @@ export default {
       return orgCompanyOf(bus)
     },
     busStateText(bus) {
-      return busStateOf(bus, this.stopsByDir[bus.dir], this.kdtrees[bus.dir])
+      return busStateOf(bus, this.stopsByDir[bus.dir], this.kdtrees[bus.dir], this.routeByDir[bus.dir])
     },
     // 运行状态配色：到站=绿 / 离站=橙 / 行驶=青 / 停靠=琥珀，与详情窗文案同口径
     busStateCls(bus) {
-      const s = busStateOf(bus, this.stopsByDir[bus.dir], this.kdtrees[bus.dir])
+      const s = busStateOf(bus, this.stopsByDir[bus.dir], this.kdtrees[bus.dir], this.routeByDir[bus.dir])
       return s === '到站' ? 'arrived' : s === '已离站' ? 'departed' : s === '行驶' ? 'moving' : 'stopped'
     },
     /**
@@ -4148,81 +4176,101 @@ export default {
       const tree = this.kdtrees[dir]
       const route = this.routeByDir[dir]
       if (!stops?.length || !tree) return '未知站点'
-      const lat = parseFloat(b.lat)
-      const lng = parseFloat(b.lng)
+      const lat = parseFloat(b.lat) || 0
+      const lng = parseFloat(b.lng) || 0
       if (isNaN(lat) || isNaN(lng)) return '未知站点'
 
-      // —— 第一步：K-d tree 初筛 ——
-      const target = { lat, lng }
-      const res = kdtreeNearest(tree, target)
-      if (!res || res.index < 0 || res.index >= stops.length) return '未知站点'
-      let curIdx = res.index
+      // ——— 辅助：把 route 统一为 [{lat,lng}] 格式（处理 [[lng,lat],...] 和 {lat,lng} 两种输入） ———
+      function normalizeRoute(raw) {
+        if (!Array.isArray(raw) || raw.length < 2) return null
+        const first = raw[0]
+        if (Array.isArray(first) && typeof first[0] === 'number') return raw.map(([ll, la]) => ({ lat: la, lng: ll }))
+        if (first && typeof first.lat === 'number') return raw
+        return null
+      }
+      // 把 stops 统一为 [{lat,lng,name}]
+      function normalizeStops(arr) {
+        return arr.map((s, i) => ({ lat: parseFloat(s.latitude), lng: parseFloat(s.longitude), name: s.stopName, idx: i }))
+      }
+      const normStops = normalizeStops(stops)
+      const segs = normalizeRoute(route)
 
-      // —— 第二步：route polyline 校正 ——
-      // K-d tree 只看欧氏距离，路线回头/并行时可能选错站；用 route 投影二次验证。
-      if (Array.isArray(route) && route.length >= 2) {
-        const segs = Array.isArray(route[0]) && typeof route[0][0] === 'number'
-          ? route.map(([ll, la]) => ({ lat: la, lng: ll }))
-          : route
+      // ——— 步骤1：kdtree 初筛 ———
+      const kdtreeRes = kdtreeNearest(tree, { lat, lng })
+      if (!kdtreeRes || kdtreeRes.index < 0 || kdtreeRes.index >= stops.length) return '未知站点'
+      let curIdx = kdtreeRes.index // stops 数组的原始下标
+
+      // ——— 步骤2：route polyline 投影校正 ———
+      // 优先级：route-proximate（离路线段近的站）> kdtree-distance（欧氏最近）
+      if (segs) {
+        // 2a: 先在 kdtree 候选 ±5 站内按路线投影查找
+        const W = 5
+        const lo = Math.max(0, curIdx - W), hi = Math.min(normStops.length - 1, curIdx + W)
+        let projBestSi = -1, projBestSD = Infinity
         const proj = projectOnSegs(segs, lat, lng)
         if (proj) {
-          // 在 kdtree 结果 ±3 站内找路线投影最近点附近的站
-          const lo = Math.max(0, curIdx - 3), hi = Math.min(stops.length - 1, curIdx + 3)
-          let bestSi = -1, bestSD = Infinity
           for (let si = lo; si <= hi; si++) {
-            const s = stops[si]; if (!s) continue
-            const sd = (parseFloat(s.latitude) - proj.lat) ** 2 + (parseFloat(s.longitude) - proj.lng) ** 2
-            if (sd < bestSD) { bestSD = sd; bestSi = si }
+            const ns = normStops[si]
+            if (!ns) continue
+            const sd = (ns.lat - proj.lat) ** 2 + (ns.lng - proj.lng) ** 2
+            if (sd < projBestSD) { projBestSD = sd; projBestSi = si }
           }
-          if (bestSi >= 0 && Math.sqrt(bestSD) < 0.005) { // ~550m 容差
-            curIdx = bestSi
+        }
+        // 2b: 若 ±5 内无好匹配（投影点超出容差），全局兜底扫描所有站
+        if (projBestSi < 0 || Math.sqrt(projBestSD) >= 0.006) { // 0.006° ≈ 660m
+          let globBestSi = -1, globBestSD = Infinity
+          for (let i = 0; i < normStops.length; i++) {
+            const ns = normStops[i]
+            const d = (ns.lat - lat) ** 2 + (ns.lng - lng) ** 2
+            if (d < globBestSD) { globBestSD = d; globBestSi = i }
           }
+          if (globBestSi >= 0 && Math.sqrt(globBestSD) < 0.006) {
+            curIdx = globBestSi
+          }
+        } else {
+          // 找到较好的路线投影匹配，更新 curIdx
+          curIdx = projBestSi
         }
       }
 
-      const prevSt = stops[curIdx - 1]
-      const nextSt = stops[curIdx + 1]
+      const curNs = normStops[curIdx]
+      const prevNs = normStops[curIdx - 1]
+      const nextNs = normStops[curIdx + 1]
 
-      // 计算各候选站到车辆的 haversine 距离（米）
-      const toCur = distance(lat, lng, stops[curIdx].latitude, stops[curIdx].longitude)
-      const prevDist = prevSt
-        ? distance(lat, lng, prevSt.latitude, prevSt.longitude)
-        : Infinity
-      const nextDist = nextSt
-        ? distance(lat, lng, nextSt.latitude, nextSt.longitude)
-        : Infinity
+      const toCur = distance(lat, lng, curNs.lat, curNs.lng)
+      const prevDist = prevNs ? distance(lat, lng, prevNs.lat, prevNs.lng) : Infinity
+      const nextDist = nextNs ? distance(lat, lng, nextNs.lat, nextNs.lng) : Infinity
 
-      // 默认：显示最近站
-      let result = stops[curIdx].stopName || '未知站点'
+      // 默认显示 kdtree/投影确定的当前站
+      let result = curNs.name || '未知站点'
 
-      // 有前一帧时，用 heading 推断
+      // ——— 步骤3：上一帧 heading 判断是否展示前站/后站 ———
       const prevArr = this.prevBusesByDir[dir] || []
       const prevBus = prevArr.find(p => (p.busId === b.busId || p.orgId === b.orgId) && p.lat != null)
       if (prevBus && prevBus.lat != null && prevBus.lng != null) {
         const vHeading = heading(prevBus, b)
         let lineHeading = null
-        if (prevSt && nextSt) {
-          lineHeading = heading(
-            { lat: prevSt.latitude, lng: prevSt.longitude },
-            { lat: nextSt.latitude, lng: nextSt.longitude }
-          )
-        } else if (nextSt) {
-          // 末站情形：路线向前延伸方向
-          lineHeading = heading(
-            { lat: stops[curIdx].latitude, lng: stops[curIdx].longitude },
-            { lat: nextSt.latitude, lng: nextSt.longitude }
-          )
+        if (prevNs && nextNs) {
+          // 常规情况：从前站→后站的线路方向
+          lineHeading = heading({ lat: prevNs.lat, lng: prevNs.lng }, { lat: nextNs.lat, lng: nextNs.lng })
+        } else if (nextNs) {
+          // 首站：只有前进方向
+          lineHeading = heading(curNs, nextNs)
+        } else if (prevNs) {
+          // 末站或越站：用反向（prev→cur）作为线路方向参考
+          lineHeading = heading(prevNs, curNs)
         }
         if (lineHeading != null) {
           const diffDeg = Math.abs(((vHeading - lineHeading + 540) % 360) - 180)
-          // 正向且后站更近 → 显示后站（即将到站）
-          if (diffDeg <= 90 && nextDist < prevDist && nextDist < 600) {
-            result = nextSt.stopName || result
+          // 正向行驶且后站比前站更近且在合理范围内 → 显示后站（即将到站）
+          if (diffDeg <= 90 && nextDist < prevDist && nextDist < 800 && nextDist <= toCur + 200) {
+            result = nextNs.name || result
           }
-          // 反向或停站内（距前后站都 >500m） → 保持当前站（停靠中）
-          else if (diffDeg > 90 || (toCur > 500 && prevDist > 500 && nextDist > 500)) {
-            result = stops[curIdx].stopName || result
+          // 反向行驶 → 回退到当前站（不显示下一站）
+          else if (diffDeg > 90 && prevDist < nextDist) {
+            result = prevNs?.name || result
           }
+          // 停站内（距当前站近但速度低/反向）→ 保持当前站
         }
       }
       return result
@@ -4265,7 +4313,7 @@ export default {
           this.nearStopOf(b),
           String(b.time || '--').slice(0, 5),
           `${b.gpsSpeed}km/h`,
-          b.arrived === '1' ? '到站' : busStateOf(b, this.stopsByDir[dir], this.kdtrees[dir]),
+          b.arrived === '1' ? '到站' : busStateOf(b, this.stopsByDir[dir], this.kdtrees[dir], this.routeByDir[dir]),
           `${b.lat},${b.lng}`,
         ])
         cells.forEach((c) => allRows.push([dirName, ...c]))
