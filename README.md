@@ -24,7 +24,14 @@
 
 ## 更新日志
 
-### 2026-11-15（最新）
+### 2026-11-20（最新）
+
+- **采集频率 6 小时 → 37 分钟**：`.github/workflows/daily-collect.yml` cron 改为 `*/37 * * * *`（GitHub 分钟按小时取模，实际每小时 00/37 分触发，平均约 30 分钟）
+- **收录 18 条 H 系惠民公交**：H81~H99（后端本无 H95），对外显示号 H81 / 内部编码 81，`scan-lines.mjs` 白名单放行 H 前缀；修复重复查询与手动输入时对外号退回内部码（`81`→`H81`）的 bug
+- **完整自编号显示**：新增 `scan-busnumber.mjs` 从 buspedia 车队页采集团全部车型，158 车型 / 440 编号段 / 5378 个完整编号 → `src/static/bus-number-map.json`；前端 `busNumber.js` 懒加载映射表，把还原出的纯数字（如 `325311`）补全车型字母显示为 `325F311`（字母随车型变化无数字规律，只能查表）；原始纯数字保留供 MD5 反查，车速榜 / 地图页 / 站点页共 8 处显示接入
+- **buspedia 采集登录态**：`scan-busnumber.mjs` 用 Playwright + Edge 登录（账号走 `BP_USER`/`BP_PASS` 环境变量），Cookie/localStorage token 落 `scripts/.buspedia-state.json`（已 gitignore），页面二次重定向需 `networkidle` + evaluate 重试才抓得到车队数据
+
+### 2026-11-15
 
 - **营运公司采集双链路**：`scan-org.mjs` 从 buspedia 采集团线路 `org`（含人工核实映射 355/408=一公司，重跑不丢）；新增 `scan-org-live.mjs` 从在线车辆自编号反推（MD5 还原首位数字 1→一公司…9→九公司，按线路投票取众数），补 buspedia 未收录的 D/K/YX 线，接入 `auto-collect.mjs` 每 6 小时随 CI 累积回填。全库 `org` 570 → 604 条
 - **931 路标记停运**：用户核实已取消，`status=停运` + `statusSource=人工确认`，不再进入实时查询 / 搜索联想 / 全市线网扫描
@@ -138,6 +145,7 @@ npm run test:busid    # 车辆编号还原测试（全量建字典约 400ms）
 | `npm run deploy:pages` | 构建 H5 并推送到远端 `pages` 分支（GitHub Pages） | — |
 | `npm run scan:org` | buspedia 采集营运公司写 `org`（含手动核实映射） | `src/static/lines.json` |
 | `npm run scan:org:live` | 在线车辆自编号反推营运公司（只补强不降级，`--dry` 预览） | `src/static/lines.json` |
+| `npm run scan:busnumber` | buspedia 车队页采集完整自编号映射（需 `BP_USER`/`BP_PASS`，支持 `--retry`/`--limit`/`--parse-only`） | `src/static/bus-number-map.json` |
 | `npm run test:md5` | MD5 单元测试 | — |
 | `npm run test:busid` | 车辆编号还原测试 | — |
 
@@ -313,9 +321,11 @@ busId = MD5( orgBusId )
 | `c370ec3d80532ba4afe5af93000db96e` | 52826 |
 | `bed5623adc8b12bc67a4221a5d5cccc4` | 72541 |
 
-线路详情页与地图页会直接显示还原后的自编号（如 `72502`），并附带 MD5 原值备查。
+线路详情页与地图页会显示还原后的自编号，并附带 MD5 原值备查。
 
-**衍生用途：营运公司反推**（`scripts/scan-org-live.mjs`）。自编号首位数字即营运公司（1→一公司 … 9→九公司），是车辆归属的权威判据：把 `/detailData` 在线车辆的 `busId` 经上述字典还原后取首位，按线路两方向合并投票取众数（护栏防跨公司支援车带偏），写入 `lines.json` 的 `org`。这比停更的 buspedia 更准，专门补它未收录的 D/K/YX 线；因定制线多在班时段才有车，靠 CI 每 6 小时反复跑累积覆盖。实测 1 路=二公司、337=三公司、10 路=七公司、408=一公司全部吻合。
+**完整自编号补全（`src/utils/busNumber.js` + `src/static/bus-number-map.json`）**：MD5 字典只能还原出纯数字（如 `325311`），但真实车辆编号含车型字母（如 `325F311`），且字母随车型变化、无数字规律。采集器 `scan-busnumber.mjs` 登录 buspedia 车队页，抓全集团 158 个车型的「自编号段」（如 `325F311~321`），展开为 5378 个完整编号建成映射表 `byNum[去字母数字] → [完整编号]`。前端 `formatBusNo(orgId)` 查表补全显示，**原始纯数字 `orgId` 保持不变**（仍用于 MD5 反查车辆与公司推断）；映射表约 909KB，走 `uni.request` 懒加载 + 缓存 + `onBusNumberReady(cb)` 就绪回调（同 `busId.js` 模式），不打包进首屏。采集需 buspedia 账号（`BP_USER`/`BP_PASS`），页面有二次客户端重定向，须 `networkidle` + evaluate 重试才抓得到 `.data-cell`。
+
+**衍生用途：营运公司反推**（`scripts/scan-org-live.mjs`）。自编号首位数字即营运公司（1→一公司 … 9→九公司），是车辆归属的权威判据：把 `/detailData` 在线车辆的 `busId` 经上述字典还原后取首位，按线路两方向合并投票取众数（护栏防跨公司支援车带偏），写入 `lines.json` 的 `org`。这比停更的 buspedia 更准，专门补它未收录的 D/K/YX 线；因定制线多在班时段才有车，靠 CI 每 37 分钟反复跑累积覆盖。实测 1 路=二公司、337=三公司、10 路=七公司、408=一公司全部吻合。
 
 ### `arrived` 字段语义（实测）
 
