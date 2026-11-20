@@ -74,7 +74,9 @@ async function loadPlaywright() {
  */
 export function expandSegment(line) {
   const out = []
-  const m = String(line).trim().match(/^(\d)(25)?([A-Z])?(.+)$/)
+  // 格式：公司号(1位) + 批次码(1~2位数字) + 车型字母(可选) + 车号范围
+  // 例：125B2023、115Y562~596、105A123、16Y0001~0037、325G322
+  const m = String(line).trim().match(/^(\d)(\d{1,2})?([A-Z])?(.+)$/)
   if (!m) return out
   const company = Number(m[1])
   const letter = m[3] || ''
@@ -85,7 +87,13 @@ export function expandSegment(line) {
     const rg = p.match(/^(\d+)~(\d+)$/)
     if (rg) {
       const a = Number(rg[1]), b = Number(rg[2])
-      if (b >= a && b - a <= 2000) for (let n = a; n <= b; n++) out.push({ company, letter, num: String(n), full: `${company}${m[2] || ''}${letter}${n}` })
+      const width = rg[1].length // 保留原文位数（如 001~050 补零到 3 位，避免误匹配无零的短编号）
+      if (b >= a && b - a <= 2000) {
+        for (let n = a; n <= b; n++) {
+          const s = String(n).padStart(width, '0')
+          out.push({ company, letter, num: s, full: `${company}${m[2] || ''}${letter}${s}` })
+        }
+      }
     } else if (/^\d+$/.test(p)) {
       out.push({ company, letter, num: p, full: `${company}${m[2] || ''}${letter}${p}` })
     }
@@ -103,9 +111,17 @@ function buildMap(rows) {
       segLines++
       for (const x of expandSegment(line)) {
         byFull[x.full] = { company: x.company, letter: x.letter, num: x.num, model: r.model, modelId: r.id }
-        // 系统里的纯数字自编号 = 完整编号去掉字母（如 125B3011 → 1253011）
-        const plain = x.full.replace(/[A-Z]/g, '')
-        ;(byNum[plain] ||= []).push(x.full)
+        // 系统编号 = 公司号(首位) + 车号，中间不含批次码/字母
+        //   buspedia 319N2379（3公司+19批次+N车型+2379车号）→ 系统 32379
+        // 车号可能带前导零（如 322N001），系统 MD5 还原无零 → 同时登记去零版本
+        const keys = new Set([
+          `${x.company}${x.num}`,
+          `${x.company}${String(Number(x.num))}`,
+        ])
+        for (const key of keys) {
+          const arr = (byNum[key] ||= [])
+          if (!arr.includes(x.full)) arr.push(x.full)
+        }
       }
     }
   }
