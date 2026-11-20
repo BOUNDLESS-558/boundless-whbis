@@ -4081,16 +4081,75 @@ export default {
       if (bus.arrived === '1') return 'arrived'
       return parseFloat(bus.gpsSpeed) > 0 ? 'moving' : 'stopped'
     },
-    // 车辆所处站点名（与该方向站点序列最近的一站，K-d Tree O(log N)）。
-    // 只返回站名这一个值：复制表格的「所在站点」单元格直接用它，不含坐标/换行，避免破坏 TSV/图片表格。
+    /**
+     * 计算车辆当前所在站点名。
+     *
+     * 策略：先找 K-d tree 最近站 idx，再取前后相邻站（idx-1 / idx+1），
+     * 结合上一帧位置推算车辆 heading，判断车辆正在远离前站还是靠近后站：
+     *   - 若正朝向后站且距离后站更近 → 显示后站（即将到站）
+     *   - 若正朝向前站或刚离开前站且速度低（停站/已发车）→ 显示前站（刚刚离站或临近）
+     *   - 否则回退到纯最近站
+     *
+     * 仅返回站名字符串，供「所在站点」列与复制表格直接使用。
+     */
     nearStopOf(b) {
-      const tree = this.kdtrees[b.dir]
-      if (!tree) return '未知站点'
-      const target = { lat: parseFloat(b.lat), lng: parseFloat(b.lng) }
+      const dir = b.dir
+      const stops = this.stopsByDir[dir]
+      const tree = this.kdtrees[dir]
+      if (!stops?.length || !tree) return '未知站点'
+      const target = { lat: parseFloat(b.lat) || 0, lng: parseFloat(b.lng) || 0 }
       const res = kdtreeNearest(tree, target)
-      if (!res || res.index < 0) return '未知站点'
-      const station = this.stopsByDir[b.dir]?.[res.index] || this.stopsByDir[0]?.[0]
-      return station && station.stopName ? station.stopName : '未知站点'
+      if (!res || res.index < 0 || res.index >= stops.length) return '未知站点'
+      const curIdx = res.index
+      const prevSt = stops[curIdx - 1]  // 线路序号上的前一站
+      const nextSt = stops[curIdx + 1]  // 线路序号上的后一站
+
+      // 计算各候选站到车辆的 haversine 距离（米）
+      const toCur = distance(b.lat, b.lng, stops[curIdx].latitude, stops[curIdx].longitude)
+      const prevDist = prevSt
+        ? distance(b.lat, b.lng, prevSt.latitude, prevSt.longitude)
+        : Infinity
+      const nextDist = nextSt
+        ? distance(b.lat, b.lng, nextSt.latitude, nextSt.longitude)
+        : Infinity
+
+      // 默认：显示最近站
+      let result = stops[curIdx].stopName || '未知站点'
+
+      // 有前一帧时，尝试用 heading 推断应显示的站
+      const prevArr = this.prevBusesByDir[dir] || []
+      const prevBus = prevArr.find(p => (p.busId === b.busId || p.orgId === b.orgId) && p.lat != null)
+      if (prevBus && prevBus.lat != null && prevBus.lng != null) {
+        // 位移向量 heading（度）；prevBus / b 均有 {lat, lng}
+        const vHeading = heading(prevBus, b)
+        // 线路段向：从前站到后站的航向（站点字段为 latitude/longitude，需转换）
+        let lineHeading = null
+        if (prevSt && nextSt) {
+          lineHeading = heading(
+            { lat: prevSt.latitude, lng: prevSt.longitude },
+            { lat: nextSt.latitude, lng: nextSt.longitude }
+          )
+        } else if (prevSt) {
+          // 当前已在第一站，看向后方
+          lineHeading = heading(
+            { lat: stops[curIdx + 1].latitude, lng: stops[curIdx + 1].longitude },
+            { lat: prevSt.latitude, lng: prevSt.longitude }
+          )
+        }
+        if (lineHeading != null) {
+          // 计算 vHeading 与线路方向的夹角（0~180°）
+          const diffDeg = Math.abs(((vHeading - lineHeading + 540) % 360) - 180)
+          // 若车正沿线路方向前进（夹角 ≤ 90°）且后站更近 → 显示后站（即将到站）
+          if (diffDeg <= 90 && nextDist < prevDist && nextDist < 600) {
+            result = nextSt?.stopName || result
+          }
+          // 若车逆行但停在某站附近（速度低、距离近）→ 保持当前站
+          else if (parseFloat(b.gpsSpeed || 0) < 3 && toCur <= prevDist && toCur <= nextDist) {
+            result = stops[curIdx].stopName || result
+          }
+        }
+      }
+      return result
     },
     // 在线车辆悬浮提示：方向 / 编号 / 营运公司 / 所在站点 / 时间 / 速度 / 状态 / 经纬度
     busTip(b) {
