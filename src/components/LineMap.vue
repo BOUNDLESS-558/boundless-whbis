@@ -3357,22 +3357,22 @@ export default {
           op: snapped ? 1 : 0.55,
           d: smoothPath(sampled, snapped),
         })
-        // 箭头位置：短路线（≤60点）放3个，长路线放5个，间隔均分
-        const nArrows = pts.length <= 60 ? 3 : 5
-        const positions = nArrows === 3
-          ? [0.25, 0.5, 0.75]
-          : [0.18, 0.38, 0.58, 0.78, 0.92]
-        positions.forEach((f) => {
-          const i = Math.min(pts.length - 2, Math.max(0, Math.round(f * (pts.length - 1))))
-          const a = pts[i]
-          const b = pts[i + 1]
-          arrows.push({
-            x: (a.x + b.x) / 2,
-            y: (a.y + b.y) / 2,
-            deg: (Math.atan2(b.y - a.y, b.x - a.x) * 180) / Math.PI,
-            color: this.routeStyle(d).svgStroke,
-          })
-        })
+        // 箭头位置：按屏幕像素间距等距放置（放大后自动变密），间隔 70px
+        const ARROW_SPACING = 70
+        let cumDist = 0
+        for (let i = 0; i < sampled.length - 1; i++) {
+          const a = sampled[i], b = sampled[i + 1]
+          const segLen = Math.sqrt((b.x - a.x) ** 2 + (b.y - a.y) ** 2)
+          if (segLen < 1) continue
+          // 在路段中点投放，但只在前一个箭头 ≥ ARROW_SPACING px 时才放
+          if (cumDist > 0 && cumDist < ARROW_SPACING) { cumDist += segLen; continue }
+          const midX = (a.x + b.x) / 2, midY = (a.y + b.y) / 2
+          const deg = (Math.atan2(b.y - a.y, b.x - a.x) * 180) / Math.PI
+          arrows.push({ x: midX, y: midY, deg, color: this.routeStyle(d).svgStroke })
+          cumDist = 0
+          // 累加本段后半程到下一个候选点的距离
+          cumDist += segLen / 2
+        }
       })
       this.svgRoutes = routes
       this.routeArrows = arrows
