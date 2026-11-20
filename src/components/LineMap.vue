@@ -1580,12 +1580,10 @@ export default {
           this.stopsByDir[d] = row.stops
           const flat = Array.isArray(row.route) && row.route.length >= 4 ? row.route : null
           let geo = flat ? fromFlat(flat) : []
-          // 高德对往返同路的线路只返回一条 polyline，采集时按起讫站给「反向」方向
-          // 记了 amap.reversed=true 但没反转几何。上下行轨迹同向会让「全部」视角的
-          // 两条线完全重合（后画的玫红盖掉青蓝），且方向箭头也反了。
-          // 这里在装载时反转，让两个方向点序相反：sideShift / offsetPolyline 的
-          // 法向自然相反，双轨分居两侧；箭头与站点顺序也随之对齐。
-          if (geo.length > 1 && row.amap && row.amap.reversed === true) geo = geo.reverse()
+          // 采集端 scan-routes-amap.mjs 已按 amap.reversed 把几何反转后写盘（dirRoute），
+          // route 点序此刻已与本方向站序一致；amap.reversed 仅作元数据标记。
+          // 这里绝不能再反转一次：否则几何方向倒过来，与站点首尾错开，
+          // ptsOf() 的首末站锚定会把首站硬接到远端几何端点，画出横跨全线的 V 形绕行。
           if (geo.length > 1) {
             this.routeByDir[d] = geo
             this.routeState[d] = 'ok'
@@ -3008,20 +3006,32 @@ export default {
           : (this.stopsByDir[d] || []).map((st) => ({ lat: parseFloat(st.latitude), lng: parseFloat(st.longitude) }))
         // 走向几何端点常与首末站有数百米偏差（高德只画到路口 / 桥尾，离真实站点尚远），
         // 把首末站真实坐标补到走向两端，保证连线真正接上起终点。
-        // 注意：routeByDir 可能相对站序反向（装载时按 amap.reversed 反转，见 loadAllStops），
-        // 所以必须按「就近」判断几何首端对应哪个终点站，否则会把首末站接反、拉出横跨全线的长直线。
+        // 几何端点与任一首尾站都离得很远（改线后资产陈旧 / 点序错乱）时跳过锚定，
+        // 否则强接会拉出横跨全线的 V 形长直线（站点圆点正常但线绕远）。
         const stopsArr = this.stopsByDir[d] || []
         if (hasRoute && stopsArr.length >= 2) {
           const toPt = (st) => ({ lat: parseFloat(st.latitude), lng: parseFloat(st.longitude) })
           const first = toPt(stopsArr[0])
           const last = toPt(stopsArr[stopsArr.length - 1])
           const g0 = src[0]
+          const gEnd = src[src.length - 1]
           const dist2 = (a, b) => (a.lat - b.lat) ** 2 + (a.lng - b.lng) ** 2
-          const headIsFirst = dist2(g0, first) <= dist2(g0, last)
-          const head = headIsFirst ? first : last
-          const tail = headIsFirst ? last : first
-          src.unshift(head)
-          src.push(tail)
+          // 约 2km 的经纬度平方距离阈值（武汉纬度 30.6°：0.02°≈2.2km）
+          const MAX_ANCHOR_D2 = 0.0004
+          const d0f = dist2(g0, first), d0l = dist2(g0, last)
+          const dEf = dist2(gEnd, first), dEl = dist2(gEnd, last)
+          // 两端各自就近配对到不同终点时才能锚定（头配首站则尾配尾站，反之亦然）；
+          // 只要有一端离所有终点都很远，或两端都挤向同一终点，就放弃锚定。
+          const endIsLast = dEl <= dEf
+          const nearHead = Math.min(d0f, d0l) <= MAX_ANCHOR_D2
+          const nearTail = Math.min(dEf, dEl) <= MAX_ANCHOR_D2
+          const headIsFirst = d0f <= d0l
+          if (nearHead && nearTail && headIsFirst === endIsLast) {
+            const head = headIsFirst ? first : last
+            const tail = headIsFirst ? last : first
+            src.unshift(head)
+            src.push(tail)
+          }
         }
         const raw = src.filter((p) => !isNaN(p.lat) && !isNaN(p.lng)).map((p) => ({ x: sx(p.lng), y: sy(p.lat) }))
         // 同向重合时 dir1 反向偏移，保证两条线分居两侧都能看见
