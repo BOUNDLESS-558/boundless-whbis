@@ -228,6 +228,35 @@ function slimStops(stops) {
   })
 }
 
+/**
+ * 高德 busstop → 前端站点对象。
+ * 架构：站点与走向全用高德数据，集团只提供车辆信号/GPS；因此站点 id/名称/坐标一律取高德，
+ * 不带集团的 transferInfos。高德 id 形如 BV10060938，sequence 即站序。
+ * @param {Array} busstops 高德 busline.busstops
+ * @param {boolean} reversed 该方向需反转：站点同 polyline 一起倒序，保持与站序/几何一致
+ */
+function busstopsToStops(busstops, reversed) {
+  const out = []
+  for (const b of busstops || []) {
+    if (!b || !b.location) continue
+    const [lng, lat] = String(b.location).split(',').map(Number)
+    if (!isFinite(lng) || !isFinite(lat) || lng === 0 || lat === 0) continue
+    out.push({
+      stopNo: b.sequence != null ? Number(b.sequence) : undefined,
+      stopId: b.id || '',
+      stopName: b.name || '',
+      longitude: lng,
+      latitude: lat,
+    })
+  }
+  if (!reversed) return out
+  // 反转后重排序号：站名顺序才是行进方向，stopNo 应随之 1..N 递增，
+  // 否则前端 cleanStops 的 sortByNo 会按旧 sequence 把方向倒回去。
+  const rev = out.reverse()
+  rev.forEach((s, i) => { s.stopNo = i + 1 })
+  return rev
+}
+
 // ── 高德公交信息查询 ──
 // linename 日配额耗尽后置位 → 自动切备用链路；备用链路也耗尽才停机。
 let QUOTA_EXHAUSTED = false
@@ -345,7 +374,12 @@ function matchBusline(buslines, firstStop, lastStop) {
       else if ((f && s.includes(f) && l && e.includes(l))) score = 1
       else if ((f && e.includes(f) && l && s.includes(l))) { score = 1; reversed = true }
     }
-    if (score > bestScore) { bestScore = score; best = { bl, reversed } }
+    // 同分时优先「方向一致」的 busline（reversed=false）：高德常同时给正反两条线，
+    // 精确方向那条才该被选中；否则会选到反方向再反转，站点数/顺序都对不上集团方向。
+    if (score > bestScore || (score === bestScore && score >= 1 && !reversed && best && best.reversed)) {
+      bestScore = score
+      best = { bl, reversed }
+    }
   }
   if (!best || bestScore < 1 || !best.bl.polyline) return null
   return { polyline: best.bl.polyline, busstops: best.bl.busstops || [], reversed: best.reversed, id: best.bl.id }
@@ -510,25 +544,25 @@ for (const l of todoFinal) {
     const { stops } = cleanStops(rawStops)
     if (stops.length < 2) { stats.dirMiss++; unresolved++; continue }
 
-    // 用清洗后站点的首末站名匹配高德方向
-    let firstStop = stops[0].stopName
-    let lastStop = stops[stops.length - 1].stopName
+    // 用 base 的稳定起讫站匹配高德方向：base.startStop/endStop 来自集团线路基础信息，
+    // 不随站点数组被高德覆盖而改变，是该方向真实行进方向的可靠基准。
+    // （站点数组经反复重采/反转后首末可能被打乱，不能用它判断方向。）
+    const firstStop = (base && base.startStop) || (rawStops[0] && rawStops[0].stopName) || stops[0].stopName
+    const lastStop = (base && base.endStop) || (rawStops[rawStops.length - 1] && rawStops[rawStops.length - 1].stopName) || stops[stops.length - 1].stopName
     let m = matchBusline(buslines, firstStop, lastStop)
-    if (!m) {
-      // 回退：cleanStops 按 stopNo 排序可能把终点打乱（211 dir0 把「育才实验学校」
-      // 排到「湖大知行学院」之后），改用清洗前物理首末站再试一次
-      firstStop = (rawStops[0] && rawStops[0].stopName) || firstStop
-      lastStop = (rawStops[rawStops.length - 1] && rawStops[rawStops.length - 1].stopName) || lastStop
-      m = matchBusline(buslines, firstStop, lastStop)
-    }
+    if (!m) m = matchBusline(buslines, stops[0].stopName, stops[stops.length - 1].stopName)
 
-    let pts, reversed, amapId, amapName
+    let pts, reversed, amapId, amapName, amapStops = null
     if (m) {
       // 站名匹配成功：沿用高德 busline 的 reversed 标记
       pts = parsePolyline(m.polyline)
       reversed = m.reversed
       amapId = m.id || null
       amapName = (buslines[0] && buslines[0].name) || null
+      // 站点以高德为准：busline 自带 busstops，替换掉集团 /line 的站点
+      // （集团站含旧站残留/另一套 id，用户架构要求站点只用高德）
+      const cand = busstopsToStops(m.busstops, reversed)
+      if (cand.length >= 2) amapStops = cand
     } else {
       // 站名匹配失败（常见于线路改线 / 起讫站改名）：用资产已存的稳定 lineid 直查该方向
       // polyline，再按最新站点坐标做几何方向判定。没有 id 才真正放弃。
@@ -544,6 +578,8 @@ for (const l of todoFinal) {
       reversed = dec.need
       amapId = String(oldId)
       amapName = bl.name || null
+      const cand = busstopsToStops(bl.busstops, reversed)
+      if (cand.length >= 2) amapStops = cand
       stats.fallback++
     }
     if (!pts || pts.length < 2) { stats.dirMiss++; stats.fallback++; unresolved++; continue }
@@ -558,7 +594,8 @@ for (const l of todoFinal) {
     const bounds = `${Math.min(...lngs).toFixed(6)};${Math.min(...lats).toFixed(6)};${Math.max(...lngs).toFixed(6)};${Math.max(...lats).toFixed(6)}`
     putRow(no, d, {
       base,
-      stops: slimStops(stops),
+      // 站点优先高德；高德没给 busstops 时才保留集团站（避免数据缺失）
+      stops: slimStops(amapStops || stops),
       route: toFlat(dirRoute),
       snapped: true,
       source: 'amap',
