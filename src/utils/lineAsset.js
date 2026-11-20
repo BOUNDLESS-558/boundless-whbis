@@ -39,7 +39,9 @@ export function loadShard(no) {
   if (SHARDS.has(key)) return SHARDS.get(key)
   const p = new Promise((resolve) => {
     uni.request({
-      url: assetUrl(ASSET_DIR + key + '.json'),
+      // 缓存破坏：静态 JSON 走 HTTP 缓存，用户不强刷就会一直看到旧资产（斜穿/回环修复不生效）。
+      // 加时间戳后每次请求都拉新文件，SHARDS 内存缓存仍保证同页不重复请求。
+      url: assetUrl(ASSET_DIR + key + '.json?t=' + Date.now()),
       method: 'GET',
       timeout: 15000,
       success: (res) => {

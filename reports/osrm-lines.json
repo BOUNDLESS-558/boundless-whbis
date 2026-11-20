@@ -1,0 +1,3410 @@
+{
+  "updatedAt": "2026-11-20T14:25:06.711Z",
+  "rule": "source=osrm 表示该方向走向由 OSRM 驾车路网近似生成，非高德公交 API 官方轨迹（API 未收录时的兜底）。",
+  "total": 366,
+  "lines": [
+    {
+      "no": "1",
+      "name": "",
+      "company": "公交集团",
+      "shard": "jt/b28.json",
+      "osrmDirs": [
+        "0",
+        "1"
+      ]
+    },
+    {
+      "no": "7",
+      "name": "",
+      "company": "公交集团",
+      "shard": "jt/b54.json",
+      "osrmDirs": [
+        "0",
+        "1"
+      ]
+    },
+    {
+      "no": "9",
+      "name": "",
+      "company": "公交集团",
+      "shard": "jt/b52.json",
+      "osrmDirs": [
+        "0",
+        "1"
+      ]
+    },
+    {
+      "no": "10",
+      "name": "",
+      "company": "公交集团",
+      "shard": "jt/b04.json",
+      "osrmDirs": [
+        "0",
+        "1"
+      ]
+    },
+    {
+      "no": "14",
+      "name": "",
+      "company": "公交集团",
+      "shard": "jt/b56.json",
+      "osrmDirs": [
+        "0",
+        "1"
+      ]
+    },
+    {
+      "no": "15",
+      "name": "",
+      "company": "公交集团",
+      "shard": "jt/b11.json",
+      "osrmDirs": [
+        "0",
+        "1"
+      ]
+    },
+    {
+      "no": "16",
+      "name": "",
+      "company": "公交集团",
+      "shard": "jt/b30.json",
+      "osrmDirs": [
+        "0",
+        "1"
+      ]
+    },
+    {
+      "no": "18",
+      "name": "",
+      "company": "公交集团",
+      "shard": "jt/b44.json",
+      "osrmDirs": [
+        "0",
+        "1"
+      ]
+    },
+    {
+      "no": "20",
+      "name": "",
+      "company": "公交集团",
+      "shard": "jt/b63.json",
+      "osrmDirs": [
+        "0",
+        "1"
+      ]
+    },
+    {
+      "no": "23",
+      "name": "",
+      "company": "公交集团",
+      "shard": "jt/b18.json",
+      "osrmDirs": [
+        "0",
+        "1"
+      ]
+    },
+    {
+      "no": "24",
+      "name": "",
+      "company": "公交集团",
+      "shard": "jt/b51.json",
+      "osrmDirs": [
+        "0",
+        "1"
+      ]
+    },
+    {
+      "no": "25",
+      "name": "",
+      "company": "公交集团",
+      "shard": "jt/b32.json",
+      "osrmDirs": [
+        "0",
+        "1"
+      ]
+    },
+    {
+      "no": "26",
+      "name": "",
+      "company": "公交集团",
+      "shard": "jt/b25.json",
+      "osrmDirs": [
+        "0",
+        "1"
+      ]
+    },
+    {
+      "no": "28",
+      "name": "",
+      "company": "公交集团",
+      "shard": "jt/b23.json",
+      "osrmDirs": [
+        "0",
+        "1"
+      ]
+    },
+    {
+      "no": "30",
+      "name": "",
+      "company": "公交集团",
+      "shard": "jt/b54.json",
+      "osrmDirs": [
+        "0",
+        "1"
+      ]
+    },
+    {
+      "no": "34",
+      "name": "",
+      "company": "公交集团",
+      "shard": "jt/b02.json",
+      "osrmDirs": [
+        "0",
+        "1"
+      ]
+    },
+    {
+      "no": "35",
+      "name": "",
+      "company": "公交集团",
+      "shard": "jt/b21.json",
+      "osrmDirs": [
+        "0",
+        "1"
+      ]
+    },
+    {
+      "no": "40",
+      "name": "",
+      "company": "公交集团",
+      "shard": "jt/b41.json",
+      "osrmDirs": [
+        "0",
+        "1"
+      ]
+    },
+    {
+      "no": "42",
+      "name": "",
+      "company": "公交集团",
+      "shard": "jt/b03.json",
+      "osrmDirs": [
+        "0",
+        "1"
+      ]
+    },
+    {
+      "no": "46",
+      "name": "",
+      "company": "公交集团",
+      "shard": "jt/b15.json",
+      "osrmDirs": [
+        "0",
+        "1"
+      ]
+    },
+    {
+      "no": "47",
+      "name": "",
+      "company": "公交集团",
+      "shard": "jt/b60.json",
+      "osrmDirs": [
+        "0",
+        "1"
+      ]
+    },
+    {
+      "no": "59",
+      "name": "",
+      "company": "公交集团",
+      "shard": "jt/b11.json",
+      "osrmDirs": [
+        "0",
+        "1"
+      ]
+    },
+    {
+      "no": "60",
+      "name": "",
+      "company": "公交集团",
+      "shard": "jt/b59.json",
+      "osrmDirs": [
+        "0",
+        "1"
+      ]
+    },
+    {
+      "no": "66",
+      "name": "",
+      "company": "公交集团",
+      "shard": "jt/b45.json",
+      "osrmDirs": [
+        "0",
+        "1"
+      ]
+    },
+    {
+      "no": "71",
+      "name": "",
+      "company": "公交集团",
+      "shard": "jt/b05.json",
+      "osrmDirs": [
+        "0",
+        "1"
+      ]
+    },
+    {
+      "no": "72",
+      "name": "",
+      "company": "公交集团",
+      "shard": "jt/b12.json",
+      "osrmDirs": [
+        "0",
+        "1"
+      ]
+    },
+    {
+      "no": "74",
+      "name": "",
+      "company": "公交集团",
+      "shard": "jt/b38.json",
+      "osrmDirs": [
+        "0",
+        "1"
+      ]
+    },
+    {
+      "no": "79",
+      "name": "",
+      "company": "公交集团",
+      "shard": "jt/b29.json",
+      "osrmDirs": [
+        "0",
+        "1"
+      ]
+    },
+    {
+      "no": "118",
+      "name": "",
+      "company": "公交集团",
+      "shard": "jt/b61.json",
+      "osrmDirs": [
+        "0",
+        "1"
+      ]
+    },
+    {
+      "no": "119",
+      "name": "",
+      "company": "公交集团",
+      "shard": "jt/b42.json",
+      "osrmDirs": [
+        "0",
+        "1"
+      ]
+    },
+    {
+      "no": "201",
+      "name": "",
+      "company": "公交集团",
+      "shard": "jt/b10.json",
+      "osrmDirs": [
+        "0",
+        "1"
+      ]
+    },
+    {
+      "no": "202",
+      "name": "",
+      "company": "公交集团",
+      "shard": "jt/b55.json",
+      "osrmDirs": [
+        "0",
+        "1"
+      ]
+    },
+    {
+      "no": "203",
+      "name": "",
+      "company": "公交集团",
+      "shard": "jt/b36.json",
+      "osrmDirs": [
+        "0",
+        "1"
+      ]
+    },
+    {
+      "no": "204",
+      "name": "",
+      "company": "公交集团",
+      "shard": "jt/b17.json",
+      "osrmDirs": [
+        "0",
+        "1"
+      ]
+    },
+    {
+      "no": "205",
+      "name": "",
+      "company": "公交集团",
+      "shard": "jt/b62.json",
+      "osrmDirs": [
+        "0",
+        "1"
+      ]
+    },
+    {
+      "no": "207",
+      "name": "",
+      "company": "公交集团",
+      "shard": "jt/b24.json",
+      "osrmDirs": [
+        "0",
+        "1"
+      ]
+    },
+    {
+      "no": "208",
+      "name": "",
+      "company": "公交集团",
+      "shard": "jt/b05.json",
+      "osrmDirs": [
+        "0",
+        "1"
+      ]
+    },
+    {
+      "no": "211",
+      "name": "",
+      "company": "公交集团",
+      "shard": "jt/b39.json",
+      "osrmDirs": [
+        "0",
+        "1"
+      ]
+    },
+    {
+      "no": "212",
+      "name": "",
+      "company": "公交集团",
+      "shard": "jt/b58.json",
+      "osrmDirs": [
+        "0",
+        "1"
+      ]
+    },
+    {
+      "no": "213",
+      "name": "",
+      "company": "公交集团",
+      "shard": "jt/b13.json",
+      "osrmDirs": [
+        "0"
+      ]
+    },
+    {
+      "no": "214",
+      "name": "",
+      "company": "公交集团",
+      "shard": "jt/b08.json",
+      "osrmDirs": [
+        "0",
+        "1"
+      ]
+    },
+    {
+      "no": "238",
+      "name": "",
+      "company": "公交集团",
+      "shard": "jt/b30.json",
+      "osrmDirs": [
+        "0",
+        "1"
+      ]
+    },
+    {
+      "no": "242",
+      "name": "",
+      "company": "公交集团",
+      "shard": "jt/b19.json",
+      "osrmDirs": [
+        "0",
+        "1"
+      ]
+    },
+    {
+      "no": "255",
+      "name": "",
+      "company": "公交集团",
+      "shard": "jt/b15.json",
+      "osrmDirs": [
+        "0",
+        "1"
+      ]
+    },
+    {
+      "no": "266",
+      "name": "",
+      "company": "公交集团",
+      "shard": "jt/b61.json",
+      "osrmDirs": [
+        "0",
+        "1"
+      ]
+    },
+    {
+      "no": "277",
+      "name": "",
+      "company": "公交集团",
+      "shard": "jt/b35.json",
+      "osrmDirs": [
+        "0",
+        "1"
+      ]
+    },
+    {
+      "no": "291",
+      "name": "",
+      "company": "公交集团",
+      "shard": "jt/b47.json",
+      "osrmDirs": [
+        "0",
+        "1"
+      ]
+    },
+    {
+      "no": "295",
+      "name": "",
+      "company": "公交集团",
+      "shard": "jt/b35.json",
+      "osrmDirs": [
+        "0",
+        "1"
+      ]
+    },
+    {
+      "no": "309",
+      "name": "",
+      "company": "公交集团",
+      "shard": "jt/b29.json",
+      "osrmDirs": [
+        "0",
+        "1"
+      ]
+    },
+    {
+      "no": "313",
+      "name": "",
+      "company": "公交集团",
+      "shard": "jt/b14.json",
+      "osrmDirs": [
+        "0",
+        "1"
+      ]
+    },
+    {
+      "no": "317",
+      "name": "",
+      "company": "公交集团",
+      "shard": "jt/b26.json",
+      "osrmDirs": [
+        "0",
+        "1"
+      ]
+    },
+    {
+      "no": "318",
+      "name": "",
+      "company": "公交集团",
+      "shard": "jt/b35.json",
+      "osrmDirs": [
+        "0",
+        "1"
+      ]
+    },
+    {
+      "no": "329",
+      "name": "",
+      "company": "公交集团",
+      "shard": "jt/b11.json",
+      "osrmDirs": [
+        "0"
+      ]
+    },
+    {
+      "no": "330",
+      "name": "",
+      "company": "公交集团",
+      "shard": "jt/b41.json",
+      "osrmDirs": [
+        "0"
+      ]
+    },
+    {
+      "no": "343",
+      "name": "",
+      "company": "公交集团",
+      "shard": "jt/b35.json",
+      "osrmDirs": [
+        "0"
+      ]
+    },
+    {
+      "no": "350",
+      "name": "",
+      "company": "公交集团",
+      "shard": "jt/b63.json",
+      "osrmDirs": [
+        "0",
+        "1"
+      ]
+    },
+    {
+      "no": "358",
+      "name": "",
+      "company": "公交集团",
+      "shard": "jt/b23.json",
+      "osrmDirs": [
+        "0",
+        "1"
+      ]
+    },
+    {
+      "no": "360",
+      "name": "",
+      "company": "公交集团",
+      "shard": "jt/b04.json",
+      "osrmDirs": [
+        "0"
+      ]
+    },
+    {
+      "no": "372",
+      "name": "",
+      "company": "公交集团",
+      "shard": "jt/b39.json",
+      "osrmDirs": [
+        "0",
+        "1"
+      ]
+    },
+    {
+      "no": "375",
+      "name": "",
+      "company": "公交集团",
+      "shard": "jt/b46.json",
+      "osrmDirs": [
+        "0",
+        "1"
+      ]
+    },
+    {
+      "no": "391",
+      "name": "",
+      "company": "公交集团",
+      "shard": "jt/b48.json",
+      "osrmDirs": [
+        "0",
+        "1"
+      ]
+    },
+    {
+      "no": "397",
+      "name": "",
+      "company": "公交集团",
+      "shard": "jt/b34.json",
+      "osrmDirs": [
+        "0",
+        "1"
+      ]
+    },
+    {
+      "no": "408内环",
+      "name": "",
+      "company": "公交集团",
+      "shard": "jt/b39.json",
+      "osrmDirs": [
+        "0"
+      ]
+    },
+    {
+      "no": "504",
+      "name": "",
+      "company": "公交集团",
+      "shard": "jt/b60.json",
+      "osrmDirs": [
+        "0",
+        "1"
+      ]
+    },
+    {
+      "no": "509",
+      "name": "",
+      "company": "公交集团",
+      "shard": "jt/b27.json",
+      "osrmDirs": [
+        "0",
+        "1"
+      ]
+    },
+    {
+      "no": "512",
+      "name": "",
+      "company": "公交集团",
+      "shard": "jt/b19.json",
+      "osrmDirs": [
+        "0",
+        "1"
+      ]
+    },
+    {
+      "no": "522",
+      "name": "",
+      "company": "公交集团",
+      "shard": "jt/b28.json",
+      "osrmDirs": [
+        "0",
+        "1"
+      ]
+    },
+    {
+      "no": "523",
+      "name": "",
+      "company": "公交集团",
+      "shard": "jt/b47.json",
+      "osrmDirs": [
+        "1"
+      ]
+    },
+    {
+      "no": "527",
+      "name": "",
+      "company": "公交集团",
+      "shard": "jt/b35.json",
+      "osrmDirs": [
+        "0",
+        "1"
+      ]
+    },
+    {
+      "no": "530内环",
+      "name": "",
+      "company": "公交集团",
+      "shard": "jt/b63.json",
+      "osrmDirs": [
+        "0"
+      ]
+    },
+    {
+      "no": "530外环",
+      "name": "",
+      "company": "公交集团",
+      "shard": "jt/b24.json",
+      "osrmDirs": [
+        "0"
+      ]
+    },
+    {
+      "no": "536",
+      "name": "",
+      "company": "公交集团",
+      "shard": "jt/b61.json",
+      "osrmDirs": [
+        "0",
+        "1"
+      ]
+    },
+    {
+      "no": "561",
+      "name": "",
+      "company": "公交集团",
+      "shard": "jt/b25.json",
+      "osrmDirs": [
+        "0",
+        "1"
+      ]
+    },
+    {
+      "no": "567内环",
+      "name": "",
+      "company": "公交集团",
+      "shard": "jt/b51.json",
+      "osrmDirs": [
+        "0"
+      ]
+    },
+    {
+      "no": "567外环",
+      "name": "",
+      "company": "公交集团",
+      "shard": "jt/b44.json",
+      "osrmDirs": [
+        "0"
+      ]
+    },
+    {
+      "no": "569",
+      "name": "",
+      "company": "公交集团",
+      "shard": "jt/b49.json",
+      "osrmDirs": [
+        "0",
+        "1"
+      ]
+    },
+    {
+      "no": "598",
+      "name": "",
+      "company": "公交集团",
+      "shard": "jt/b09.json",
+      "osrmDirs": [
+        "0",
+        "1"
+      ]
+    },
+    {
+      "no": "599",
+      "name": "",
+      "company": "公交集团",
+      "shard": "jt/b54.json",
+      "osrmDirs": [
+        "0",
+        "1"
+      ]
+    },
+    {
+      "no": "608",
+      "name": "",
+      "company": "公交集团",
+      "shard": "jt/b57.json",
+      "osrmDirs": [
+        "0",
+        "1"
+      ]
+    },
+    {
+      "no": "612",
+      "name": "",
+      "company": "公交集团",
+      "shard": "jt/b46.json",
+      "osrmDirs": [
+        "0",
+        "1"
+      ]
+    },
+    {
+      "no": "627",
+      "name": "",
+      "company": "公交集团",
+      "shard": "jt/b34.json",
+      "osrmDirs": [
+        "0",
+        "1"
+      ]
+    },
+    {
+      "no": "638",
+      "name": "",
+      "company": "公交集团",
+      "shard": "jt/b02.json",
+      "osrmDirs": [
+        "0",
+        "1"
+      ]
+    },
+    {
+      "no": "673",
+      "name": "",
+      "company": "公交集团",
+      "shard": "jt/b11.json",
+      "osrmDirs": [
+        "0"
+      ]
+    },
+    {
+      "no": "686",
+      "name": "",
+      "company": "公交集团",
+      "shard": "jt/b15.json",
+      "osrmDirs": [
+        "0"
+      ]
+    },
+    {
+      "no": "688",
+      "name": "",
+      "company": "公交集团",
+      "shard": "jt/b01.json",
+      "osrmDirs": [
+        "0",
+        "1"
+      ]
+    },
+    {
+      "no": "717",
+      "name": "",
+      "company": "公交集团",
+      "shard": "jt/b54.json",
+      "osrmDirs": [
+        "0",
+        "1"
+      ]
+    },
+    {
+      "no": "729",
+      "name": "",
+      "company": "公交集团",
+      "shard": "jt/b47.json",
+      "osrmDirs": [
+        "0",
+        "1"
+      ]
+    },
+    {
+      "no": "734",
+      "name": "",
+      "company": "公交集团",
+      "shard": "jt/b49.json",
+      "osrmDirs": [
+        "0",
+        "1"
+      ]
+    },
+    {
+      "no": "751",
+      "name": "",
+      "company": "公交集团",
+      "shard": "jt/b24.json",
+      "osrmDirs": [
+        "0",
+        "1"
+      ]
+    },
+    {
+      "no": "796",
+      "name": "",
+      "company": "公交集团",
+      "shard": "jt/b49.json",
+      "osrmDirs": [
+        "0",
+        "1"
+      ]
+    },
+    {
+      "no": "808",
+      "name": "",
+      "company": "公交集团",
+      "shard": "jt/b23.json",
+      "osrmDirs": [
+        "0",
+        "1"
+      ]
+    },
+    {
+      "no": "931",
+      "name": "",
+      "company": "公交集团",
+      "shard": "jt/b28.json",
+      "osrmDirs": [
+        "0",
+        "1"
+      ]
+    },
+    {
+      "no": "2371",
+      "name": "",
+      "company": "公交集团",
+      "shard": "jt/b10.json",
+      "osrmDirs": [
+        "0"
+      ]
+    },
+    {
+      "no": "3971",
+      "name": "",
+      "company": "公交集团",
+      "shard": "jt/b41.json",
+      "osrmDirs": [
+        "0"
+      ]
+    },
+    {
+      "no": "电2",
+      "name": "",
+      "company": "公交集团",
+      "shard": "jt/b06.json",
+      "osrmDirs": [
+        "0",
+        "1"
+      ]
+    },
+    {
+      "no": "D103",
+      "name": "",
+      "company": "公交集团",
+      "shard": "jt/b35.json",
+      "osrmDirs": [
+        "0"
+      ]
+    },
+    {
+      "no": "D104",
+      "name": "",
+      "company": "公交集团",
+      "shard": "jt/b02.json",
+      "osrmDirs": [
+        "0"
+      ]
+    },
+    {
+      "no": "D109",
+      "name": "",
+      "company": "公交集团",
+      "shard": "jt/b33.json",
+      "osrmDirs": [
+        "0"
+      ]
+    },
+    {
+      "no": "D111",
+      "name": "",
+      "company": "公交集团",
+      "shard": "jt/b44.json",
+      "osrmDirs": [
+        "0"
+      ]
+    },
+    {
+      "no": "D112",
+      "name": "",
+      "company": "公交集团",
+      "shard": "jt/b37.json",
+      "osrmDirs": [
+        "0"
+      ]
+    },
+    {
+      "no": "D113",
+      "name": "",
+      "company": "公交集团",
+      "shard": "jt/b18.json",
+      "osrmDirs": [
+        "0"
+      ]
+    },
+    {
+      "no": "D123",
+      "name": "",
+      "company": "公交集团",
+      "shard": "jt/b61.json",
+      "osrmDirs": [
+        "0"
+      ]
+    },
+    {
+      "no": "D126",
+      "name": "",
+      "company": "公交集团",
+      "shard": "jt/b30.json",
+      "osrmDirs": [
+        "0"
+      ]
+    },
+    {
+      "no": "D127",
+      "name": "",
+      "company": "公交集团",
+      "shard": "jt/b49.json",
+      "osrmDirs": [
+        "0"
+      ]
+    },
+    {
+      "no": "D136",
+      "name": "",
+      "company": "公交集团",
+      "shard": "jt/b27.json",
+      "osrmDirs": [
+        "0"
+      ]
+    },
+    {
+      "no": "D137",
+      "name": "",
+      "company": "公交集团",
+      "shard": "jt/b08.json",
+      "osrmDirs": [
+        "0"
+      ]
+    },
+    {
+      "no": "D138",
+      "name": "",
+      "company": "公交集团",
+      "shard": "jt/b53.json",
+      "osrmDirs": [
+        "0"
+      ]
+    },
+    {
+      "no": "D139",
+      "name": "",
+      "company": "公交集团",
+      "shard": "jt/b34.json",
+      "osrmDirs": [
+        "0"
+      ]
+    },
+    {
+      "no": "D168",
+      "name": "",
+      "company": "公交集团",
+      "shard": "jt/b56.json",
+      "osrmDirs": [
+        "0"
+      ]
+    },
+    {
+      "no": "D205",
+      "name": "",
+      "company": "公交集团",
+      "shard": "jt/b36.json",
+      "osrmDirs": [
+        "0"
+      ]
+    },
+    {
+      "no": "D207",
+      "name": "",
+      "company": "公交集团",
+      "shard": "jt/b10.json",
+      "osrmDirs": [
+        "0"
+      ]
+    },
+    {
+      "no": "D208",
+      "name": "",
+      "company": "公交集团",
+      "shard": "jt/b19.json",
+      "osrmDirs": [
+        "0"
+      ]
+    },
+    {
+      "no": "D210",
+      "name": "",
+      "company": "公交集团",
+      "shard": "jt/b34.json",
+      "osrmDirs": [
+        "0"
+      ]
+    },
+    {
+      "no": "D211",
+      "name": "",
+      "company": "公交集团",
+      "shard": "jt/b53.json",
+      "osrmDirs": [
+        "0"
+      ]
+    },
+    {
+      "no": "D212",
+      "name": "",
+      "company": "公交集团",
+      "shard": "jt/b60.json",
+      "osrmDirs": [
+        "0"
+      ]
+    },
+    {
+      "no": "D213",
+      "name": "",
+      "company": "公交集团",
+      "shard": "jt/b15.json",
+      "osrmDirs": [
+        "0"
+      ]
+    },
+    {
+      "no": "D225",
+      "name": "",
+      "company": "公交集团",
+      "shard": "jt/b18.json",
+      "osrmDirs": [
+        "0"
+      ]
+    },
+    {
+      "no": "D230",
+      "name": "",
+      "company": "公交集团",
+      "shard": "jt/b16.json",
+      "osrmDirs": [
+        "0"
+      ]
+    },
+    {
+      "no": "D231",
+      "name": "",
+      "company": "公交集团",
+      "shard": "jt/b35.json",
+      "osrmDirs": [
+        "0"
+      ]
+    },
+    {
+      "no": "D232",
+      "name": "",
+      "company": "公交集团",
+      "shard": "jt/b54.json",
+      "osrmDirs": [
+        "0"
+      ]
+    },
+    {
+      "no": "D233",
+      "name": "",
+      "company": "公交集团",
+      "shard": "jt/b09.json",
+      "osrmDirs": [
+        "0"
+      ]
+    },
+    {
+      "no": "D234",
+      "name": "",
+      "company": "公交集团",
+      "shard": "jt/b28.json",
+      "osrmDirs": [
+        "0"
+      ]
+    },
+    {
+      "no": "D235",
+      "name": "",
+      "company": "公交集团",
+      "shard": "jt/b47.json",
+      "osrmDirs": [
+        "0"
+      ]
+    },
+    {
+      "no": "D236",
+      "name": "",
+      "company": "公交集团",
+      "shard": "jt/b02.json",
+      "osrmDirs": [
+        "0"
+      ]
+    },
+    {
+      "no": "D237",
+      "name": "",
+      "company": "公交集团",
+      "shard": "jt/b21.json",
+      "osrmDirs": [
+        "0"
+      ]
+    },
+    {
+      "no": "D238",
+      "name": "",
+      "company": "公交集团",
+      "shard": "jt/b40.json",
+      "osrmDirs": [
+        "0"
+      ]
+    },
+    {
+      "no": "D239",
+      "name": "",
+      "company": "公交集团",
+      "shard": "jt/b59.json",
+      "osrmDirs": [
+        "0"
+      ]
+    },
+    {
+      "no": "D240",
+      "name": "",
+      "company": "公交集团",
+      "shard": "jt/b47.json",
+      "osrmDirs": [
+        "0"
+      ]
+    },
+    {
+      "no": "D241",
+      "name": "",
+      "company": "公交集团",
+      "shard": "jt/b28.json",
+      "osrmDirs": [
+        "0"
+      ]
+    },
+    {
+      "no": "D242",
+      "name": "",
+      "company": "公交集团",
+      "shard": "jt/b21.json",
+      "osrmDirs": [
+        "0"
+      ]
+    },
+    {
+      "no": "D243",
+      "name": "",
+      "company": "公交集团",
+      "shard": "jt/b02.json",
+      "osrmDirs": [
+        "0"
+      ]
+    },
+    {
+      "no": "D245",
+      "name": "",
+      "company": "公交集团",
+      "shard": "jt/b16.json",
+      "osrmDirs": [
+        "0"
+      ]
+    },
+    {
+      "no": "D246",
+      "name": "",
+      "company": "公交集团",
+      "shard": "jt/b09.json",
+      "osrmDirs": [
+        "0"
+      ]
+    },
+    {
+      "no": "D247",
+      "name": "",
+      "company": "公交集团",
+      "shard": "jt/b54.json",
+      "osrmDirs": [
+        "0"
+      ]
+    },
+    {
+      "no": "D248",
+      "name": "",
+      "company": "公交集团",
+      "shard": "jt/b07.json",
+      "osrmDirs": [
+        "0"
+      ]
+    },
+    {
+      "no": "D249",
+      "name": "",
+      "company": "公交集团",
+      "shard": "jt/b52.json",
+      "osrmDirs": [
+        "0"
+      ]
+    },
+    {
+      "no": "D250",
+      "name": "",
+      "company": "公交集团",
+      "shard": "jt/b38.json",
+      "osrmDirs": [
+        "0"
+      ]
+    },
+    {
+      "no": "D251",
+      "name": "",
+      "company": "公交集团",
+      "shard": "jt/b57.json",
+      "osrmDirs": [
+        "0"
+      ]
+    },
+    {
+      "no": "D300",
+      "name": "",
+      "company": "公交集团",
+      "shard": "jt/b00.json",
+      "osrmDirs": [
+        "0"
+      ]
+    },
+    {
+      "no": "D301",
+      "name": "",
+      "company": "公交集团",
+      "shard": "jt/b19.json",
+      "osrmDirs": [
+        "0"
+      ]
+    },
+    {
+      "no": "D305",
+      "name": "",
+      "company": "公交集团",
+      "shard": "jt/b31.json",
+      "osrmDirs": [
+        "0"
+      ]
+    },
+    {
+      "no": "D306",
+      "name": "",
+      "company": "公交集团",
+      "shard": "jt/b50.json",
+      "osrmDirs": [
+        "0"
+      ]
+    },
+    {
+      "no": "D307",
+      "name": "",
+      "company": "公交集团",
+      "shard": "jt/b05.json",
+      "osrmDirs": [
+        "0"
+      ]
+    },
+    {
+      "no": "D308",
+      "name": "",
+      "company": "公交集团",
+      "shard": "jt/b24.json",
+      "osrmDirs": [
+        "0"
+      ]
+    },
+    {
+      "no": "D309",
+      "name": "",
+      "company": "公交集团",
+      "shard": "jt/b43.json",
+      "osrmDirs": [
+        "0"
+      ]
+    },
+    {
+      "no": "D310",
+      "name": "",
+      "company": "公交集团",
+      "shard": "jt/b09.json",
+      "osrmDirs": [
+        "0"
+      ]
+    },
+    {
+      "no": "D311",
+      "name": "",
+      "company": "公交集团",
+      "shard": "jt/b54.json",
+      "osrmDirs": [
+        "0"
+      ]
+    },
+    {
+      "no": "D312",
+      "name": "",
+      "company": "公交集团",
+      "shard": "jt/b35.json",
+      "osrmDirs": [
+        "0"
+      ]
+    },
+    {
+      "no": "D338",
+      "name": "",
+      "company": "公交集团",
+      "shard": "jt/b03.json",
+      "osrmDirs": [
+        "0"
+      ]
+    },
+    {
+      "no": "D339",
+      "name": "",
+      "company": "公交集团",
+      "shard": "jt/b48.json",
+      "osrmDirs": [
+        "0"
+      ]
+    },
+    {
+      "no": "D340",
+      "name": "",
+      "company": "公交集团",
+      "shard": "jt/b36.json",
+      "osrmDirs": [
+        "0"
+      ]
+    },
+    {
+      "no": "D360",
+      "name": "",
+      "company": "公交集团",
+      "shard": "jt/b22.json",
+      "osrmDirs": [
+        "0"
+      ]
+    },
+    {
+      "no": "D402",
+      "name": "",
+      "company": "公交集团",
+      "shard": "jt/b07.json",
+      "osrmDirs": [
+        "0"
+      ]
+    },
+    {
+      "no": "D403",
+      "name": "",
+      "company": "公交集团",
+      "shard": "jt/b52.json",
+      "osrmDirs": [
+        "0"
+      ]
+    },
+    {
+      "no": "D404",
+      "name": "",
+      "company": "公交集团",
+      "shard": "jt/b33.json",
+      "osrmDirs": [
+        "0"
+      ]
+    },
+    {
+      "no": "D405",
+      "name": "",
+      "company": "公交集团",
+      "shard": "jt/b14.json",
+      "osrmDirs": [
+        "0"
+      ]
+    },
+    {
+      "no": "D407",
+      "name": "",
+      "company": "公交集团",
+      "shard": "jt/b40.json",
+      "osrmDirs": [
+        "0"
+      ]
+    },
+    {
+      "no": "D408",
+      "name": "",
+      "company": "公交集团",
+      "shard": "jt/b21.json",
+      "osrmDirs": [
+        "0"
+      ]
+    },
+    {
+      "no": "D411",
+      "name": "",
+      "company": "公交集团",
+      "shard": "jt/b55.json",
+      "osrmDirs": [
+        "0"
+      ]
+    },
+    {
+      "no": "D412",
+      "name": "",
+      "company": "公交集团",
+      "shard": "jt/b10.json",
+      "osrmDirs": [
+        "0"
+      ]
+    },
+    {
+      "no": "D414",
+      "name": "",
+      "company": "公交集团",
+      "shard": "jt/b24.json",
+      "osrmDirs": [
+        "0"
+      ]
+    },
+    {
+      "no": "D415",
+      "name": "",
+      "company": "公交集团",
+      "shard": "jt/b43.json",
+      "osrmDirs": [
+        "0"
+      ]
+    },
+    {
+      "no": "D417",
+      "name": "",
+      "company": "公交集团",
+      "shard": "jt/b17.json",
+      "osrmDirs": [
+        "0"
+      ]
+    },
+    {
+      "no": "D418",
+      "name": "",
+      "company": "公交集团",
+      "shard": "jt/b12.json",
+      "osrmDirs": [
+        "0"
+      ]
+    },
+    {
+      "no": "D419",
+      "name": "",
+      "company": "公交集团",
+      "shard": "jt/b31.json",
+      "osrmDirs": [
+        "0"
+      ]
+    },
+    {
+      "no": "D420",
+      "name": "",
+      "company": "公交集团",
+      "shard": "jt/b31.json",
+      "osrmDirs": [
+        "0"
+      ]
+    },
+    {
+      "no": "D422",
+      "name": "",
+      "company": "公交集团",
+      "shard": "jt/b05.json",
+      "osrmDirs": [
+        "0"
+      ]
+    },
+    {
+      "no": "D423",
+      "name": "",
+      "company": "公交集团",
+      "shard": "jt/b50.json",
+      "osrmDirs": [
+        "0"
+      ]
+    },
+    {
+      "no": "D424",
+      "name": "",
+      "company": "公交集团",
+      "shard": "jt/b19.json",
+      "osrmDirs": [
+        "0"
+      ]
+    },
+    {
+      "no": "D425",
+      "name": "",
+      "company": "公交集团",
+      "shard": "jt/b00.json",
+      "osrmDirs": [
+        "0"
+      ]
+    },
+    {
+      "no": "D426",
+      "name": "",
+      "company": "公交集团",
+      "shard": "jt/b57.json",
+      "osrmDirs": [
+        "0"
+      ]
+    },
+    {
+      "no": "D427",
+      "name": "",
+      "company": "公交集团",
+      "shard": "jt/b38.json",
+      "osrmDirs": [
+        "0"
+      ]
+    },
+    {
+      "no": "D428",
+      "name": "",
+      "company": "公交集团",
+      "shard": "jt/b55.json",
+      "osrmDirs": [
+        "0"
+      ]
+    },
+    {
+      "no": "D429",
+      "name": "",
+      "company": "公交集团",
+      "shard": "jt/b36.json",
+      "osrmDirs": [
+        "0"
+      ]
+    },
+    {
+      "no": "D430",
+      "name": "",
+      "company": "公交集团",
+      "shard": "jt/b22.json",
+      "osrmDirs": [
+        "0"
+      ]
+    },
+    {
+      "no": "D431",
+      "name": "",
+      "company": "公交集团",
+      "shard": "jt/b41.json",
+      "osrmDirs": [
+        "0"
+      ]
+    },
+    {
+      "no": "D477",
+      "name": "",
+      "company": "公交集团",
+      "shard": "jt/b51.json",
+      "osrmDirs": [
+        "0"
+      ]
+    },
+    {
+      "no": "D479",
+      "name": "",
+      "company": "公交集团",
+      "shard": "jt/b61.json",
+      "osrmDirs": [
+        "0"
+      ]
+    },
+    {
+      "no": "D483",
+      "name": "",
+      "company": "公交集团",
+      "shard": "jt/b60.json",
+      "osrmDirs": [
+        "0"
+      ]
+    },
+    {
+      "no": "D502",
+      "name": "",
+      "company": "公交集团",
+      "shard": "jt/b28.json",
+      "osrmDirs": [
+        "0"
+      ]
+    },
+    {
+      "no": "D503",
+      "name": "",
+      "company": "公交集团",
+      "shard": "jt/b47.json",
+      "osrmDirs": [
+        "0"
+      ]
+    },
+    {
+      "no": "D511",
+      "name": "",
+      "company": "公交集团",
+      "shard": "jt/b56.json",
+      "osrmDirs": [
+        "0"
+      ]
+    },
+    {
+      "no": "D514",
+      "name": "",
+      "company": "公交集团",
+      "shard": "jt/b23.json",
+      "osrmDirs": [
+        "0"
+      ]
+    },
+    {
+      "no": "D517",
+      "name": "",
+      "company": "公交集团",
+      "shard": "jt/b42.json",
+      "osrmDirs": [
+        "0"
+      ]
+    },
+    {
+      "no": "D520",
+      "name": "",
+      "company": "公交集团",
+      "shard": "jt/b48.json",
+      "osrmDirs": [
+        "0"
+      ]
+    },
+    {
+      "no": "D524",
+      "name": "",
+      "company": "公交集团",
+      "shard": "jt/b60.json",
+      "osrmDirs": [
+        "0"
+      ]
+    },
+    {
+      "no": "D526",
+      "name": "",
+      "company": "公交集团",
+      "shard": "jt/b34.json",
+      "osrmDirs": [
+        "0"
+      ]
+    },
+    {
+      "no": "D528",
+      "name": "",
+      "company": "公交集团",
+      "shard": "jt/b08.json",
+      "osrmDirs": [
+        "0"
+      ]
+    },
+    {
+      "no": "D533",
+      "name": "",
+      "company": "公交集团",
+      "shard": "jt/b00.json",
+      "osrmDirs": [
+        "0"
+      ]
+    },
+    {
+      "no": "D535",
+      "name": "",
+      "company": "公交集团",
+      "shard": "jt/b50.json",
+      "osrmDirs": [
+        "0"
+      ]
+    },
+    {
+      "no": "D543",
+      "name": "",
+      "company": "公交集团",
+      "shard": "jt/b51.json",
+      "osrmDirs": [
+        "0"
+      ]
+    },
+    {
+      "no": "D547",
+      "name": "",
+      "company": "公交集团",
+      "shard": "jt/b63.json",
+      "osrmDirs": [
+        "0"
+      ]
+    },
+    {
+      "no": "D549",
+      "name": "",
+      "company": "公交集团",
+      "shard": "jt/b49.json",
+      "osrmDirs": [
+        "0"
+      ]
+    },
+    {
+      "no": "D556",
+      "name": "",
+      "company": "公交集团",
+      "shard": "jt/b41.json",
+      "osrmDirs": [
+        "0"
+      ]
+    },
+    {
+      "no": "D591",
+      "name": "",
+      "company": "公交集团",
+      "shard": "jt/b00.json",
+      "osrmDirs": [
+        "0"
+      ]
+    },
+    {
+      "no": "D598",
+      "name": "",
+      "company": "公交集团",
+      "shard": "jt/b43.json",
+      "osrmDirs": [
+        "0"
+      ]
+    },
+    {
+      "no": "D600",
+      "name": "",
+      "company": "公交集团",
+      "shard": "jt/b23.json",
+      "osrmDirs": [
+        "0"
+      ]
+    },
+    {
+      "no": "D632",
+      "name": "",
+      "company": "公交集团",
+      "shard": "jt/b34.json",
+      "osrmDirs": [
+        "0"
+      ]
+    },
+    {
+      "no": "D635",
+      "name": "",
+      "company": "公交集团",
+      "shard": "jt/b03.json",
+      "osrmDirs": [
+        "0"
+      ]
+    },
+    {
+      "no": "D638",
+      "name": "",
+      "company": "公交集团",
+      "shard": "jt/b20.json",
+      "osrmDirs": [
+        "0"
+      ]
+    },
+    {
+      "no": "D639",
+      "name": "",
+      "company": "公交集团",
+      "shard": "jt/b39.json",
+      "osrmDirs": [
+        "0"
+      ]
+    },
+    {
+      "no": "D643",
+      "name": "",
+      "company": "公交集团",
+      "shard": "jt/b06.json",
+      "osrmDirs": [
+        "0"
+      ]
+    },
+    {
+      "no": "D644",
+      "name": "",
+      "company": "公交集团",
+      "shard": "jt/b63.json",
+      "osrmDirs": [
+        "0"
+      ]
+    },
+    {
+      "no": "D646",
+      "name": "",
+      "company": "公交集团",
+      "shard": "jt/b37.json",
+      "osrmDirs": [
+        "0"
+      ]
+    },
+    {
+      "no": "D647",
+      "name": "",
+      "company": "公交集团",
+      "shard": "jt/b18.json",
+      "osrmDirs": [
+        "0"
+      ]
+    },
+    {
+      "no": "D648",
+      "name": "",
+      "company": "公交集团",
+      "shard": "jt/b11.json",
+      "osrmDirs": [
+        "0"
+      ]
+    },
+    {
+      "no": "D650",
+      "name": "",
+      "company": "公交集团",
+      "shard": "jt/b10.json",
+      "osrmDirs": [
+        "0"
+      ]
+    },
+    {
+      "no": "D651",
+      "name": "",
+      "company": "公交集团",
+      "shard": "jt/b29.json",
+      "osrmDirs": [
+        "0"
+      ]
+    },
+    {
+      "no": "D652",
+      "name": "",
+      "company": "公交集团",
+      "shard": "jt/b36.json",
+      "osrmDirs": [
+        "0"
+      ]
+    },
+    {
+      "no": "D654",
+      "name": "",
+      "company": "公交集团",
+      "shard": "jt/b62.json",
+      "osrmDirs": [
+        "0"
+      ]
+    },
+    {
+      "no": "D655",
+      "name": "",
+      "company": "公交集团",
+      "shard": "jt/b17.json",
+      "osrmDirs": [
+        "0"
+      ]
+    },
+    {
+      "no": "D656",
+      "name": "",
+      "company": "公交集团",
+      "shard": "jt/b24.json",
+      "osrmDirs": [
+        "0"
+      ]
+    },
+    {
+      "no": "D657",
+      "name": "",
+      "company": "公交集团",
+      "shard": "jt/b43.json",
+      "osrmDirs": [
+        "0"
+      ]
+    },
+    {
+      "no": "D658",
+      "name": "",
+      "company": "公交集团",
+      "shard": "jt/b50.json",
+      "osrmDirs": [
+        "0"
+      ]
+    },
+    {
+      "no": "D659",
+      "name": "",
+      "company": "公交集团",
+      "shard": "jt/b05.json",
+      "osrmDirs": [
+        "0"
+      ]
+    },
+    {
+      "no": "D661",
+      "name": "",
+      "company": "公交集团",
+      "shard": "jt/b46.json",
+      "osrmDirs": [
+        "0"
+      ]
+    },
+    {
+      "no": "D664",
+      "name": "",
+      "company": "公交集团",
+      "shard": "jt/b13.json",
+      "osrmDirs": [
+        "0"
+      ]
+    },
+    {
+      "no": "D666",
+      "name": "",
+      "company": "公交集团",
+      "shard": "jt/b39.json",
+      "osrmDirs": [
+        "0"
+      ]
+    },
+    {
+      "no": "D667",
+      "name": "",
+      "company": "公交集团",
+      "shard": "jt/b20.json",
+      "osrmDirs": [
+        "0"
+      ]
+    },
+    {
+      "no": "D668",
+      "name": "",
+      "company": "公交集团",
+      "shard": "jt/b41.json",
+      "osrmDirs": [
+        "0"
+      ]
+    },
+    {
+      "no": "D669",
+      "name": "",
+      "company": "公交集团",
+      "shard": "jt/b22.json",
+      "osrmDirs": [
+        "0"
+      ]
+    },
+    {
+      "no": "D670",
+      "name": "",
+      "company": "公交集团",
+      "shard": "jt/b56.json",
+      "osrmDirs": [
+        "0"
+      ]
+    },
+    {
+      "no": "D671",
+      "name": "",
+      "company": "公交集团",
+      "shard": "jt/b11.json",
+      "osrmDirs": [
+        "0"
+      ]
+    },
+    {
+      "no": "D687",
+      "name": "",
+      "company": "公交集团",
+      "shard": "jt/b54.json",
+      "osrmDirs": [
+        "0"
+      ]
+    },
+    {
+      "no": "D688",
+      "name": "",
+      "company": "公交集团",
+      "shard": "jt/b07.json",
+      "osrmDirs": [
+        "0"
+      ]
+    },
+    {
+      "no": "D689",
+      "name": "",
+      "company": "公交集团",
+      "shard": "jt/b52.json",
+      "osrmDirs": [
+        "0"
+      ]
+    },
+    {
+      "no": "D690",
+      "name": "",
+      "company": "公交集团",
+      "shard": "jt/b38.json",
+      "osrmDirs": [
+        "0"
+      ]
+    },
+    {
+      "no": "D691",
+      "name": "",
+      "company": "公交集团",
+      "shard": "jt/b57.json",
+      "osrmDirs": [
+        "0"
+      ]
+    },
+    {
+      "no": "D692",
+      "name": "",
+      "company": "公交集团",
+      "shard": "jt/b00.json",
+      "osrmDirs": [
+        "0"
+      ]
+    },
+    {
+      "no": "D693",
+      "name": "",
+      "company": "公交集团",
+      "shard": "jt/b19.json",
+      "osrmDirs": [
+        "0"
+      ]
+    },
+    {
+      "no": "D694",
+      "name": "",
+      "company": "公交集团",
+      "shard": "jt/b50.json",
+      "osrmDirs": [
+        "0"
+      ]
+    },
+    {
+      "no": "D695",
+      "name": "",
+      "company": "公交集团",
+      "shard": "jt/b05.json",
+      "osrmDirs": [
+        "0"
+      ]
+    },
+    {
+      "no": "D697",
+      "name": "",
+      "company": "公交集团",
+      "shard": "jt/b31.json",
+      "osrmDirs": [
+        "0"
+      ]
+    },
+    {
+      "no": "D700",
+      "name": "",
+      "company": "公交集团",
+      "shard": "jt/b44.json",
+      "osrmDirs": [
+        "0"
+      ]
+    },
+    {
+      "no": "D701",
+      "name": "",
+      "company": "公交集团",
+      "shard": "jt/b63.json",
+      "osrmDirs": [
+        "0"
+      ]
+    },
+    {
+      "no": "D702",
+      "name": "",
+      "company": "公交集团",
+      "shard": "jt/b18.json",
+      "osrmDirs": [
+        "0"
+      ]
+    },
+    {
+      "no": "D703",
+      "name": "",
+      "company": "公交集团",
+      "shard": "jt/b37.json",
+      "osrmDirs": [
+        "0"
+      ]
+    },
+    {
+      "no": "D704",
+      "name": "",
+      "company": "公交集团",
+      "shard": "jt/b32.json",
+      "osrmDirs": [
+        "0"
+      ]
+    },
+    {
+      "no": "D706",
+      "name": "",
+      "company": "公交集团",
+      "shard": "jt/b06.json",
+      "osrmDirs": [
+        "0"
+      ]
+    },
+    {
+      "no": "D707",
+      "name": "",
+      "company": "公交集团",
+      "shard": "jt/b25.json",
+      "osrmDirs": [
+        "0"
+      ]
+    },
+    {
+      "no": "D708",
+      "name": "",
+      "company": "公交集团",
+      "shard": "jt/b04.json",
+      "osrmDirs": [
+        "0"
+      ]
+    },
+    {
+      "no": "D710",
+      "name": "",
+      "company": "公交集团",
+      "shard": "jt/b53.json",
+      "osrmDirs": [
+        "0"
+      ]
+    },
+    {
+      "no": "D714",
+      "name": "",
+      "company": "公交集团",
+      "shard": "jt/b41.json",
+      "osrmDirs": [
+        "0"
+      ]
+    },
+    {
+      "no": "D719",
+      "name": "",
+      "company": "公交集团",
+      "shard": "jt/b58.json",
+      "osrmDirs": [
+        "0"
+      ]
+    },
+    {
+      "no": "D720",
+      "name": "",
+      "company": "公交集团",
+      "shard": "jt/b62.json",
+      "osrmDirs": [
+        "0"
+      ]
+    },
+    {
+      "no": "D721",
+      "name": "",
+      "company": "公交集团",
+      "shard": "jt/b17.json",
+      "osrmDirs": [
+        "0"
+      ]
+    },
+    {
+      "no": "D722",
+      "name": "",
+      "company": "公交集团",
+      "shard": "jt/b24.json",
+      "osrmDirs": [
+        "0"
+      ]
+    },
+    {
+      "no": "D723",
+      "name": "",
+      "company": "公交集团",
+      "shard": "jt/b43.json",
+      "osrmDirs": [
+        "0"
+      ]
+    },
+    {
+      "no": "D724",
+      "name": "",
+      "company": "公交集团",
+      "shard": "jt/b10.json",
+      "osrmDirs": [
+        "0"
+      ]
+    },
+    {
+      "no": "D725",
+      "name": "",
+      "company": "公交集团",
+      "shard": "jt/b29.json",
+      "osrmDirs": [
+        "0"
+      ]
+    },
+    {
+      "no": "D727",
+      "name": "",
+      "company": "公交集团",
+      "shard": "jt/b55.json",
+      "osrmDirs": [
+        "0"
+      ]
+    },
+    {
+      "no": "D728",
+      "name": "",
+      "company": "公交集团",
+      "shard": "jt/b38.json",
+      "osrmDirs": [
+        "0"
+      ]
+    },
+    {
+      "no": "D729",
+      "name": "",
+      "company": "公交集团",
+      "shard": "jt/b57.json",
+      "osrmDirs": [
+        "0"
+      ]
+    },
+    {
+      "no": "D730",
+      "name": "",
+      "company": "公交集团",
+      "shard": "jt/b07.json",
+      "osrmDirs": [
+        "0"
+      ]
+    },
+    {
+      "no": "D732",
+      "name": "",
+      "company": "公交集团",
+      "shard": "jt/b45.json",
+      "osrmDirs": [
+        "0"
+      ]
+    },
+    {
+      "no": "D739",
+      "name": "",
+      "company": "公交集团",
+      "shard": "jt/b28.json",
+      "osrmDirs": [
+        "0"
+      ]
+    },
+    {
+      "no": "D742",
+      "name": "",
+      "company": "公交集团",
+      "shard": "jt/b14.json",
+      "osrmDirs": [
+        "0"
+      ]
+    },
+    {
+      "no": "D744",
+      "name": "",
+      "company": "公交集团",
+      "shard": "jt/b52.json",
+      "osrmDirs": [
+        "0"
+      ]
+    },
+    {
+      "no": "D749",
+      "name": "",
+      "company": "公交集团",
+      "shard": "jt/b35.json",
+      "osrmDirs": [
+        "0"
+      ]
+    },
+    {
+      "no": "D750",
+      "name": "",
+      "company": "公交集团",
+      "shard": "jt/b49.json",
+      "osrmDirs": [
+        "0"
+      ]
+    },
+    {
+      "no": "D755",
+      "name": "",
+      "company": "公交集团",
+      "shard": "jt/b42.json",
+      "osrmDirs": [
+        "0"
+      ]
+    },
+    {
+      "no": "D760",
+      "name": "",
+      "company": "公交集团",
+      "shard": "jt/b58.json",
+      "osrmDirs": [
+        "0"
+      ]
+    },
+    {
+      "no": "D761",
+      "name": "",
+      "company": "公交集团",
+      "shard": "jt/b13.json",
+      "osrmDirs": [
+        "0"
+      ]
+    },
+    {
+      "no": "D762",
+      "name": "",
+      "company": "公交集团",
+      "shard": "jt/b20.json",
+      "osrmDirs": [
+        "0"
+      ]
+    },
+    {
+      "no": "D763",
+      "name": "",
+      "company": "公交集团",
+      "shard": "jt/b39.json",
+      "osrmDirs": [
+        "0"
+      ]
+    },
+    {
+      "no": "D782",
+      "name": "",
+      "company": "公交集团",
+      "shard": "jt/b10.json",
+      "osrmDirs": [
+        "0"
+      ]
+    },
+    {
+      "no": "D789",
+      "name": "",
+      "company": "公交集团",
+      "shard": "jt/b31.json",
+      "osrmDirs": [
+        "0"
+      ]
+    },
+    {
+      "no": "D791",
+      "name": "",
+      "company": "公交集团",
+      "shard": "jt/b26.json",
+      "osrmDirs": [
+        "0"
+      ]
+    },
+    {
+      "no": "D799",
+      "name": "",
+      "company": "公交集团",
+      "shard": "jt/b02.json",
+      "osrmDirs": [
+        "0"
+      ]
+    },
+    {
+      "no": "D851",
+      "name": "",
+      "company": "公交集团",
+      "shard": "jt/b07.json",
+      "osrmDirs": [
+        "0"
+      ]
+    },
+    {
+      "no": "D1123",
+      "name": "",
+      "company": "公交集团",
+      "shard": "jt/b34.json",
+      "osrmDirs": [
+        "0"
+      ]
+    },
+    {
+      "no": "D1212",
+      "name": "",
+      "company": "公交集团",
+      "shard": "jt/b63.json",
+      "osrmDirs": [
+        "0"
+      ]
+    },
+    {
+      "no": "D1221",
+      "name": "",
+      "company": "公交集团",
+      "shard": "jt/b01.json",
+      "osrmDirs": [
+        "0"
+      ]
+    },
+    {
+      "no": "D1222",
+      "name": "",
+      "company": "公交集团",
+      "shard": "jt/b08.json",
+      "osrmDirs": [
+        "0"
+      ]
+    },
+    {
+      "no": "D1223",
+      "name": "",
+      "company": "公交集团",
+      "shard": "jt/b27.json",
+      "osrmDirs": [
+        "0"
+      ]
+    },
+    {
+      "no": "D1225",
+      "name": "",
+      "company": "公交集团",
+      "shard": "jt/b13.json",
+      "osrmDirs": [
+        "0"
+      ]
+    },
+    {
+      "no": "D1230",
+      "name": "",
+      "company": "公交集团",
+      "shard": "jt/b55.json",
+      "osrmDirs": [
+        "0"
+      ]
+    },
+    {
+      "no": "D1292",
+      "name": "",
+      "company": "公交集团",
+      "shard": "jt/b55.json",
+      "osrmDirs": [
+        "0"
+      ]
+    },
+    {
+      "no": "D1301",
+      "name": "",
+      "company": "公交集团",
+      "shard": "jt/b52.json",
+      "osrmDirs": [
+        "0"
+      ]
+    },
+    {
+      "no": "D1302",
+      "name": "",
+      "company": "公交集团",
+      "shard": "jt/b45.json",
+      "osrmDirs": [
+        "0"
+      ]
+    },
+    {
+      "no": "D1303",
+      "name": "",
+      "company": "公交集团",
+      "shard": "jt/b26.json",
+      "osrmDirs": [
+        "0"
+      ]
+    },
+    {
+      "no": "D1304",
+      "name": "",
+      "company": "公交集团",
+      "shard": "jt/b59.json",
+      "osrmDirs": [
+        "0"
+      ]
+    },
+    {
+      "no": "D1305",
+      "name": "",
+      "company": "公交集团",
+      "shard": "jt/b40.json",
+      "osrmDirs": [
+        "0"
+      ]
+    },
+    {
+      "no": "D1575",
+      "name": "",
+      "company": "公交集团",
+      "shard": "jt/b61.json",
+      "osrmDirs": [
+        "0"
+      ]
+    },
+    {
+      "no": "D1576",
+      "name": "",
+      "company": "公交集团",
+      "shard": "jt/b04.json",
+      "osrmDirs": [
+        "0"
+      ]
+    },
+    {
+      "no": "D1750",
+      "name": "",
+      "company": "公交集团",
+      "shard": "jt/b22.json",
+      "osrmDirs": [
+        "0"
+      ]
+    },
+    {
+      "no": "D1985",
+      "name": "",
+      "company": "公交集团",
+      "shard": "jt/b14.json",
+      "osrmDirs": [
+        "0"
+      ]
+    },
+    {
+      "no": "D2517",
+      "name": "",
+      "company": "公交集团",
+      "shard": "jt/b10.json",
+      "osrmDirs": [
+        "0"
+      ]
+    },
+    {
+      "no": "D3145",
+      "name": "",
+      "company": "公交集团",
+      "shard": "jt/b32.json",
+      "osrmDirs": [
+        "0"
+      ]
+    },
+    {
+      "no": "D3157",
+      "name": "",
+      "company": "公交集团",
+      "shard": "jt/b47.json",
+      "osrmDirs": [
+        "0"
+      ]
+    },
+    {
+      "no": "D3158",
+      "name": "",
+      "company": "公交集团",
+      "shard": "jt/b14.json",
+      "osrmDirs": [
+        "0"
+      ]
+    },
+    {
+      "no": "D5119",
+      "name": "",
+      "company": "公交集团",
+      "shard": "jt/b19.json",
+      "osrmDirs": [
+        "0"
+      ]
+    },
+    {
+      "no": "D5194",
+      "name": "",
+      "company": "公交集团",
+      "shard": "jt/b60.json",
+      "osrmDirs": [
+        "0",
+        "1"
+      ]
+    },
+    {
+      "no": "D5249",
+      "name": "",
+      "company": "公交集团",
+      "shard": "jt/b31.json",
+      "osrmDirs": [
+        "0",
+        "1"
+      ]
+    },
+    {
+      "no": "D5811",
+      "name": "",
+      "company": "公交集团",
+      "shard": "jt/b36.json",
+      "osrmDirs": [
+        "1"
+      ]
+    },
+    {
+      "no": "D5813",
+      "name": "",
+      "company": "公交集团",
+      "shard": "jt/b10.json",
+      "osrmDirs": [
+        "1"
+      ]
+    },
+    {
+      "no": "D5938",
+      "name": "",
+      "company": "公交集团",
+      "shard": "jt/b58.json",
+      "osrmDirs": [
+        "0",
+        "1"
+      ]
+    },
+    {
+      "no": "D6202",
+      "name": "",
+      "company": "公交集团",
+      "shard": "jt/b21.json",
+      "osrmDirs": [
+        "0",
+        "1"
+      ]
+    },
+    {
+      "no": "D6522",
+      "name": "",
+      "company": "公交集团",
+      "shard": "jt/b34.json",
+      "osrmDirs": [
+        "1"
+      ]
+    },
+    {
+      "no": "D6524",
+      "name": "",
+      "company": "公交集团",
+      "shard": "jt/b48.json",
+      "osrmDirs": [
+        "0",
+        "1"
+      ]
+    },
+    {
+      "no": "D6532",
+      "name": "",
+      "company": "公交集团",
+      "shard": "jt/b31.json",
+      "osrmDirs": [
+        "0",
+        "1"
+      ]
+    },
+    {
+      "no": "D6535",
+      "name": "",
+      "company": "公交集团",
+      "shard": "jt/b38.json",
+      "osrmDirs": [
+        "0"
+      ]
+    },
+    {
+      "no": "D6536",
+      "name": "",
+      "company": "公交集团",
+      "shard": "jt/b19.json",
+      "osrmDirs": [
+        "0"
+      ]
+    },
+    {
+      "no": "D6901",
+      "name": "",
+      "company": "公交集团",
+      "shard": "jt/b53.json",
+      "osrmDirs": [
+        "0",
+        "1"
+      ]
+    },
+    {
+      "no": "D6902",
+      "name": "",
+      "company": "公交集团",
+      "shard": "jt/b60.json",
+      "osrmDirs": [
+        "0",
+        "1"
+      ]
+    },
+    {
+      "no": "D6903",
+      "name": "",
+      "company": "公交集团",
+      "shard": "jt/b15.json",
+      "osrmDirs": [
+        "0",
+        "1"
+      ]
+    },
+    {
+      "no": "H81",
+      "name": "",
+      "company": "公交集团",
+      "shard": "jt/b04.json",
+      "osrmDirs": [
+        "0"
+      ]
+    },
+    {
+      "no": "H82",
+      "name": "",
+      "company": "公交集团",
+      "shard": "jt/b61.json",
+      "osrmDirs": [
+        "0"
+      ]
+    },
+    {
+      "no": "H83",
+      "name": "",
+      "company": "公交集团",
+      "shard": "jt/b42.json",
+      "osrmDirs": [
+        "0"
+      ]
+    },
+    {
+      "no": "H84",
+      "name": "",
+      "company": "公交集团",
+      "shard": "jt/b11.json",
+      "osrmDirs": [
+        "0"
+      ]
+    },
+    {
+      "no": "H85",
+      "name": "",
+      "company": "公交集团",
+      "shard": "jt/b56.json",
+      "osrmDirs": [
+        "0",
+        "1"
+      ]
+    },
+    {
+      "no": "H86",
+      "name": "",
+      "company": "公交集团",
+      "shard": "jt/b49.json",
+      "osrmDirs": [
+        "0",
+        "1"
+      ]
+    },
+    {
+      "no": "H87",
+      "name": "",
+      "company": "公交集团",
+      "shard": "jt/b30.json",
+      "osrmDirs": [
+        "0",
+        "1"
+      ]
+    },
+    {
+      "no": "H88",
+      "name": "",
+      "company": "公交集团",
+      "shard": "jt/b63.json",
+      "osrmDirs": [
+        "0",
+        "1"
+      ]
+    },
+    {
+      "no": "H89",
+      "name": "",
+      "company": "公交集团",
+      "shard": "jt/b44.json",
+      "osrmDirs": [
+        "0",
+        "1"
+      ]
+    },
+    {
+      "no": "H90",
+      "name": "",
+      "company": "公交集团",
+      "shard": "jt/b14.json",
+      "osrmDirs": [
+        "0",
+        "1"
+      ]
+    },
+    {
+      "no": "H91",
+      "name": "",
+      "company": "公交集团",
+      "shard": "jt/b33.json",
+      "osrmDirs": [
+        "0",
+        "1"
+      ]
+    },
+    {
+      "no": "H92",
+      "name": "",
+      "company": "公交集团",
+      "shard": "jt/b40.json",
+      "osrmDirs": [
+        "0",
+        "1"
+      ]
+    },
+    {
+      "no": "H93",
+      "name": "",
+      "company": "公交集团",
+      "shard": "jt/b59.json",
+      "osrmDirs": [
+        "0",
+        "1"
+      ]
+    },
+    {
+      "no": "H94",
+      "name": "",
+      "company": "公交集团",
+      "shard": "jt/b26.json",
+      "osrmDirs": [
+        "0",
+        "1"
+      ]
+    },
+    {
+      "no": "H96",
+      "name": "",
+      "company": "公交集团",
+      "shard": "jt/b52.json",
+      "osrmDirs": [
+        "0",
+        "1"
+      ]
+    },
+    {
+      "no": "H97",
+      "name": "",
+      "company": "公交集团",
+      "shard": "jt/b07.json",
+      "osrmDirs": [
+        "0",
+        "1"
+      ]
+    },
+    {
+      "no": "H98",
+      "name": "",
+      "company": "公交集团",
+      "shard": "jt/b54.json",
+      "osrmDirs": [
+        "0",
+        "1"
+      ]
+    },
+    {
+      "no": "H99",
+      "name": "",
+      "company": "公交集团",
+      "shard": "jt/b09.json",
+      "osrmDirs": [
+        "0",
+        "1"
+      ]
+    },
+    {
+      "no": "K26",
+      "name": "",
+      "company": "公交集团",
+      "shard": "jt/b58.json",
+      "osrmDirs": [
+        "0",
+        "1"
+      ]
+    },
+    {
+      "no": "K61",
+      "name": "",
+      "company": "公交集团",
+      "shard": "jt/b31.json",
+      "osrmDirs": [
+        "0"
+      ]
+    },
+    {
+      "no": "K202",
+      "name": "",
+      "company": "公交集团",
+      "shard": "jt/b14.json",
+      "osrmDirs": [
+        "0"
+      ]
+    },
+    {
+      "no": "K205",
+      "name": "",
+      "company": "公交集团",
+      "shard": "jt/b07.json",
+      "osrmDirs": [
+        "0"
+      ]
+    },
+    {
+      "no": "K208",
+      "name": "",
+      "company": "公交集团",
+      "shard": "jt/b16.json",
+      "osrmDirs": [
+        "0"
+      ]
+    },
+    {
+      "no": "K213",
+      "name": "",
+      "company": "公交集团",
+      "shard": "jt/b56.json",
+      "osrmDirs": [
+        "0"
+      ]
+    },
+    {
+      "no": "K267",
+      "name": "",
+      "company": "公交集团",
+      "shard": "jt/b55.json",
+      "osrmDirs": [
+        "0"
+      ]
+    },
+    {
+      "no": "K295",
+      "name": "",
+      "company": "公交集团",
+      "shard": "jt/b02.json",
+      "osrmDirs": [
+        "0"
+      ]
+    },
+    {
+      "no": "K377",
+      "name": "",
+      "company": "公交集团",
+      "shard": "jt/b41.json",
+      "osrmDirs": [
+        "0"
+      ]
+    },
+    {
+      "no": "K399",
+      "name": "",
+      "company": "公交集团",
+      "shard": "jt/b13.json",
+      "osrmDirs": [
+        "0"
+      ]
+    },
+    {
+      "no": "K401",
+      "name": "",
+      "company": "公交集团",
+      "shard": "jt/b61.json",
+      "osrmDirs": [
+        "0"
+      ]
+    },
+    {
+      "no": "K402",
+      "name": "",
+      "company": "公交集团",
+      "shard": "jt/b04.json",
+      "osrmDirs": [
+        "0"
+      ]
+    },
+    {
+      "no": "K411",
+      "name": "",
+      "company": "公交集团",
+      "shard": "jt/b00.json",
+      "osrmDirs": [
+        "0"
+      ]
+    },
+    {
+      "no": "K502",
+      "name": "",
+      "company": "公交集团",
+      "shard": "jt/b15.json",
+      "osrmDirs": [
+        "0"
+      ]
+    },
+    {
+      "no": "K508",
+      "name": "",
+      "company": "公交集团",
+      "shard": "jt/b13.json",
+      "osrmDirs": [
+        "0"
+      ]
+    },
+    {
+      "no": "K509",
+      "name": "",
+      "company": "公交集团",
+      "shard": "jt/b58.json",
+      "osrmDirs": [
+        "0"
+      ]
+    },
+    {
+      "no": "K514",
+      "name": "",
+      "company": "公交集团",
+      "shard": "jt/b32.json",
+      "osrmDirs": [
+        "0"
+      ]
+    },
+    {
+      "no": "K539",
+      "name": "",
+      "company": "公交集团",
+      "shard": "jt/b57.json",
+      "osrmDirs": [
+        "0"
+      ]
+    },
+    {
+      "no": "K540",
+      "name": "",
+      "company": "公交集团",
+      "shard": "jt/b49.json",
+      "osrmDirs": [
+        "0"
+      ]
+    },
+    {
+      "no": "K541",
+      "name": "",
+      "company": "公交集团",
+      "shard": "jt/b30.json",
+      "osrmDirs": [
+        "0"
+      ]
+    },
+    {
+      "no": "K549",
+      "name": "",
+      "company": "公交集团",
+      "shard": "jt/b06.json",
+      "osrmDirs": [
+        "0"
+      ]
+    },
+    {
+      "no": "K555",
+      "name": "",
+      "company": "公交集团",
+      "shard": "jt/b07.json",
+      "osrmDirs": [
+        "0"
+      ]
+    },
+    {
+      "no": "K561",
+      "name": "",
+      "company": "公交集团",
+      "shard": "jt/b16.json",
+      "osrmDirs": [
+        "0"
+      ]
+    },
+    {
+      "no": "K577",
+      "name": "",
+      "company": "公交集团",
+      "shard": "jt/b27.json",
+      "osrmDirs": [
+        "0"
+      ]
+    },
+    {
+      "no": "K583",
+      "name": "",
+      "company": "公交集团",
+      "shard": "jt/b52.json",
+      "osrmDirs": [
+        "0"
+      ]
+    },
+    {
+      "no": "K606",
+      "name": "",
+      "company": "公交集团",
+      "shard": "jt/b14.json",
+      "osrmDirs": [
+        "0"
+      ]
+    },
+    {
+      "no": "K610",
+      "name": "",
+      "company": "公交集团",
+      "shard": "jt/b61.json",
+      "osrmDirs": [
+        "0"
+      ]
+    },
+    {
+      "no": "K653",
+      "name": "",
+      "company": "公交集团",
+      "shard": "jt/b32.json",
+      "osrmDirs": [
+        "0"
+      ]
+    },
+    {
+      "no": "K654",
+      "name": "",
+      "company": "公交集团",
+      "shard": "jt/b37.json",
+      "osrmDirs": [
+        "0"
+      ]
+    },
+    {
+      "no": "K703",
+      "name": "",
+      "company": "公交集团",
+      "shard": "jt/b18.json",
+      "osrmDirs": [
+        "0"
+      ]
+    },
+    {
+      "no": "K707",
+      "name": "",
+      "company": "公交集团",
+      "shard": "jt/b06.json",
+      "osrmDirs": [
+        "0"
+      ]
+    },
+    {
+      "no": "K709",
+      "name": "",
+      "company": "公交集团",
+      "shard": "jt/b04.json",
+      "osrmDirs": [
+        "0"
+      ]
+    },
+    {
+      "no": "K716",
+      "name": "",
+      "company": "公交集团",
+      "shard": "jt/b28.json",
+      "osrmDirs": [
+        "0"
+      ]
+    },
+    {
+      "no": "K722",
+      "name": "",
+      "company": "公交集团",
+      "shard": "jt/b39.json",
+      "osrmDirs": [
+        "0"
+      ]
+    },
+    {
+      "no": "K903",
+      "name": "",
+      "company": "公交集团",
+      "shard": "jt/b24.json",
+      "osrmDirs": [
+        "0"
+      ]
+    },
+    {
+      "no": "K908",
+      "name": "",
+      "company": "公交集团",
+      "shard": "jt/b57.json",
+      "osrmDirs": [
+        "0"
+      ]
+    },
+    {
+      "no": "K913",
+      "name": "",
+      "company": "公交集团",
+      "shard": "jt/b01.json",
+      "osrmDirs": [
+        "0"
+      ]
+    },
+    {
+      "no": "YX10",
+      "name": "",
+      "company": "公交集团",
+      "shard": "jt/b45.json",
+      "osrmDirs": [
+        "0",
+        "1"
+      ]
+    },
+    {
+      "no": "YX511",
+      "name": "",
+      "company": "公交集团",
+      "shard": "jt/b05.json",
+      "osrmDirs": [
+        "0",
+        "1"
+      ]
+    },
+    {
+      "no": "YX518",
+      "name": "",
+      "company": "公交集团",
+      "shard": "jt/b10.json",
+      "osrmDirs": [
+        "0",
+        "1"
+      ]
+    },
+    {
+      "no": "YX610",
+      "name": "",
+      "company": "公交集团",
+      "shard": "jt/b15.json",
+      "osrmDirs": [
+        "0",
+        "1"
+      ]
+    },
+    {
+      "no": "YX703",
+      "name": "",
+      "company": "公交集团",
+      "shard": "jt/b56.json",
+      "osrmDirs": [
+        "0",
+        "1"
+      ]
+    }
+  ]
+}

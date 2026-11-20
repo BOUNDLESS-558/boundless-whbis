@@ -1,22 +1,22 @@
 /**
- * OSRM 走向规划（免 KEY，公开 demo server）
+ * 站点基线走向规划（免 KEY）
  *
- * 策略：
- *   1. 先尝试批量计划整条线（≤18个途经点/批）；成功就用。
- *   2. 若返回空或路径太短（站点间直线距离很大但OSRM路径很短 → 意味着断链），
- *      退回到逐站请求并自动加中间插入点。
- *   3. 每站之间若直线距离 > WARN_DIST（默认500m），会在中点附近找一个道路入口点
- *      （通过周边道路搜索或简单线性插值后做反向投影），作为额外途经点再跑一次 OSRM，
- *      以降低单次调用距离、提高成功率。
- *
- * 坐标体系：
- *   - assets/api/lines/*.json 中的 lat/lng 是 GCJ-02（高德/腾讯坐标系）。
- *   - OSRM 只接受 WGS-84（GPS）。
- *   - 输入/输出均使用 WGS-84 {lat, lng}，内部转换一次。
+ * v6 策略：以站点直连 + 线性插值为基线（站点坐标是公交公司实测，比任何算路都准）。
+ *   - 短距段（≤1200m）：直接站点直连，无需 OSRM
+ *   - 长距段（>1200m）：尝试 OSRM，sanity check 通过（路径长度 ≤ 直线 ×4）才用，否则回退直连
+ *   - 后处理插值补密至 ~50m/点
  */
 
 const PI = Math.PI
 const R = 6371000  // 地球半径（米）
+
+// ── 常量 ───────────────────────────────────────────────────────────────
+const OSRM_BASE = 'https://router.project-osrm.org/route/v1/driving'
+const TIMEOUT_MS = 10000
+const LONG_SEG_THRESHOLD = 1200   // 米：站距超过此值才尝试 OSRM
+const MAX_SINGLE_SEGMENT = 2000   // 米：单段上限，超则拆分重试
+const SANE_RATIO = 4              // OSRM路径不超过直线距离的此倍数
+const DENSIFY_MAX_DIST = 50       // 米：后处理插值补密阈值
 
 // GCJ-02 → WGS-84（3次迭代，精度优于0.1米）
 export function gcj02ToWgs84(gcjLat, gcjLng) {
@@ -89,12 +89,6 @@ export function perpDistToSegment(pts, A, B) {
   return Math.hypot(pts.lat - proj.lat, pts.lng - proj.lng) * 111000
 }
 
-const OSRM_BASE = 'https://router.project-osrm.org/route/v1/driving'
-const MAX_WAYPOINTS_PER_BATCH = 18
-const MAX_SINGLE_SEGMENT = 2000     // 米：超过此距离强制插入中途点重试
-const WARN_SEGDIST = 500            // 米：单段直线距离警告阈值
-const SANE_RATIO = 8                // 路径长度不超过直线距离的SANE_RATIO倍视为合理
-const TIMEOUT_MS = 10000            // 每次OSRM请求超时（ms）
 
 /**
  * 单次 OSRM 调用（带超时）
@@ -128,7 +122,7 @@ async function callOsrmWithMidpoint(a, b) {
   if (viaResult && viaResult.length >= 2) {
     const viaLen = computePathLength(viaResult)
     const straightLen = haversine(a, b)
-    if (viaLen <= straightLen * 5) return viaResult
+    if (viaLen <= straightLen * SANE_RATIO) return viaResult
   }
 
   // 2) 分两段各自请求，拼接
@@ -173,7 +167,6 @@ function computePathLength(coords) {
 export async function fetchRoadRoute(stops, cacheKey = '') {
   if (!stops || stops.length < 2) return { points: [], stats: {} }
 
-  // GCJ → WGS-84
   const wgsStops = stops.map((s) => {
     const lat = typeof s.latitude === 'number' ? s.latitude : parseFloat(s.latitude)
     const lng = typeof s.longitude === 'number' ? s.longitude : parseFloat(s.longitude)
@@ -183,70 +176,63 @@ export async function fetchRoadRoute(stops, cacheKey = '') {
 
   if (wgsStops.length < 2) return { points: [], stats: {} }
 
-  const allPts = []       // 最终合并后的wgs点列
+  const allPts = []
   const stats = {
     totalStops: wgsStops.length,
     segmentCount: wgsStops.length - 1,
     osrmCalled: 0,
+    osrmSuccess: 0,
     osrmFailed: 0,
     fallbackUsed: 0,
+    directConnected: 0,
     midInsertions: 0,
     totalPathLen: 0,
     totalStraightLen: 0,
   }
 
-  // 逐段处理
   for (let i = 0; i < wgsStops.length - 1; i++) {
     const A = wgsStops[i]
     const B = wgsStops[i + 1]
     const dist = haversine(A, B)
     stats.totalStraightLen += dist
 
-    // 记录当前allPts最后一点（用于去重）
+    // 追加当前站点（去重首点）
     const prevPt = allPts[allPts.length - 1]
-
-    if (prevPt) {
-      // 避免首尾重复
-      if (!(Math.abs(prevPt.lat - A.lat) < 1e-8 && Math.abs(prevPt.lng - A.lng) < 1e-8)) {
-        allPts.push(A)
-      }
-    } else {
+    if (!prevPt || !(Math.abs(prevPt.lat - A.lat) < 1e-8 && Math.abs(prevPt.lng - A.lng) < 1e-8)) {
       allPts.push(A)
     }
 
-    // 判断是否需要智能分段
-    let pts = null
-    if (dist <= MAX_SINGLE_SEGMENT) {
-      // 短距离：直接请求
-      stats.osrmCalled++
-      pts = await callOsrm([A, B])
-    } else {
-      // 长距离：必须用中点插值法
-      stats.osrmCalled++
-      stats.midInsertions++
-      pts = await callOsrmWithMidpoint(A, B)
-    }
-
-    if (pts && pts.length >= 2) {
-      // 把pts（除了可能与allPts末尾重复的首点）追加进去
-      const firstPt = pts[0]
-      const lastAllPt = allPts[allPts.length - 1]
-      let startIdx = 0
-      if (lastAllPt && !(Math.abs(lastAllPt.lat - firstPt.lat) < 1e-8 && Math.abs(lastAllPt.lng - firstPt.lng) < 1e-8)) {
-        startIdx = 0
-      } else {
-        // 去掉重复首点
-        startIdx = 1
-      }
-      for (let k = startIdx; k < pts.length; k++) {
-        allPts.push({ lat: pts[k][1], lng: pts[k][0] })
-      }
-      stats.osrmCalled++
-    } else {
-      stats.osrmFailed++
-      stats.fallbackUsed++
-      // 兜底：直连
+    // ── v7 决策：短距直连，长距必用 OSRM ——
+    if (dist <= LONG_SEG_THRESHOLD) {
+      // 短距：站点坐标是实测，直连比 OSRM 绕小街更准
+      stats.directConnected++
       allPts.push(B)
+    } else {
+      // 长距：必须用 OSRM 贴路，否则 2km 站点直连斜穿街区（截图问题根源）。
+      // 只要 OSRM 返回路径就用（哪怕绕一点也比直线好）；仅网络失败才回退直连。
+      stats.osrmCalled++
+      let pts = null
+      if (dist <= MAX_SINGLE_SEGMENT) {
+        pts = await callOsrm([A, B])
+      } else {
+        stats.midInsertions++
+        pts = await callOsrmWithMidpoint(A, B)
+      }
+      if (pts && pts.length >= 2) {
+        const lastAllPt = allPts[allPts.length - 1]
+        let startIdx = 0
+        if (lastAllPt && Math.abs(lastAllPt.lat - pts[0][1]) < 1e-8 && Math.abs(lastAllPt.lng - pts[0][0]) < 1e-8) {
+          startIdx = 1
+        }
+        for (let k = startIdx; k < pts.length; k++) {
+          allPts.push({ lat: pts[k][1], lng: pts[k][0] })
+        }
+        stats.osrmSuccess++
+      } else {
+        stats.osrmFailed++
+        stats.fallbackUsed++
+        allPts.push(B)
+      }
     }
   }
 
@@ -257,12 +243,45 @@ export async function fetchRoadRoute(stops, cacheKey = '') {
     allPts.push(lastStop)
   }
 
-  // 计算总路径长度
+  // 后处理插值补密
+  const densePts = densifyRoute(allPts, DENSIFY_MAX_DIST)
+  stats.densified = allPts.length
+  stats.densifiedOut = densePts.length
+
   for (let i = 1; i < allPts.length; i++) {
     stats.totalPathLen += haversine(allPts[i - 1], allPts[i])
   }
 
-  return { points: allPts, stats }
+  return { points: densePts, stats }
+}
+
+/**
+ * 后处理插值：将相邻点间距超过 maxDist 的路段用线性插值补密
+ * @param {Array<{lat:number,lng:number}>} pts - WGS-84 点序列
+ * @param {number} maxDist - 最大间距（米），超过此值则插入中间点
+ * @returns {Array<{lat:number,lng:number}>} 补密后的点序列
+ */
+function densifyRoute(pts, maxDist) {
+  if (pts.length < 2) return pts
+  const out = [pts[0]]
+  for (let i = 1; i < pts.length; i++) {
+    const prev = out[out.length - 1]
+    const curr = pts[i]
+    const dist = haversine(prev, curr)
+    if (dist <= maxDist) {
+      out.push(curr)
+    } else {
+      // 插入 N 个等间距中间点，保证每段 ≤ maxDist
+      const nSegs = Math.max(2, Math.ceil(dist / maxDist))
+      const dLat = (curr.lat - prev.lat) / nSegs
+      const dLon = (curr.lng - prev.lng) / nSegs
+      for (let j = 1; j < nSegs; j++) {
+        out.push({ lat: prev.lat + dLat * j, lng: prev.lng + dLon * j })
+      }
+      out.push(curr)
+    }
+  }
+  return out
 }
 
 /**

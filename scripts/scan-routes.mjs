@@ -108,10 +108,46 @@ function sigOf(stops) {
 }
 const changedSet = new Set()
 // 算法版本：v3 = stripLoops 多回环切除 + 保护环线；v4 = 坏 leg「加 1/3、2/3 途经点重试」
-// 修复（消灭 211 型直线弦）。旧资产（algo 低于本版本）会被全部重算刷新。
-const VERSION = 4
+// 修复（消灭 211 型直线弦）；v5 = 后处理插值补密稀疏段（DENSIFY_MAX_DIST=50m）
+// v6 = 短距段（≤800m）跳过 OSRM 直接站点连线（消除算路偏差），长距 OSRM 更严格质检
+// v7 = 修正 v6：长距段必须用 OSRM 贴路（2km 站点直连会斜穿街区），去掉整体回退
+// v8 = map-matching 质检：长距段被拉成直线（偏离<50m）时判定 match 不可信，退回 /route
+// v9 = 长距段改用独立 /route(overview=full) 顶层 geometry（steps geometry 偶发为空导致回退直连）
+// v10 = 长距段绕路质检：绕行比 >2.5 且站距<1.5km 时回退站点直连（消除 OSRM 单行道大绕行）
+// v11 = 分段 map-matching：整线 /match 因 URL 过长 TooBig，改为 6 点重叠块逐段匹配，
+//        还原站点间道路弯折（通用「补点」方案，根治自绘底图模式的斜穿）
+// v12 = stripLoops 改用绕行比判据（segLen>gap*6），删除 map-match 吸附错误产生的 1~2km 回环
+const VERSION = 12
+const SHORT_SEG_THRESHOLD = 800   // 米：站距低于此值直接用站点连线，不请求 OSRM
+const DENSIFY_MAX_DIST = 50 // 米：后处理插值阈值——相邻点间距超过此值则插入中间点
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
+
+/**
+ * 后处理插值：将相邻点间距超过 maxDist 的路段用线性插值补密
+ * 用于提高视觉渲染质量，不改变路径几何形状。
+ */
+function densifyRoute(pts, maxDist) {
+  if (!pts || pts.length < 2) return pts
+  const out = [pts[0]]
+  for (let i = 1; i < pts.length; i++) {
+    const prev = out[out.length - 1]
+    const curr = pts[i]
+    const dist = haversine(prev, curr)
+    if (dist <= maxDist) {
+      out.push(curr)
+    } else {
+      const nSegs = Math.max(2, Math.ceil(dist / maxDist))
+      const dLat = (curr.lat - prev.lat) / nSegs
+      const dLon = (curr.lng - prev.lng) / nSegs
+      for (let j = 1; j < nSegs; j++) {
+        out.push({ lat: prev.lat + dLat * j, lng: prev.lng + dLon * j })
+      }
+      out.push(curr)
+    }
+  }
+  return out
+}
 
 /** 探测一个方向，返回完整 stopDetailList（不是只有坐标串） */
 async function probe(code, dir) {
@@ -194,6 +230,31 @@ async function requestSegment(waypoints) {
   return null
 }
 
+/**
+ * map-matching 质检：稀疏站点下 /match 会把「长距站点对」错误拉成纯直线
+ * （实测 646 的「龙阳大道郭茨口→解放大道宗关」2km 跨江段偏离直线 0m，而真实道路
+ * 需绕行 3km、偏离 459m）。若任一长距段被拉直，整条 match 不可信，退回分段 /route。
+ */
+function matchHasStraightLongSeg(matched, wgsStops) {
+  for (let i = 0; i < wgsStops.length - 1; i++) {
+    const A = wgsStops[i], B = wgsStops[i + 1]
+    const straight = haversine(A, B)
+    if (straight <= 1200) continue // 只查长距段
+    // 找 match 路径上离 A、B 最近的点
+    let iA = 0, iB = matched.length - 1, dA = Infinity, dB = Infinity
+    for (let j = 0; j < matched.length; j++) {
+      const d1 = haversine(A, matched[j]), d2 = haversine(B, matched[j])
+      if (d1 < dA) { dA = d1; iA = j }
+      if (d2 < dB) { dB = d2; iB = j }
+    }
+    if (iA >= iB) continue
+    const seg = matched.slice(iA, iB + 1)
+    // 该长距段若几乎是直线（偏离 <50m），说明 match 没还原真实绕行
+    if (maxExcursion(seg, A, B) < 50) return true
+  }
+  return false
+}
+
 /** 结果不能跑到站点包围盒之外（外扩 25% 容纳真实绕行） */
 function isSane(gcj, stopsGcj) {
   const lats = stopsGcj.map((p) => p.lat)
@@ -209,20 +270,19 @@ function isSane(gcj, stopsGcj) {
 
 /**
  * 剔除「绕一大圈回到前方某点」的几何回环。
- * OSRM 用驾车 profile 规划公交走向：为避单行道 / 禁转，会绕街区几公里再回到之前的点附近
- * （273 路实测站点序列完全正常，几何却出现 13km 的回环）。这不是真实公交走向，
- * 而是驾车路网的绕行，画出来就是规整矩形。
- * 只删「绕行 >4km 且回到 80m 内」的极端回环，真实掉头（几百米）与小绕行不动。
- * 关键保护：只删「中段回环」（cut 之后仍有剩余路线），绝不把真正的环线（终点≈起点）
- * 整条删掉；最多切 maxCuts 次，避免极端数据下过度删除。
+ * OSRM / map-matching 用驾车 profile 规划公交走向：为避单行道 / 禁转，或把稀疏站点吸附到
+ * 错误小路，会绕一大圈再回到近乎同一点（646 实测绕 2.3km 却只前进 118m，画出来是个大环）。
+ *
+ * 判据用「绕行比」而非绝对距离：从点 i 累积走 segLen，若遇到点 k 距 i 很近（<closeDist）
+ * 且 segLen 远大于这段净位移（segLen > gap*LOOP_RATIO），则为坏环。
+ * 真实道路的小弯绕行 segLen≈gap，比值≈1，不会被误删。
+ *
+ * 关键保护：只删「中段回环」（cut 之后仍有剩余路线），绝不把真正的环线（终点≈起点）整条删掉。
  */
-function stripLoops(pts, minSeg = 4000, closeDist = 80, maxCuts = 8) {
+const LOOP_RATIO = 6 // 绕行长度 / 净位移 超过此值判为坏环
+function stripLoops(pts, minSeg = 400, closeDist = 150, maxCuts = 12) {
   if (!pts || pts.length < 10) return { pts: pts || [], removed: 0 }
-  // ⚠ 闭合环线（408内环/408外环等，首尾同站）整条就是「绕一圈回到起点」，
-  // 任何基于「绕行 >4km 且回到附近」的启发式都会把它当成异常回环删掉。
-  // 实测 35 点被删成 3 点：第一次 cut 落在末尾被保护条件挡下，但循环继续推进 i 后，
-  // 从 i=1/2/3… 出发又会找到中段 cut，于是整条环被逐段吃掉。
-  // 首尾重合（<200m）且线路足够长 → 判定为真实闭环，直接保留全部点，不做回环剔除。
+  // 闭合环线（首尾同站）整条就是「绕一圈回到起点」，不做回环剔除
   const span = pts.reduce((s, p, i) => i ? s + haversine(pts[i - 1], p) : 0, 0)
   if (haversine(pts[0], pts[pts.length - 1]) < 200 && span > minSeg) {
     return { pts, removed: 0 }
@@ -236,7 +296,8 @@ function stripLoops(pts, minSeg = 4000, closeDist = 80, maxCuts = 8) {
     let segLen = 0
     for (let k = i + 1; k < pts.length; k++) {
       segLen += haversine(pts[k - 1], pts[k])
-      if (segLen > minSeg && haversine(pts[i], pts[k]) < closeDist) { cut = k; break }
+      const gap = haversine(pts[i], pts[k])
+      if (segLen > minSeg && gap < closeDist && segLen > gap * LOOP_RATIO) { cut = k; break }
       if (segLen > 60000) break
     }
     // 中段回环才删（cut 之后还有路线）；真正的环线终点≈起点 → cut 落在末尾，不动
@@ -253,114 +314,155 @@ function stripLoops(pts, minSeg = 4000, closeDist = 80, maxCuts = 8) {
 }
 
 /**
- * OSRM map-matching（/match/v1/driving）：把整条站点序列当「GPS 轨迹」贴合到驾车路网。
- * 相对分段 /route，match 会把稀疏站点吸附到真实道路、还原被 /route 漏掉的掉头/绕行，
- * 直接根治「不贴合路网 / 算路不正确」。放宽 radiuses=120m 容忍站点坐标几十米误差。
- * 失败（服务不可用 / 匹配明显绕远 / 首尾离首末站过远）返回 null，交回分段 /route 兜底。
+ * 两点间独立 /route（overview=full），直接返回 geometry 点列。
+ * 用于长距站点对：requestSegment 的 steps geometry 在 demo server 上偶发为空，
+ * 而 overview=full 的顶层 geometry 稳定返回完整路径。
  */
-async function requestMatchAll(wgs) {
-  if (wgs.length < 2 || wgs.length > 100) return null // 超长线走分段 /route，避免单次请求过大
-  const coordPath = wgs.map((p) => `${p.lng.toFixed(6)},${p.lat.toFixed(6)}`).join(';')
-  const url = `${OSRM.replace('/route/v1/', '/match/v1/')}/${coordPath}` +
-    `?overview=full&geometries=geojson&radiuses=${wgs.map(() => '120').join(';')}`
+async function requestPairRoute(a, b) {
+  const coordPath = `${a.lng.toFixed(6)},${a.lat.toFixed(6)};${b.lng.toFixed(6)},${b.lat.toFixed(6)}`
+  const url = `${OSRM}/${coordPath}?overview=full&geometries=geojson`
   for (let attempt = 0; attempt < 3; attempt++) {
     try {
-      const res = await fetch(url, { signal: AbortSignal.timeout(OSRM_TIMEOUT * 2) })
+      const res = await fetch(url, { signal: AbortSignal.timeout(OSRM_TIMEOUT) })
       const j = await res.json()
-      if (!j || j.code !== 'Ok' || !Array.isArray(j.matchings) || !j.matchings.length) return null
-      const coords = j.matchings[0].geometry && j.matchings[0].geometry.coordinates
+      if (!j || j.code !== 'Ok' || !j.routes?.length) return null
+      const coords = j.routes[0].geometry?.coordinates
       if (!Array.isArray(coords) || coords.length < 2) return null
-      const pts = coords.map(([lng, lat]) => ({ lat, lng }))
-      const straight = haversine(wgs[0], wgs[wgs.length - 1])
-      const span = pts.reduce((s, p, i) => (i ? s + haversine(pts[i - 1], p) : 0), 0)
-      // 匹配整体须沿站点序列铺开：绕远超过 4 倍直线距离、或首尾离首末站 >1.5km 均视为失败
-      if (straight > 200 && span > straight * 4 + 2000) return null
-      if (haversine(wgs[0], pts[0]) > 1500 || haversine(wgs[wgs.length - 1], pts[pts.length - 1]) > 1500) return null
-      return pts
+      return coords.map(([lng, lat]) => ({ lat, lng }))
     } catch (e) {
       if (attempt === 2) return null
-      await sleep(400 * (attempt + 1))
+      await sleep(1000 * (attempt + 1))
     }
   }
   return null
 }
 
 /**
+ * OSRM map-matching（/match/v1/driving）——分段版。
+ *
+ * 整条线一次 /match 会因 URL 过长返回 TooBig（646 实测 35 站必失败）。
+ * 改为切成 MATCH_CHUNK 个 waypoint 的重叠块逐段匹配：每块首点 = 上块末点，
+ * 保证拼接连续；不带 radiuses（缩短 URL），坐标精度降到 5 位。
+ * 每块质检绕路比（>4 判失败），失败块用 requestPairRoute 兜底；
+ * 全部处理完返回拼接点列（WGS-84）。这是「自己补点」的通用实现：
+ * 不去动站点坐标，只把站点序列吸附到真实路网，还原站点间的道路弯折。
+ */
+const MATCH_CHUNK = 6 // 每块 waypoint 数（实测 6 点在 demo server 上稳定成功、不 TooBig）
+async function requestMatchAll(wgs) {
+  if (wgs.length < 2) return null
+  const pushDedup = (acc, p) => {
+    const last = acc[acc.length - 1]
+    if (!last || Math.abs(last.lat - p.lat) > 1e-8 || Math.abs(last.lng - p.lng) > 1e-8) acc.push(p)
+  }
+  const all = []
+  for (let i = 0; i < wgs.length - 1; i += MATCH_CHUNK - 1) {
+    const seg = wgs.slice(i, Math.min(i + MATCH_CHUNK, wgs.length))
+    if (seg.length < 2) break
+    const coordPath = seg.map((p) => `${p.lng.toFixed(5)},${p.lat.toFixed(5)}`).join(';')
+    const url = `${OSRM.replace('/route/v1/', '/match/v1/')}/${coordPath}?overview=full&geometries=geojson`
+    let segPts = null
+    for (let attempt = 0; attempt < 3; attempt++) {
+      try {
+        const res = await fetch(url, { signal: AbortSignal.timeout(OSRM_TIMEOUT) })
+        const j = await res.json()
+        if (j && j.code === 'Ok' && j.matchings?.length) {
+          const coords = j.matchings[0].geometry?.coordinates
+          if (Array.isArray(coords) && coords.length >= 2) {
+            segPts = coords.map(([lng, lat]) => ({ lat, lng }))
+            break
+          }
+        }
+      } catch (e) { /* 重试 */ }
+      await sleep(400 * (attempt + 1))
+    }
+    // 质检：匹配路径绕路比 >4 视为异常，整块作废
+    if (segPts && segPts.length > 1) {
+      let plen = 0
+      for (let k = 1; k < segPts.length; k++) plen += haversine(segPts[k - 1], segPts[k])
+      const straight = haversine(seg[0], seg[seg.length - 1])
+      if (straight > 100 && plen > straight * 4 + 500) segPts = null
+    }
+    // 块失败：用两点 /route 兜底该块首尾（宁可直段也不留空洞）
+    if (!segPts || segPts.length < 2) {
+      segPts = await requestPairRoute(seg[0], seg[seg.length - 1])
+    }
+    if (segPts) segPts.forEach((p) => pushDedup(all, p))
+    await sleep(OSRM_DELAY)
+  }
+  return all.length >= 2 ? all : null
+}
+
+/**
  * 整线算路：清洗后的站点序列 → GCJ-02 走向点列。
- * v4：坏 leg 不再直接退化成直线弦（截图 211 路的斜切来源），而是沿用运行时验证过的
- * 「加 1/3、2/3 途经点重试」修复：把坏 leg 拆两段重算，子段仍坏才回退弦。
- * 质检同 v2：驾车距离 ≤ straight*2.2+350、偏航 ≤ max(straight*0.5,260)；
- * 修复后坏段仍过半则整条退站点连线；最后剔除极端几何回环。
+ * v6：短距段（≤800m）跳过 OSRM，直接站点连线（站点坐标是最可靠来源）；
+ *     长距段才请求 OSRM，且质检更严格（ratio≤1.5、偏航≤max(dist*0.3,150)），
+ *     坏段过半时整体回退站点连线。
  */
 async function routeAlongRoads(stops) {
   const gcjStops = pointsOf(stops)
   if (gcjStops.length < 2) return null
   const wgs = gcjStops.map((p) => gcj02ToWgs84(p.lat, p.lng))
-  // 优先 map-matching：把站点序列贴合真实路网（比分段 /route 更准，根治不贴合路网）。
-  // 成功则直接走与原逻辑一致的「WGS→GCJ→stripLoops→simplify」收尾；失败回落分段 /route。
+  // 优先 map-matching：把站点序列贴合真实路网
   if (wgs.length >= 2 && wgs.length <= 100) {
     const matched = await queueOsrm(() => requestMatchAll(wgs))
-    if (matched && matched.length >= 2) {
+    if (matched && matched.length >= 2 && !matchHasStraightLongSeg(matched, wgs)) {
       const gcj = matched.map((p) => wgs84ToGcj02(p.lat, p.lng))
       if (isSane(gcj, gcjStops)) {
         const cleaned = stripLoops(gcj)
-        return simplify(cleaned.pts, SIMPLIFY_TOL)
+        return densifyRoute(simplify(cleaned.pts, SIMPLIFY_TOL), DENSIFY_MAX_DIST)
       }
     }
   }
   const acc = []
-  let legsTotal = 0
-  let legsBad = 0
-  let repaired = 0
   const push = (p) => {
     const last = acc[acc.length - 1]
     if (!last || Math.abs(last.lat - p.lat) > 1e-8 || Math.abs(last.lng - p.lng) > 1e-8) acc.push(p)
   }
-  // 单个 leg 的质检 + 上屏。bad 时只记数不推点，交给调用方决定「重试还是回退弦」。
-  // count=false 用于修复重试的子 leg：不计入坏段比例（否则一次失败重试虚增 3 个坏段，
-  // 会把「修复后仍差」误判成「坏段过半」而整条回退）。
-  const judge = (a, b, leg, count = true) => {
-    const straight = haversine(a, b)
-    const allow = Math.max(straight * 0.5, 260)
-    const good = leg && leg.pts && leg.pts.length > 1 &&
-      leg.distance <= straight * 2.2 + 350 &&
-      maxExcursion(leg.pts, a, b) <= allow
-    if (count) { legsTotal++; if (!good) legsBad++ }
-    return good
-  }
-  for (let i = 0; i < wgs.length - 1; i += MAX_WAYPOINTS - 1) {
-    const seg = wgs.slice(i, Math.min(i + MAX_WAYPOINTS, wgs.length))
-    if (seg.length < 2) break
-    const legs = await queueOsrm(() => requestSegment(seg))
-    if (!legs) return null // 服务不可用：整条交给上游回退站点连线，别产出半截几何
-    for (let k = 0; k + 1 < seg.length; k++) {
-      const a = seg[k], b = seg[k + 1], leg = legs[k]
-      if (judge(a, b, leg)) leg.pts.forEach(push)
-      else {
-        // 修复：加 1/3、2/3 途经点重算（不是中点——中点容易落在同一个坏路网上）
-        const m1 = { lat: a.lat + (b.lat - a.lat) / 3, lng: a.lng + (b.lng - a.lng) / 3 }
-        const m2 = { lat: a.lat + (b.lat - a.lat) * 2 / 3, lng: a.lng + (b.lng - a.lng) * 2 / 3 }
-        const sub = await queueOsrm(() => requestSegment([a, m1, m2, b]))
-        let ok = false
-        if (sub && sub.length === 3) {
-          const g1 = judge(a, m1, sub[0], false), g2 = judge(m1, m2, sub[1], false), g3 = judge(m2, b, sub[2], false)
-          if (g1 && g2 && g3) {
-            sub[0].pts.forEach(push); sub[1].pts.forEach(push); sub[2].pts.forEach(push)
-            ok = true
-          }
+  for (let i = 0; i < wgs.length - 1; i++) {
+    const A = wgs[i], B = wgs[i + 1]
+    const dist = haversine(A, B)
+    // 追加 A（去重）
+    const prevPt = acc[acc.length - 1]
+    if (!prevPt || Math.abs(prevPt.lat - A.lat) > 1e-8 || Math.abs(prevPt.lng - A.lng) > 1e-8) {
+      acc.push(A)
+    }
+    if (dist <= SHORT_SEG_THRESHOLD) {
+      // 短距：站点直连（站点坐标是实测，直连比 OSRM 绕小街更准）
+      acc.push(B)
+    } else {
+      // 长距：必须用 OSRM 贴路，否则 2km 站点直连会斜穿街区。
+      // 只要 OSRM 返回了路径就用（哪怕不完美也比长距直线好）；仅网络失败才回退直连。
+      // 单独 /route 两点 + overview=full，直接取 routes[0].geometry.coordinates。
+      // （requestSegment 的 steps geometry 在 demo server 上偶发为空，导致长段被当成直连）
+      const legPts = await queueOsrm(() => requestPairRoute(A, B))
+      if (legPts && legPts.length > 1) {
+        // 质检：OSRM 驾车 profile 为避单行道/禁转会绕大圈（实测 830m 站距绕 3.8km）。
+        // 绕路比 >2.5 判定为无效绕行：短于 1.5km 用站点直连，更长则保留（长段直连会斜穿）。
+        let pathLen = 0
+        for (let k = 1; k < legPts.length; k++) pathLen += haversine(legPts[k - 1], legPts[k])
+        if (pathLen <= dist * 2.5) {
+          legPts.forEach(push)
+        } else if (dist < 1500) {
+          acc.push(B) // 中短距绕行：站点直连更忠实
+        } else {
+          legPts.forEach(push) // 长距：绕行也比斜穿直线好
         }
-        if (!ok) [a, b].forEach(push); else repaired++ // legsBad 已在主质检计过一次，不再重复
+      } else {
+        acc.push(B)
       }
     }
-    if (i + MAX_WAYPOINTS - 1 >= wgs.length - 1) break
+  }
+  // 补上最后一个站
+  const lastStop = wgs[wgs.length - 1]
+  const lastPt = acc[acc.length - 1]
+  if (!lastPt || Math.abs(lastPt.lat - lastStop.lat) > 1e-8 || Math.abs(lastPt.lng - lastStop.lng) > 1e-8) {
+    acc.push(lastStop)
   }
   if (acc.length < 2) return null
-  // 修复后坏段仍过半：贴路意义不大，整条退成「清洗后的站点连线」，风格统一不混拼
-  if (legsTotal && legsBad / legsTotal > 0.5) return null
   const gcj = acc.map((p) => wgs84ToGcj02(p.lat, p.lng))
   if (!isSane(gcj, gcjStops)) return null
   const cleaned = stripLoops(gcj)
-  return simplify(cleaned.pts, SIMPLIFY_TOL)
+  return densifyRoute(simplify(cleaned.pts, SIMPLIFY_TOL), DENSIFY_MAX_DIST)
 }
 
 /** 站点明细精简：保留运行时真正用到的字段，换乘只留 subwayLineNo */
