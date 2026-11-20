@@ -3357,25 +3357,8 @@ export default {
           op: snapped ? 1 : 0.55,
           d: smoothPath(sampled, snapped),
         })
-        // 箭头位置：按屏幕像素间距等距放置（放大后自动变密），间隔 70px
-        const ARROW_SPACING = 70
-        let cumDist = 0
-        for (let i = 0; i < sampled.length - 1; i++) {
-          const a = sampled[i], b = sampled[i + 1]
-          const segLen = Math.sqrt((b.x - a.x) ** 2 + (b.y - a.y) ** 2)
-          if (segLen < 1) continue
-          // 在路段中点投放，但只在前一个箭头 ≥ ARROW_SPACING px 时才放
-          if (cumDist > 0 && cumDist < ARROW_SPACING) { cumDist += segLen; continue }
-          const midX = (a.x + b.x) / 2, midY = (a.y + b.y) / 2
-          const deg = (Math.atan2(b.y - a.y, b.x - a.x) * 180) / Math.PI
-          arrows.push({ x: midX, y: midY, deg, color: this.routeStyle(d).svgStroke })
-          cumDist = 0
-          // 累加本段后半程到下一个候选点的距离
-          cumDist += segLen / 2
-        }
       })
       this.svgRoutes = routes
-      this.routeArrows = arrows
 
       // 2) 车辆标签位置先算：车号在圆点上方且彼此错开，站名避让需要用到最终位置
       const usedBusLabel = []
@@ -3472,6 +3455,35 @@ export default {
       })
       this.svgStops = stops
       this.labelStops = labels
+
+      // 箭头位置：按屏幕像素间距等距放置（放大后自动变密），间隔 70px。
+      // 放在站点算好之后：若箭头中心正落在任一站点圆点上就跳过，避免与站点标记重叠。
+      const ARROW_SPACING = 70
+      // 站点圆点半径（末站实心点约 9px）+ 箭头半宽（约 6px）→ 16px 内视为重叠
+      const STOP_AVOID_R2 = 16 * 16
+      dirs.forEach((d) => {
+        const sampled = routePts[d]
+        if (!sampled || sampled.length < 2) return
+        let cumDist = 0
+        for (let i = 0; i < sampled.length - 1; i++) {
+          const a = sampled[i], b = sampled[i + 1]
+          const segLen = Math.sqrt((b.x - a.x) ** 2 + (b.y - a.y) ** 2)
+          if (segLen < 1) continue
+          // 在路段中点投放，但只在前一个箭头 ≥ ARROW_SPACING px 时才放
+          if (cumDist > 0 && cumDist < ARROW_SPACING) { cumDist += segLen; continue }
+          const midX = (a.x + b.x) / 2, midY = (a.y + b.y) / 2
+          // 箭头中心压在任一方向站点的圆点上（含对向站点）则跳过本箭头
+          const onStop = stops.some((s) => (s.x - midX) ** 2 + (s.y - midY) ** 2 < STOP_AVOID_R2)
+          if (!onStop) {
+            const deg = (Math.atan2(b.y - a.y, b.x - a.x) * 180) / Math.PI
+            arrows.push({ x: midX, y: midY, deg, color: this.routeStyle(d).svgStroke })
+          }
+          cumDist = 0
+          // 累加本段后半程到下一个候选点的距离
+          cumDist += segLen / 2
+        }
+      })
+      this.routeArrows = arrows
 
       // 4) 车辆（圆点 + 已算好的车号位置）
       this.svgBuses = this.shownBuses.map((b, i) => {

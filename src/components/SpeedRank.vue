@@ -82,6 +82,8 @@
 import { RANK_LIMITS, DEFAULT_RANK_LIMIT, DRIFT_SPEED, rankBySpeed } from '../utils/speedRank.js'
 import { SPEED_BANDS } from '../utils/cityBus.js'
 import { formatBusNo, onBusNumberReady } from '../utils/busNumber.js'
+import { loadLineAsset, assetDir } from '../utils/lineAsset.js'
+import { distance } from '../utils/geo.js'
 import { copyTable } from '../utils/clipboard.js'
 import CopyPill from './CopyPill.vue'
 
@@ -105,6 +107,9 @@ export default {
       folded: false,
       driftSpeed: DRIFT_SPEED,
       mapVersion: 0,
+      // 所处站点缓存：{ [线路号|方向]: [{stopName, latitude, longitude}] }
+      // 与自编号查车同源（静态线路资产），榜单变化时异步预取，复制时同步取最近站
+      stopCache: {},
     }
   },
   computed: {
@@ -138,6 +143,11 @@ export default {
     onBusNumberReady(() => { this.mapVersion++ })
   },
   watch: {
+    // 榜单行变化时异步预取涉及线路的站点明细（复制到来的瞬间必须同步，不能等请求）
+    rows: {
+      immediate: true,
+      handler(rs) { this.prefetchStops(rs) },
+    },
     folded(v) {
       try { uni.setStorageSync(RANK_FOLD_KEY, !!v) } catch (e) { /* 忽略 */ }
       // 折叠后浮窗高度骤变，通知父组件重新量占位并重排全览
@@ -168,6 +178,52 @@ export default {
       void this.mapVersion // 依赖版本号，映射就绪后重渲染
       return formatBusNo(orgId)
     },
+    // 异步预取榜单车辆的站点明细：按线路号去重，命中静态资产分片（内存缓存，不重复请求）。
+    // 与自编号查车 fillOrgStopNames 同源同口径，复制到来的瞬间只做同步查表。
+    async prefetchStops(rows) {
+      if (!rows || !rows.length) return
+      if (!this._stopLoading) this._stopLoading = {}
+      const nos = [...new Set(rows.map((r) => String(r.no)).filter(Boolean))]
+      await Promise.all(nos.map(async (no) => {
+        if (this.stopCache[no + '|0'] && this.stopCache[no + '|1']) return
+        let p = this._stopLoading[no]
+        if (!p) {
+          p = (async () => {
+            let row = null
+            try { row = await loadLineAsset(no) } catch (e) { row = null }
+            for (const d of [0, 1]) {
+              const dirRow = row ? assetDir(row, d) : null
+              const stops = (dirRow && dirRow.stops) || []
+              this.stopCache[no + '|' + d] = stops
+                .map((s) => ({
+                  stopName: s.stopName || '',
+                  latitude: parseFloat(s.latitude),
+                  longitude: parseFloat(s.longitude),
+                }))
+                .filter((s) => !isNaN(s.latitude) && !isNaN(s.longitude))
+            }
+          })()
+          this._stopLoading[no] = p
+        }
+        try { await p } finally { delete this._stopLoading[no] }
+      }))
+    },
+    // 同步：按车辆 GPS 在已缓存的「该线路该方向」站点里找最近站名；无缓存返回空串
+    nearestStop(bus) {
+      if (!bus) return ''
+      const stops = this.stopCache[String(bus.no) + '|' + bus.dir]
+      if (!stops || !stops.length || isNaN(bus.lat) || isNaN(bus.lng)) return ''
+      let best = '', bestD = Infinity
+      for (const s of stops) {
+        const d = distance(bus.lat, bus.lng, s.latitude, s.longitude)
+        if (d < bestD) { bestD = d; best = s.stopName }
+      }
+      return best
+    },
+    // 到站状态：与车辆详情窗同口径（arrived==='1' 表示本班次已到终点）
+    busState(bus) {
+      return bus && bus.arrived === '1' ? '已到站' : '行驶中'
+    },
     // 复制榜单：档位由 CopyPill 的全站设置决定（文字 / Excel / 图片），数据取自当前 rows
     copyRank() {
       if (!this.rows.length) {
@@ -183,12 +239,14 @@ export default {
         String(r.speed),
         r.from && r.to ? `${r.from} → ${r.to}` : (r.routeText || ''),
         r.company || '',
+        this.nearestStop(r.bus) || '—',
+        this.busState(r.bus),
         r.time || '',
         r.drift ? '疑似漂移' : '',
       ])
       copyTable({
         title: `车速榜 前 ${this.limit} 名 · ${this.stampText} · 全局 ${this.total} 辆`,
-        columns: ['名次', '线路', '方向', '自编号', '车速(km/h)', '走向', '营运公司', 'GPS时刻', '备注'],
+        columns: ['名次', '线路', '方向', '自编号', '车速(km/h)', '走向', '营运公司', '所处站点', '到站状态', 'GPS时刻', '备注'],
         rows,
         toast: `已复制车速榜前 ${this.limit} 名`,
         imageToast: `已复制车速榜前 ${this.limit} 名为图片`,
