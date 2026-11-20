@@ -1,9 +1,9 @@
 {
-  "generatedAt": "2026-11-20T05:34:38.992Z",
+  "generatedAt": "2026-11-20T09:28:10.153Z",
   "group": {
-    "total": 1117,
+    "total": 1116,
     "bySource": {
-      "amap": 446,
+      "amap": 445,
       "osrm": 264,
       "none": 407
     },
