@@ -1335,7 +1335,8 @@ export default {
     onBusNumberReady(() => {
       this.mapVersion++
       try { if (this.drawCityTags) this.drawCityTags() } catch (e) {}
-      try { if (this.renderMap) this.renderMap() } catch (e) {}
+      // 重绘线路走向图自绘层：车辆点旁的完整编号标签（svgBuses.label）依赖映射表
+      try { this.renderSchematic() } catch (e) {}
     })
     attachDropdown(this, 'refreshMenu', 'refresh-map')
     // 恢复详情窗上次拖动过的位置（车辆窗 / 站点窗共用同一套浮窗与位置）
@@ -3167,7 +3168,7 @@ export default {
         return {
           key: b.dir + '-' + i,
           dir: b.dir,
-          label: this.selectedBus === b ? (b.orgId || '') : '',
+          label: this.selectedBus === b ? this.fmtNo(b.orgId) : '',
           x: p.x,
           y: p.y,
           labelY: p.ly,
@@ -3629,7 +3630,7 @@ export default {
         const tip = {
           x: Math.round(hit.p.x + r.left - pr.left),
           y: Math.round(hit.p.y + r.top - pr.top - lift),
-          no: hit.bus.orgId || '',
+          no: this.fmtNo(hit.bus.orgId || ''),
           // 全市态光有自编号不知道是哪路，补一行线路与方向
           line: `${hit.bus.no} ${hit.bus.dir === 0 ? '上行' : '下行'}`,
         }
@@ -3664,7 +3665,7 @@ export default {
       const tip = {
         x: Math.round(hit.p.x + r.left - pr.left),
         y: Math.round(hit.p.y + r.top - pr.top - lift),
-        no: hit.bus.orgId || '',
+        no: this.fmtNo(hit.bus.orgId || ''),
       }
       const old = this.hoverTip
       if (old && old.no === tip.no && Math.abs(old.x - tip.x) < 1 && Math.abs(old.y - tip.y) < 1) return
@@ -3797,7 +3798,7 @@ export default {
         if (!buses.length) continue
         const dirName = this.dirLabel(dir)
         const cells = buses.map((b) => [
-          b.orgId || b.busNo || '?',
+          b.orgId ? this.fmtNo(b.orgId) : (b.busNo || '?'),
           companyOf(b),
           this.nearStopOf(b),
           String(b.time || '--').slice(0, 5),
