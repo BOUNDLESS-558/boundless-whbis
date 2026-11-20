@@ -385,7 +385,8 @@ function slimStops(stops) {
 const SHARDS = new Map()
 const dirty = new Set()
 
-function shardPath(key) { return path.join(OUT, key + '.json') }
+// 集团分片统一落在 jt/ 子目录（与运行时 lineAsset.js 的 shardRel 对齐）
+function shardPath(key) { return path.join(OUT, 'jt', key + '.json') }
 
 function loadShard(key) {
   if (SHARDS.has(key)) return SHARDS.get(key)

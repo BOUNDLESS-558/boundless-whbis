@@ -17,13 +17,16 @@ const ASSET_DIR = '/static/lines/'
 const SHARDS = new Map()
 
 /**
- * 分片名：集团线路沿用 bNN.json（64 桶哈希）；
- * 非集团线路（蔡城 C / 木兰 P / 汉奇）走「公司缩写 + B + 数字」的独立分片，
- * 与集团资产互不干扰，站点 stopId 也带公司前缀。
+ * 资产分片相对路径（不含扩展名）：按营运公司分子目录存放，
+ * 让「集团 / 蔡城 / 木兰 / 汉奇」在目录层面一眼可辨。
+ * - 集团：jt/bNN（64 桶哈希）
+ * - 非集团：cc/CCBnn、ml/MLBnn、hq/HQBnn（公司缩写 + B + 两位桶号）
+ * 分片文件名与哈希算法不变，只调整目录归属；生成器（scan-routes / scan-foreign 等）
+ * 与本函数必须写读同一套路径，否则资产会 404 回退实时链路。
  */
-function shardName(no) {
+function shardRel(no) {
   const abbr = companyKeyOfNo(no)
-  return abbr === 'JT' ? shardOf(no) : foreignShardOf(no, abbr)
+  return abbr === 'JT' ? 'jt/' + shardOf(no) : abbr.toLowerCase() + '/' + foreignShardOf(no, abbr)
 }
 
 function safeJson(s) {
@@ -32,7 +35,7 @@ function safeJson(s) {
 
 /** 取一个分片；并发调用同一分片只发一次请求 */
 export function loadShard(no) {
-  const key = shardName(no)
+  const key = shardRel(no)
   if (SHARDS.has(key)) return SHARDS.get(key)
   const p = new Promise((resolve) => {
     uni.request({

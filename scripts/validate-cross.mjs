@@ -32,7 +32,8 @@ try {
 
 function assetOf(no) {
   try {
-    const j = JSON.parse(fs.readFileSync(path.join(DIR, shardOf(no) + '.json'), 'utf8'))
+    // 集团分片落在 jt/ 子目录（与运行时 lineAsset.js 的 shardRel 对齐）
+    const j = JSON.parse(fs.readFileSync(path.join(DIR, 'jt', shardOf(no) + '.json'), 'utf8'))
     return j.lines[String(no)]
   } catch {
     return null

@@ -329,9 +329,10 @@ fs.writeFileSync(LINES_OUT, JSON.stringify({
   note: '非武汉公交集团线路；高德不提供实时车辆与发车计划，realtime=false 的线路前端须标注静态数据',
   companies: byCompany, count: finalLines.length, lines: finalLines,
 }, null, 2) + '\n', 'utf8')
-fs.mkdirSync(ASSET_DIR, { recursive: true })
+for (const d of ['cc', 'ml', 'hq']) fs.mkdirSync(path.join(ASSET_DIR, d), { recursive: true })
 for (const [name, shard] of shards) {
-  const fp = path.join(ASSET_DIR, name + '.json')
+  // 分片名 CCBnn/MLBnn/HQBnn → 公司子目录 cc/ml/hq（与运行时 lineAsset.js 的 shardRel 对齐）
+  const fp = path.join(ASSET_DIR, name.slice(0, 2).toLowerCase(), name + '.json')
   let prevShard = { lines: {}, version: 1 }
   try { prevShard = JSON.parse(fs.readFileSync(fp, 'utf8')) } catch (e) { /* 新分片 */ }
   fs.writeFileSync(fp, JSON.stringify({

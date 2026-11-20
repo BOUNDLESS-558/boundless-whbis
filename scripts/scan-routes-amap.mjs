@@ -106,6 +106,9 @@ const VALIDATE_ONLY = has('validate-only')
 const ONLY_CHANGED = argOf('only-changed', '')
 // 只重试「未命中」的线路（partial / no-match / not-found），已 done 的不动，比 --force 省额度
 const RETRY_UNMATCHED = has('retry-unmatched')
+// 跳过 linename 主链路，直接走备用链路 inputtips → lineid（两个接口日配额独立池，
+// linename 耗尽时用此模式继续；也可用于全量重跑时绕过 100 次/日的 linename 瓶颈）。
+const USE_LINEID = has('use-lineid')
 // 采集进度台账：记录每条线已尝试的结果，避免「高德未收录 / 方向未匹配」的线路每轮重复消耗日配额。
 // 单独放 scripts/ 下，不进 src/static（也就不会进 H5 产物）。
 const PROGRESS = path.resolve(argOf('progress', 'scripts/.amap-progress.json'))
@@ -114,7 +117,8 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
 // ── 分片读写（与 scan-routes.mjs 同结构，独立维护，避免互相耦合）──
 const SHARDS = new Map()
 const dirty = new Set()
-const shardPath = (key) => path.join(OUT, key + '.json')
+// 集团分片统一落在 jt/ 子目录（与运行时 lineAsset.js 的 shardRel 对齐）
+const shardPath = (key) => path.join(OUT, 'jt', key + '.json')
 function loadShard(key) {
   if (SHARDS.has(key)) return SHARDS.get(key)
   let data = { updated: '', version: 0, lines: {} }
@@ -200,7 +204,8 @@ function saveProgress() {
 }
 function mark(no, state) { progress.lines[String(no)] = state }
 function isLogged(no) {
-  if (FORCE || BACKFILL_STOPS) return false
+  // use-lineid 走独立配额池，无视 linename 台账，全部重跑
+  if (FORCE || BACKFILL_STOPS || USE_LINEID) return false
   const s = progress.lines[String(no)]
   if (!s) return false
   // --retry-unmatched：只放行未完成的，done 的绝不重打
@@ -311,9 +316,11 @@ async function queryAmapFallback(lineNo) {
   const t = await amapGet('/v3/assistant/inputtips', {
     keywords: String(lineNo), city: CITYNAME, citylimit: 'true', datatype: 'busline',
   })
+  console.error(`  [dbg] inputtips ${lineNo}: ${JSON.stringify(t).slice(0, 200)}`)
   if (isQuotaOut(t)) { FALLBACK_EXHAUSTED = true; return null }
   if (!t || t.status !== '1') return null
   const ids = (t.tips || []).filter((x) => x && x.id && tipMatchesNo(x.name, lineNo)).slice(0, 4)
+  console.error(`  [dbg] matched tips: ${ids.length}`)
   // inputtips 是模糊搜索，对集团纯数字号经常只返回「408路 / 轨道交通4号线」这类干扰项，
   // 甚至 0 条。查不到精确 POI 一律返回 null（= 本轮无法判定，不记账），
   // 等 linename 次日额度恢复后用主链路重试；绝不能记成 not-found 把线路永久跳过。
@@ -321,6 +328,7 @@ async function queryAmapFallback(lineNo) {
   const out = []
   for (const x of ids) {
     const j = await amapGet('/v3/bus/lineid', { id: String(x.id), city: CITYNAME, extensions: 'all' })
+    console.error(`  [dbg] lineid ${x.id}: ${JSON.stringify(j).slice(0, 200)}`)
     if (isQuotaOut(j)) { FALLBACK_EXHAUSTED = true; return null }
     const b = j && Array.isArray(j.buslines) && j.buslines[0]
     if (b && b.polyline) out.push(b)
@@ -329,7 +337,7 @@ async function queryAmapFallback(lineNo) {
 }
 
 async function queryAmap(lineNo) {
-  if (QUOTA_EXHAUSTED) return queryAmapFallback(lineNo)
+  if (USE_LINEID || QUOTA_EXHAUSTED) return queryAmapFallback(lineNo)
   const params = {
     key: KEY, city: CITYNAME, keywords: String(lineNo),
     extensions: 'all', output: 'json', citylimit: 'true',
@@ -520,8 +528,8 @@ for (const l of todoFinal) {
     // 台账命中即跳过：包括「高德未收录」「方向未匹配」这些过去每轮都会重打的线路
     if (isLogged(no)) { stats.skipped++; continue }
 
-    // 双保险：台账被手删时，资产本身已全是 amap 的线也不重打
-    if (!FORCE && dirs.every((d) => { const r = rowOf(no, d); return r && r.source === 'amap' })) {
+    // 双保险：台账被手删时，资产本身已全是 amap 的线也不重打（use-lineid 走独立配额，全部重跑）
+    if (!FORCE && !USE_LINEID && dirs.every((d) => { const r = rowOf(no, d); return r && r.source === 'amap' })) {
       mark(no, 'done')
       saveProgress()
       stats.skipped++
@@ -547,7 +555,8 @@ for (const l of todoFinal) {
     // 补齐模式：站点已是高德的方向跳过，只补仍是集团站的方向
     if (BACKFILL_STOPS && isAmapStops(prev)) { stats.skipped++; continue }
     // 增量重拉时强制重写（含原已 amap 的方向）；否则遵守「amap 不覆盖」
-    if (!BACKFILL_STOPS && !changedLines && !FORCE && prev && prev.source === 'amap') { stats.skipped++; continue }
+    // use-lineid 走独立配额池，无视已有 amap 结果，全部重跑
+    if (!BACKFILL_STOPS && !changedLines && !FORCE && !USE_LINEID && prev && prev.source === 'amap') { stats.skipped++; continue }
 
     // 取该方向的清洗后站点（优先复用现有资产，缺则补 /line）
     let base, rawStops

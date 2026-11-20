@@ -75,27 +75,42 @@ const norm = (s) => String(s || '').replace(/\s|[（(].*?[)）]|站$/g, '')
 // ── 分片读写 ──
 const SHARDS = new Map()
 const dirty = new Set()
-const shardPath = (k) => path.join(OUT, k + '.json')
-function loadShard(k) {
-  if (SHARDS.has(k)) return SHARDS.get(k)
+// 分片按公司分子目录（jt/cc/ml/hq），递归收集所有分片
+function shardPath(k, sub) { return path.join(OUT, sub, k + '.json') }
+function listShardKeys() {
+  const out = []
+  for (const sub of fs.existsSync(OUT) ? fs.readdirSync(OUT) : []) {
+    const p = path.join(OUT, sub)
+    if (!fs.statSync(p).isDirectory()) continue
+    for (const f of fs.readdirSync(p)) {
+      if (/^(?:b\d+|CCB\d+|MLB\d+|HQB\d+)\.json$/.test(f)) out.push({ key: f.replace(/\.json$/, ''), sub })
+    }
+  }
+  return out
+}
+function loadShard(k, sub) {
+  const ck = sub + '/' + k
+  if (SHARDS.has(ck)) return SHARDS.get(ck)
   let data = { updated: '', version: 0, lines: {} }
   try {
-    const j = JSON.parse(fs.readFileSync(shardPath(k), 'utf8'))
+    const j = JSON.parse(fs.readFileSync(shardPath(k, sub), 'utf8'))
     if (j && j.lines && typeof j.lines === 'object') data = j
   } catch (e) { /* 新分片 */ }
-  SHARDS.set(k, data)
+  SHARDS.set(ck, data)
   return data
 }
 const seenShards = new Set()
 function saveDirty() {
   const keys = [...dirty]
   dirty.clear()
-  for (const k of keys) {
-    const s = SHARDS.get(k)
+  for (const ck of keys) {
+    const s = SHARDS.get(ck)
     if (!s) continue
+    const i = ck.lastIndexOf('/')
+    const k = ck.slice(i + 1), sub = ck.slice(0, i)
     s.updated = new Date().toISOString()
-    if (!DRY) fs.writeFileSync(shardPath(k), JSON.stringify(s) + '\n', 'utf8')
-    seenShards.add(k)
+    if (!DRY) fs.writeFileSync(shardPath(k, sub), JSON.stringify(s) + '\n', 'utf8')
+    seenShards.add(ck)
   }
 }
 
@@ -195,19 +210,17 @@ function assignIds(rows, infos, ids) {
 }
 
 // ── 主流程 ──
-const keys = fs.readdirSync(OUT)
-  .filter((f) => /^(?:b\d+|CCB\d+|MLB\d+|HQB\d+)\.json$/.test(f))
-  .map((f) => f.replace(/\.json$/, ''))
-const targets = new Map() // no → [{ key, dir, row }]
-for (const key of keys) {
-  const shard = loadShard(key)
+const keys = listShardKeys()
+const targets = new Map() // no → [{ key, sub, dir, row }]
+for (const { key, sub } of keys) {
+  const shard = loadShard(key, sub)
   for (const [no, line] of Object.entries(shard.lines || {})) {
     for (const [dir, row] of Object.entries(line.dirs || {})) {
       if (!row || row.source !== 'amap') continue  // OSRM 兜底行不需要 id
       if (!FORCE && row.amap && row.amap.id) continue
       if (ONLY.length && !ONLY.includes(String(no))) continue
       if (!targets.has(no)) targets.set(no, [])
-      targets.get(no).push({ key, dir, row })
+      targets.get(no).push({ key, sub, dir, row })
     }
   }
 }
@@ -253,11 +266,11 @@ for (const [no, rows] of todos) {
 
   const assigned = assignIds(rows, infos, ids)
   for (let i = 0; i < rows.length; i++) {
-    const { key, row } = rows[i]
+    const { key, sub, row } = rows[i]
     row.amap = row.amap || {}
     row.amap.id = assigned[i]
     stats.assigned++
-    dirty.add(key)
+    dirty.add(sub + '/' + key)
   }
   stats.done++
   if (stats.done % 25 === 0 || stats.done === todos.length) {

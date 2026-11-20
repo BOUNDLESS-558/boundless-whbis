@@ -93,24 +93,37 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
 // ── 分片读写（与 scan-routes-amap.mjs 同结构）──
 const SHARDS = new Map()
 const dirty = new Set()
-const shardPath = (key) => path.join(OUT, key + '.json')
-function loadShard(key) {
-  if (SHARDS.has(key)) return SHARDS.get(key)
+// 分片按公司分子目录（jt/cc/ml/hq），递归收集所有分片文件
+function shardPath(key, dir) { return path.join(OUT, dir, key + '.json') }
+function listShardKeys() {
+  const out = []
+  for (const dir of fs.existsSync(OUT) ? fs.readdirSync(OUT) : []) {
+    const sub = path.join(OUT, dir)
+    if (!fs.statSync(sub).isDirectory()) continue
+    for (const f of fs.readdirSync(sub)) {
+      if (/^(?:b\d+|CCB\d+|MLB\d+|HQB\d+)\.json$/.test(f)) out.push({ key: f.replace(/\.json$/, ''), dir })
+    }
+  }
+  return out
+}
+function loadShard(key, dir) {
+  const ck = dir + '/' + key
+  if (SHARDS.has(ck)) return SHARDS.get(ck)
   let data = { updated: '', version: 0, lines: {} }
   try {
-    const raw = fs.readFileSync(shardPath(key), 'utf8')
+    const raw = fs.readFileSync(shardPath(key, dir), 'utf8')
     const j = JSON.parse(raw)
     if (j && j.lines && typeof j.lines === 'object') data = j
   } catch (e) { /* 不存在/损坏：空分片 */ }
-  SHARDS.set(key, data)
+  SHARDS.set(ck, data)
   return data
 }
-function saveShard(key) {
-  const shard = SHARDS.get(key)
+function saveShard(key, dir) {
+  const shard = SHARDS.get(dir + '/' + key)
   if (!shard) return
   shard.updated = new Date().toISOString()
   const text = JSON.stringify(shard) + '\n'
-  if (!DRY) fs.writeFileSync(shardPath(key), text, 'utf8')
+  if (!DRY) fs.writeFileSync(shardPath(key, dir), text, 'utf8')
 }
 
 let sessionExpired = false
@@ -184,17 +197,15 @@ function transferInfosOf(station) {
 const normStop = (s) => String(s || '').replace(/\s|[（(].*?[)）]|站$/g, '')
 
 // ── 主流程 ──
-// 集团分片 bNN.json（64 桶哈希）+ 非集团 CCB/MLB/HQB + 两位桶号（scan-foreign 也已落 amap.id）
-const keys = fs.readdirSync(OUT)
-  .filter((f) => /^(?:b\d+|CCB\d+|MLB\d+|HQB\d+)\.json$/.test(f))
-  .map((f) => f.replace(/\.json$/, ''))
+// 分片按公司分子目录（jt/cc/ml/hq）：集团 bNN（64 桶哈希）+ 非集团 CCB/MLB/HQB + 两位桶号
+const keys = listShardKeys()
 let todo = []
-for (const key of keys) {
-  const shard = loadShard(key)
+for (const { key, dir: subdir } of keys) {
+  const shard = loadShard(key, subdir)
   for (const [no, line] of Object.entries(shard.lines || {})) {
     if (!line.dirs) continue
-    for (const [dir, row] of Object.entries(line.dirs)) {
-      const manual = IDS.get(`${no}:${dir}`)
+    for (const [dirName, row] of Object.entries(line.dirs)) {
+      const manual = IDS.get(`${no}:${dirName}`)
       const id = (row && row.amap && row.amap.id) || manual
       if (!id) continue
       if (ONLY.length && !ONLY.includes(String(no))) continue
@@ -202,13 +213,13 @@ for (const key of keys) {
       if (manual && row) {
         row.amap = row.amap || {}
         row.amap.id = manual
-        dirty.add(key)
+        dirty.add(subdir + '/' + key)
       }
-      todo.push({ key, no, dir, id, row })
+      todo.push({ key, subdir, no, dir: dirName, id, row })
     }
   }
 }
-if (!DRY) fs.mkdirSync(OUT, { recursive: true })
+if (!DRY) for (const d of ['jt', 'cc', 'ml', 'hq']) fs.mkdirSync(path.join(OUT, d), { recursive: true })
 if (!todo.length) {
   console.error('没有可用的线路 POI id：请先跑一次 npm run scan:routes:amap / npm run scan:foreign（需 AMAP_KEY）')
   console.error('让资产写入 amap.id；或用 --ids 337:0:900000128833,681:0:900000162531 直接指定后试跑。')
@@ -220,7 +231,7 @@ console.log(`getPoiNewbus 兼容模式：候选 ${todo.length} 个方向，免 W
 let done = 0, ok = 0, miss = 0, stopEnriched = 0
 for (const t of todo) {
   if (sessionExpired) break
-  const { key, no, dir, id, row } = t
+  const { key, subdir, no, dir, id, row } = t
   const keywords = /(路|线)$/.test(no) ? no : (/\d/.test(no) ? no + '路' : no)
   const bl = await fetchNewbus(id, keywords)
   if (!bl) { miss++; done++; continue }
@@ -272,7 +283,7 @@ for (const t of todo) {
       })
     }
   }
-  dirty.add(key)
+  dirty.add(subdir + '/' + key)
   done++
   if (done % 25 === 0 || done === todo.length) {
     const msg = `  已处理 ${done}/${todo.length}（命中 ${ok}，未响应 ${miss}，补 transferInfos ${stopEnriched} 站）`
@@ -282,7 +293,10 @@ for (const t of todo) {
   }
   if (DELAY) await sleep(DELAY)
 }
-for (const key of [...dirty]) saveShard(key)
+for (const ck of [...dirty]) {
+  const i = ck.lastIndexOf('/')
+  saveShard(ck.slice(i + 1), ck.slice(0, i))
+}
 if (!DRY && !process.env.GITHUB_ACTIONS) process.stdout.write('\n')
 console.log(`完成：命中 ${ok} / ${todo.length}，未响应 ${miss}；补充地铁换乘 ${stopEnriched} 站；写出分片 ${dirty.size} 个${DRY ? '（dry）' : ''}。`)
 if (sessionExpired)

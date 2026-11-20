@@ -26,14 +26,18 @@ const ONLY_SHARD = argOf('shard', '')
 const MAX_DEV = Number(argOf('max-dev', 200))
 const UNMARK_STALE = has('unmark-stale')
 
-// ── 加载所有分片 ──
+// ── 加载所有分片（按公司分子目录 jt/cc/ml/hq，递归收集）──
 const shards = {}
-for (const f of fs.readdirSync(OUT)) {
-  if (!f.endsWith('.json') || f === 'manifest.json' || f === 'lines.json') continue
-  try {
-    const j = JSON.parse(fs.readFileSync(path.join(OUT, f), 'utf8'))
-    if (j && j.lines) shards[f] = j
-  } catch (e) { /* 跳过损坏 */ }
+for (const sub of fs.readdirSync(OUT)) {
+  const dir = path.join(OUT, sub)
+  if (!fs.statSync(dir).isDirectory()) continue
+  for (const f of fs.readdirSync(dir)) {
+    if (!f.endsWith('.json')) continue
+    try {
+      const j = JSON.parse(fs.readFileSync(path.join(dir, f), 'utf8'))
+      if (j && j.lines) shards[sub + '/' + f] = j
+    } catch (e) { /* 跳过损坏 */ }
+  }
 }
 
 // ── 加载进度台账 ──

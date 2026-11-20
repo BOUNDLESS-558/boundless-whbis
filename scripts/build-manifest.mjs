@@ -24,8 +24,15 @@ try {
   for (const l of fl.lines || []) nameOf.set(String(l.no), l.name || l.no)
 } catch (e) { /* 资产未生成时忽略 */ }
 
-// 集团分片 bNN.json；非集团分片按「公司缩写 + B + 数字」命名（CCB01 / MLB01 / HQB01…）
-const files = fs.readdirSync(LINES_DIR).filter((x) => /^(b|(CC|ML|HQ)B)\d+\.json$/.test(x))
+// 分片按公司分子目录（jt/cc/ml/hq）存放，递归收集所有分片文件
+const files = []
+for (const sub of fs.readdirSync(LINES_DIR)) {
+  const dir = path.join(LINES_DIR, sub)
+  if (!fs.statSync(dir).isDirectory()) continue
+  for (const f of fs.readdirSync(dir)) {
+    if (/^(b|(CC|ML|HQ)B)\d+\.json$/.test(f)) files.push(path.join(sub, f))
+  }
+}
 const summary = { total: 0, amap: 0, osrm: 0, empty: 0, shards: files.length, totalPoints: 0 }
 const foreign = { total: 0, amap: 0, shards: 0 }
 const lines = {}
@@ -56,7 +63,7 @@ for (const f of files) {
   }
 }
 
-const isForeignShard = (f) => /^(CC|ML|HQ)B\d+\.json$/.test(f)
+const isForeignShard = (f) => /(?:^|\/)(CC|ML|HQ)B\d+\.json$/.test(f)
 for (const f of files.filter(isForeignShard)) {
   foreign.shards++
   const j = JSON.parse(fs.readFileSync(path.join(LINES_DIR, f), 'utf8'))
