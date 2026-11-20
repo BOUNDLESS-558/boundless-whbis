@@ -13,6 +13,8 @@
 - **时刻表**：首末班时间、发车计划
 - **全市线网**：全市在运车辆实时分布（扫描 / 自动跟随 / 按线路筛选），并附**车速榜**与**自编号尾号查车**
 - **离线资产**：线路静态资产（站点 / 走向 / 时刻表）懒加载缓存，减少网络请求
+- **线路收藏与复制方式**：线路收藏（`whbis:fav-lines:v1`，上限 10 条）+ 文本 / Excel / 图片三档复制（全站共享）
+- **本地账号**：预置账号制，默认口令 = `genPass(账号)`（不落地），密码可改为 `hashPass(账号, 新密码)`（仍不存明文）
 
 **目标平台**：Android App + Web（PC/移动浏览器）
 **技术栈**：uni-app 3.x / Vue 3 / Vite 5
@@ -22,11 +24,11 @@
 
 ### 分支约定（★ 务必遵守）
 
-- **`main`**：稳定主干，只接收已验证完成的合并，不直接在其上开发。
-- **`BETA`**：**唯一的新功能开发分支**。今后所有功能开发、改动、提交一律在 `BETA` 上进行，**不再为单个功能新建其它分支**（如历史上的 `feat/*` 分支已废弃删除）。
+- **`main`**：当前维护分支（仓库当前分支），日常改动提交在这里，不直接新开功能分支。
+- **源码分支严禁推远端**：远端 `origin` 只接收 `pages` 分支（H5 构建产物，供 GitHub Pages 部署），**任何源码分支（`main` / `BETA`）都不能推到远端**，改动保留在本地即可。
 - **`pages`**：GitHub Pages 部署产物分支（孤立提交，由 `npm run deploy:pages` 自动维护），不用于开发。
 
-工作流：在 `BETA` 上开发并提交 → 验证通过后合并进 `main` → 需要发布网站时用 `npm run deploy:pages`。
+工作流：在源码分支上提交改动 → 需要发布网站时用 `npm run deploy:pages`（构建 + 强推 `origin/pages`）。
 
 ---
 
@@ -47,6 +49,7 @@
 - **自编号查车面板加入复制**：结果计数行接入 `CopyPill`（文字 / Excel / 图片三档），内容为线路号 / 营运公司 / 所处站点 / 自编号 / 上下行五列；「所处站点」按命中车辆的线路号异步加载站点明细（`loadLineAsset` + `assetDir`，按线路去重 + in-flight 缓存），用 GPS 最近邻算站名并回填结果行，数据预取到缓存后再复制，保证图片/Excel 富格式在手势栈内同步写入不被浏览器拒绝；复制到计数行而非头部，避免标题挤压
 - **复制图片字体跟随界面字体**：`settings.js` 抽出 `getFontFamily()`（与 `applyFont` 写入 `--app-font` 的值逐字一致），`clipboard.js` 的 `renderTablePng` 标题/正文/页脚统一复用，复制图片与「账号与设置 → 界面字体」完全一致；全站所有复制图片入口一并生效
 - **在线车辆复制「所在站点」改正**：`LineMap.vue` 的 `nearStopOf()` 原返回含坐标的多行文本、被当单元格塞进复制表格破坏 TSV 结构；重构为只返回 K-d Tree 最近一站的**站名**，悬浮提示 `busTip` 仍保留独立坐标行；与 `LineStops.vue` 口径统一
+- **README 同步更新**：按实际落地修正 —— 移除已废弃的 BYOK 过时描述（`amap_byok_config` / `map_render_mode` / `hasMapKey()` / `applyAmapConfig()`），重写地图模式说明为单一真值 `useNativeMap()`（App 端内置 Key → 原生 `<map>`，H5 现状无 Key → 自绘走向图）；修正分支约守（源码分支严禁推远端）；目录结构按当前资产重绘（`pages/login/login`、utils/scripts 新增补齐，`index`/`line`/`settings` 页已移除，`components/` 新增）
 
 ### 2026-11-15
 
@@ -138,7 +141,7 @@ npm run build:app
    - **基础配置**：填写应用名称、AppID（点"重新获取"可生成测试 AppID）
    - **权限配置**：定位 / 网络权限已配好
    - **模块配置**：勾选 **Maps**（地图）与 **Geolocation**（定位）
-   - **第三方 SDK**：`app-plus.distribute.sdkConfigs.maps.amap.key` 填写 Android 平台的高德 Key（不填则地图页降级为「线路示意图」模式）
+   - **第三方 SDK**：`app-plus.distribute.sdkConfigs.maps.amap.key` 填写 Android 平台的高德 Key（不填则 `useNativeMap()` 为假，地图页走自绘走向图）
 4. 菜单 → 发行 → **原生 App - 云打包** → 选择 Android → 打包
 
 > 云打包需要 DCloud 账号登录。打包完成后下载安装包即可真机安装。
@@ -148,9 +151,10 @@ npm run build:app
 ```bash
 npm run test:md5      # MD5 实现单测（RFC 1321 向量 + 实测对照）
 npm run test:busid    # 车辆编号还原测试（全量建字典约 400ms）
+npm run test:routeclean # 站点序列清洗回归（离线读 network.json，不发请求不写文件）
 ```
 
-两个测试都是 `node scripts/*.mjs`，失败时退出码非 0，可直接当 CI 用。
+三个测试都是 `node scripts/*.mjs`，失败时退出码非 0，可直接当 CI 用。改完 `md5.js` / `busId.js` / `routeClean.js` 必须跑对应测试。
 
 ### 常用命令速查
 
@@ -160,9 +164,13 @@ npm run test:busid    # 车辆编号还原测试（全量建字典约 400ms）
 | `npm run build:h5` | 构建网页版 | `dist/build/h5` |
 | `npm run build:app` | 构建 Android App 资源 | `dist/build/app` |
 | `npm run deploy:pages` | 构建 H5 并推送到远端 `pages` 分支（GitHub Pages） | — |
-| `npm run scan:org` | buspedia 采集营运公司写 `org`（含手动核实映射） | `src/static/data/lines.json` |
-| `npm run scan:org:live` | 在线车辆自编号反推营运公司（只补强不降级，`--dry` 预览） | `src/static/data/lines.json` |
+| `npm run test:routeclean` | 站点序列清洗回归（离线读 network.json，不发请求不写盘） | — |
+| `npm run scan:lines` | 枚举探测线路网，合并写线路库（只补强不降级） | `src/static/lines/lines.json` |
+| `npm run scan:org` | buspedia 采集营运公司写 `org`（含手动核实映射） | `src/static/lines/lines.json` |
+| `npm run scan:org:live` | 在线车辆自编号反推营运公司（只补强不降级，`--dry` 预览） | `src/static/lines/lines.json` |
 | `npm run scan:busnumber` | buspedia 车队页采集完整自编号映射（需 `BP_USER`/`BP_PASS`，支持 `--retry`/`--limit`/`--parse-only`） | `src/static/data/bus-number-map.json` |
+| `npm run scan:foreign` | 高德采集蔡城 / 木兰 / 汉奇线路（需 `AMAP_KEY`） | `src/static/lines/{cc,ml,hq}/` |
+| `npm run build:foreign-net` | 由非集团资产生成 `network-foreign.json` | `src/static/net/network-foreign.json` |
 | `npm run test:md5` | MD5 单元测试 | — |
 | `npm run test:busid` | 车辆编号还原测试 | — |
 
@@ -174,42 +182,82 @@ npm run test:busid    # 车辆编号还原测试（全量建字典约 400ms）
 boundless-whbis/
 ├── index.html                 # H5 入口模板
 ├── vite.config.js             # Vite 配置（含 H5 开发跨域代理 /api）
+├── package.json               # npm 命令（dev:h5 / build:h5 / build:app / scan:* / test:* 等）
 ├── scripts/
 │   ├── test-md5.mjs           # MD5 单元测试（RFC 1321 向量 + 实测数据）
 │   ├── test-busid.mjs         # 车辆编号还原测试（终止性 + 正确性 + 性能）
+│   ├── test-route-clean.mjs   # 走向清洗回归测试（离线读 network.json）
 │   ├── deploy-pages.mjs       # GitHub Pages 一键部署（孤立提交强推 pages 分支）
-│   ├── make-stop-dot.ps1      # 生成站点圆点静态图（PowerShell 脚本）
-│   ├── openid_sniffer.py      # mitmproxy 插件：抓取 openId（备用方案）
-│   └── probe-*.mjs            # CDP 探针（地图走向/贴路/配色/重叠体检，需先跑 dev:h5）
-├── .opencode/
-│   └── commands/init.md       # /init 命令：刷新本目录文档并清理临时文件
+│   ├── auto-collect.mjs       # 自动采集入口（scan-org 累积回填）
+│   ├── scan-lines.mjs         # 枚举探测线路网 → src/static/lines/lines.json（只补强不降级）
+│   ├── scan-org.mjs           # buspedia 采集线路 org 字段（只补强不降级，--force 覆盖）
+│   ├── scan-org-live.mjs      # 在线车辆自编号反推营运公司（MD5 首位归属，补 D/K/YX 线）
+│   ├── scan-foreign.mjs       # 高德采集蔡城/木兰/汉奇（需 AMAP_KEY）
+│   ├── build-foreign-net.mjs  # 由非集团资产生成 network-foreign.json
+│   ├── scan-routes.mjs        # OSRM 驾车贴路（免 Key，可断点续跑）
+│   ├── scan-routes-amap.mjs   # 高德官方轨迹（正式 Web Service Key，仅本地采集用）
+│   ├── scan-poi-newbus.mjs    # 高德 D/K 等新站 POI 采集
+│   ├── scan-busnumber.mjs     # buspedia 车队页采集完整自编号（需 BP_USER/BP_PASS）
+│   ├── scan-amap-ids.mjs      # 高德 ID 全量回填工具
+│   └── probe-*.mjs            # CDP 探针（地图走向/贴路/配色/榜单等，先跑 dev:h5）
 ├── deploy/
 │   └── cloudflare-worker.js   # ★ Cloudflare Worker 反向代理（解决 H5 生产 CORS 预检）
 ├── README.md
+├── AGENTS.md                  # 仓库工作规约（接口协议、地图双模式、探针约定）
+├── TODO.md                    # 待办清单
 └── src/
-    ├── main.js                # 应用入口
-    ├── App.vue                # 全局生命周期
-    ├── config.js              # ★ 应用配置（openId / cityCode / apiProxy / 地图 BYOK）
-    ├── manifest.json          # App 打包配置（Android 权限 / 地图 SDK / H5 路由基准）
+    ├── main.js
+    ├── App.vue
+    ├── config.js              # ★ 应用配置（openId / cityCode / apiProxy / 地图 Key + useNativeMap）
+    ├── manifest.json          # App 打包配置（Android 权限 / 地图 SDK）
     ├── pages.json             # 路由与全局样式配置
-    ├── uni.scss               # 全局 SCSS 变量
     ├── pages/
-    │   ├── index/index.vue    # 首页：线路搜索 + 上下行结果卡片 + 地图设置入口
-    │   ├── line/line.vue      # 线路详情：站点 / 时刻表 / 实时车辆（Tab，最复杂）
-    │   ├── map/map.vue        # 实时车辆地图（原生地图 / 线路示意图双模式）
-    │   └── settings/settings.vue # 地图服务设置（BYOK：用户自填高德 Key）
+    │   ├── login/login.vue    # 账号登录（本地账号制）
+    │   └── map/map.vue        # 实时车辆地图（自绘走向图 / 原生地图 + 站点 UI 内嵌）
+    ├── components/
+    │   ├── LineSearch.vue     # 线路搜索（地图页顶部）
+    │   ├── LineStops.vue      # 线路详情 / 站点 UI（地图页 FloatWin 内嵌：站点 / 时刻表）
+    │   ├── LineDb.vue         # 线路库窗（地图页 FloatWin 内嵌）
+    │   ├── LineMap.vue        # ★ 走向图绘制（自绘 / 原生双模式）
+    │   ├── LinePlan.vue       # 发车计划组件
+    │   ├── SpeedRank.vue      # 车速榜（速度分档 + 复制）
+    │   ├── Signboard.vue      # 站牌仿真（公交站牌图）
+    │   ├── FloatWin.vue       # 可拖动浮窗（实时线路窗 / 线路库 / 线路详情等）
+    │   ├── FavStar.vue        # 线路收藏星标
+    │   ├── FavPanel.vue       # 收藏夹面板
+    │   └── CopyPill.vue       # 复制胶囊（文本 / Excel / 图片三档）
     ├── utils/
     │   ├── api.js             # ★ 接口请求层（封装 3 个公交接口 + 车辆还原再导出）
     │   ├── busId.js           # ★ 车辆编号逆向还原（分片异步构建字典，防卡 UI）
+    │   ├── busNumber.js       # 完整自编号补全（懒加载 bus-number-map.json）
+    │   ├── busDir.js          # 上下行判定 / 方向辅助
     │   ├── md5.js             # 纯 JS MD5 实现（RFC 1321，零依赖）
     │   ├── geo.js             # ★ Haversine 距离 + 车辆匹配最近站点 + GCJ-02 ⇄ WGS-84
     │   ├── osrm.js            # ★ 站点序列吸附 OSM 道路（OSRM，免 Key，7 天缓存）
-    │   └── asset.js           # ★ 基址感知的静态资源路径解析（子路径部署）
+    │   ├── asset.js           # ★ 基址感知的静态资源路径解析（子路径部署）
+    │   ├── companies.js       # 营运公司字典（缩写 / 颜色 / 号段 / 分片）唯一真源
+    │   ├── lineIndex.js       # 线路库 + 联想检索池（资产零请求）
+    │   ├── lineAsset.js       # 线路静态资产懒加载（内存缓存 + 去重）
+    │   ├── routeClean.js      # 走向清洗规则（生成器与运行时共用）
+    │   ├── kdtree.js          # 站点最近邻查询（K-d Tree）
+    │   ├── favorites.js       # 线路收藏（`whbis:fav-lines:v1`，上限 10 条）
+    │   ├── clipboard.js       # 统一复制（copyTable + 图片 ClipboardItem）
+    │   ├── dropdown.js        # 就地下拉全局互斥仲裁（Attach 接入）
+    │   ├── settings.js        # 各类偏好（面板尺寸 / 位置 / 地图来源等）
+    │   ├── panelResize.js     # 浮层面板可拖拽改宽 / 高（H5）
+    │   ├── panelPos.js        # 面板位置记忆 / 自由移动
+    │   ├── cityBus.js         # 全市快照：车辆归属推断 / 自编号尾号查车
+    │   ├── speedRank.js       # 车速榜（速度分档）
+    │   ├── auth.js            # 本地账号预置账号制（登录 / 改密 / 恢复默认）
+    │   └── avatar.js          # 用户头像载入
     └── static/
-        ├── logo.png
-        ├── bus-live.png
-        ├── stop-dot.png       # 线路示意图用的站点圆点
-        └── background.jpg
+        ├── lines/             # 线路库数据资产（lines.json + manifest.json + bNN 分片）
+        ├── lines/jt/          # 集团线路资产（bNN.json 64 桶哈希，含站点与走向）
+        ├── lines/cc|ml|hq/    # 非集团线路资产（CCB*/MLB*/HQB*）
+        ├── lines/foreign-lines.json  # 非集团摘要
+        ├── net/               # 实时网络（network.json / network-foreign.json）
+        ├── data/bus-number-map.json  # 完整自编号映射（~3.6MB，懒加载）
+        └── img/               # logo / stop-dot / bus-live / background 等
 ```
 
 ---
@@ -227,7 +275,7 @@ boundless-whbis/
 ### 请求样例
 
 ```http
-POST https://customized.wuhanbus.com/gps-resapi/wechat/bus/line HTTP/1.1
+POST https://customized.wuhanbus.com/gps-resapi/wechat/bus/line HTTP/1.1   （实际请求路径 /line）
 Content-Type: application/json
 openId: wx_openid_dev_001
 
@@ -247,9 +295,9 @@ openId: wx_openid_dev_001
 
 | 接口 | 线路参数 | 用途 |
 | ---- | -------- | ---- |
-| `POST /bus/line` | `lineCode` | 线路基础信息 + 全部站点（含经纬度、地铁换乘） |
-| `POST /bus/detailPlanTime` | `lineId` | 计划发车时刻表 |
-| `POST /bus/detailData` | `lineId` | 在线运营车辆实时 GPS |
+| `POST /line` | `lineCode` | 线路基础信息 + 全部站点（含经纬度、地铁换乘） |
+| `POST /detailPlanTime` | `lineId` | 计划发车时刻表 |
+| `POST /detailData` | `lineId` | 在线运营车辆实时 GPS |
 
 > ⚠️ 用错参数名会返回 `code:3014 lineCode:线路ID不能为空` / `lineId:线路id不能为空`。
 
@@ -260,47 +308,32 @@ openId: wx_openid_dev_001
 
 ---
 
-## 四、地图（双模式 + BYOK）
+## 四、地图（`useNativeMap()` 唯一真值）
 
-地图页支持**双模式**，无 Key 也能跑通，而「用哪套」与有没有 Key **已经解耦**（设置项 `map_render_mode`）：
+地图有两套渲染，判定只认 `src/config.js` 的 `useNativeMap()`（不拼接 Key、不出现多套判定变体）：
 
 | 模式 | 触发条件 | 说明 |
 | ---- | -------- | ---- |
-| 原生地图 | `useNativeMap()` 为 true | 使用 uni-app `<map>` 组件（高德底图 + 原生 marker/折线） |
-| 自绘走向图 | `useNativeMap()` 为 false | 自绘 SVG：高德瓦片底图 + 贴路走向 + 站点 + 实时车辆 |
+| 原生地图 | App 端且 `APP_CONFIG.mapKey` 非空（Key 随安装包内置） | uni-app `<map>` 组件（高德底图 + 原生 marker/polyline） |
+| 自绘走向图 | `useNativeMap()` 为假 | SVG 走向图：高德免 Key 瓦片底图 + 贴路走向 + 站点 + 实时车辆 |
 
-`useNativeMap()` 的判定（`src/config.js`）：
+判定规则：
 
-| 设置值 | 有 Key | 无 Key |
-| ------ | ------ | ------ |
-| `auto`（默认，未设置） | 原生地图 | 自绘走向图 |
-| `schematic`（走向图） | **自绘走向图** | 自绘走向图 |
-| `native`（原生地图） | 原生地图 | 自绘走向图（自动回退） |
+- **App 端**：`APP_CONFIG.mapKey` 非空 → 原生地图（Key 来自 `src/manifest.json` 的 `app-plus.distribute.sdkConfigs.maps.amap.key`）。
+- **H5 端**：`APP_CONFIG.mapKey` 留空（现状）→ `useNativeMap()` 恒为假 → 一律自绘走向图（免 Key 的 OSRM 贴路 + 高德免 Key 瓦片）。
 
-即：**填了 Key 但想要自绘视觉**时，在「地图服务设置」里把渲染方式选成「走向图」即可（保存后整页重载生效）。键名 `map_render_mode`，与 Key 存储 `amap_byok_config` 相互独立，切换模式不会清除 Key。
+> BYOK（用户自填 Key）入口已整体移除：`config.js` 不再读 `amap_byok_config`，`main.js` 不再调 `applyAmapConfig()`，设置页也已移除对应抽屉。若将来需要 H5 原生地图，只填 `manifest.json` 里 H5 的 `sdkConfigs.maps.amap`（Web端 JS API Key + securityJsCode），构建期注入后重启 dev 服务器。
 
-**自绘模式的两个底座**（都不依赖高德 JS API）：
+**自绘走向图的两个底座**（都不依赖高德 JS API）：
 
-- **底图**：用 `<image>` 拼高德标准瓦片（`webrd0{1-4}.is.autonavi.com/appmaptile?...style=8`，免 Key、GCJ-02、256px），按相机浮点 zoom 取 `floor(zoom)` 的瓦片层 + 缩放定位，再叠加暗色蒙版降饱和，保证站名/车号可读。控制卡可关闭底图。
-- **走向**：`utils/osrm.js` 调 OSRM（`router.project-osrm.org`，WGS-84）把站点序列吸附到 OSM 道路，坐标需 GCJ-02 ⇄ WGS-84 互转（`geo.js` 的 `gcj02ToWgs84`）。
-  - 逐段质检用**最大垂距**，不用「规划距离/直线距离」的 ratio——站前掉头 ratio 能到 11 但实际只偏 76m，而吸附到高架 ratio 17 时已跑到 3km 外。
-  - 坏段修复四级：贴走廊直接用 → 加途经点重算 → **换端点吸附候选重算**（`/nearest?number=3`）→ 站间短直线。坏段根因是站点被吸到高架层/对向车道。
-  - 结果按 `{线路号}-{方向}` 缓存 7 天（键前缀 `whbis:osrm-route:v5:`，算法变更需升版本号）。OSRM 是公共 demo 服务，会限速/断连，全部失败仅回退站点连线，不影响主流程。
-  - 走向未贴路时（初屏几秒 / OSRM 失败）画的是站间直连虚线，并显示「贴路计算中 / 贴路服务不可用」提示。
+- **底图**：`.tile-layer` 用 `<image>` 拼高德标准瓦片（`webrd0{1-4}.is.autonavi.com/appmaptile?lang=zh_cn&size=1&scale=1&style=8&x=..&y=..&z=..`，免 Key、GCJ-02、256px），`zt=floor(zoom)` + `scale=2^(zoom-zt)` 定位，再叠 `.tile-shade` 暗蒙版降饱和，保证站名/车号可读。控制卡可关闭底图。
+- **走向**：`utils/osrm.js` 调 OSRM（WGS-84，需与 GCJ-02 互转）吸附站点序列。
+  - 逐段质检用**最大垂距**，不用「规划距离/直线距离」ratio——站前掉头 ratio 11 只偏 76m 却真实，吸到高架 ratio 17 已跑 3km 外。
+  - 坏段四级修复：贴走廊直接用 → 加 1/3、2/3 途经点重算 → **换端点吸附候选**（`/nearest?number=3`）→ 站间短直线。坏段根因是站点被吸到高架层/对向车道。
+  - 结果按 `{线路号}-{方向}` 缓存 7 天（键前缀 `whbis:osrm-route:v5:`，算法变更需升版本号）。OSRM 是公共 demo 服务，会限速/断连，全部失败仅回退站点连线（细虚线 + `routeAlert` 提示）。
+- **线路静态资产优先**：`src/static/lines/**` 由生成器产出（集团 `bNN` 64 桶 + 非集团 `CCB`/`MLB`/`HQB` 分片），每条线路双方向含 `base`/`stops`/`route`/`snapped`/`source`（`amap` 高德官方轨迹更优，`osrm` 驾车近似兜底）。`LineMap` 懒加载命中即不发 `/line`、`snapped` 为真连 OSRM 也不请求。
 
-**方向配色（全站统一，两页必须一致）**：**上行 = 青蓝（`#06B6D4` / `#22D3EE`），下行 = 玫红（`#F43F5E` / `#FB7185`）**。`map.vue` 的 `DIR_STYLE` 是唯一真源，`line.vue` 用 CSS 变量镜像。青/玫红而非红/绿，是为了色盲友好。上下行同屏时按行进法向分轨偏移（自绘 3.5px，原生地图 14m），否则后画的会整条盖掉先画的。
-
-**Key 获取方式（BYOK，自带密钥方案）**：
-
-项目出于安全**不再内置高德 Key**。用户需自行申请，且 H5 与 App 端 Key 类型不同：
-
-- **H5**：到[高德开放平台](https://console.amap.com/dev/key/app)申请「Web端(JS API)」类型的 Key + 安全密钥。
-  - 首页右上角 ⚙ 齿轮 →「地图服务设置」展开面板，或进入 `pages/settings/settings.vue` 填入；面板顶部还有「地图渲染方式」三档选择。
-  - 保存后存 `localStorage`（`amap_byok_config`），运行时由 `applyAmapConfig()` 覆写 `__uniConfig.aMapKey`。
-  - ⚠️ 高德 SDK 一经加载无法换 Key，保存后需**整页重载**才生效。
-- **App 端**：申请「Android/iOS 平台」类型的 Key，填入 `src/manifest.json` 的 `app-plus.distribute.sdkConfigs.maps.amap.key`，随安装包内置，无需用户配置。
-
-`src/config.js` 的 `mapKey` 字段默认留空；`hasMapKey()` 判断内置 Key 与用户自定义 Key 是否可用，`useNativeMap()` 在它的基础上叠加 `map_render_mode` 偏好。
+**方向配色（全站唯一真源 `src/components/LineMap.vue` 的 `DIR_STYLE`）**：**上行青蓝 `#06B6D4`/`#22D3EE`，下行玫红 `#F43F5E`/`#FB7185`**（色盲友好）；环线统一用紫罗兰色系。上下行同屏分轨（自绘 3.5px、原生 14m），否则后画的会整条盖掉先画的。
 
 > ⚠️ 实测：武汉公交 API 返回的站点/车辆坐标**已是 GCJ-02**（与高德官方线路轨迹偏差仅约 18m），直接上高德地图即可，切勿二次转换（`geo.js` 的 `wgs84ToGcj02` 仅供持有 WGS84 原始坐标的参考场景）。
 
@@ -338,11 +371,11 @@ busId = MD5( orgBusId )
 | `c370ec3d80532ba4afe5af93000db96e` | 52826 |
 | `bed5623adc8b12bc67a4221a5d5cccc4` | 72541 |
 
-线路详情页与地图页会显示还原后的自编号，并附带 MD5 原值备查。
+实时车辆 UI（`LineStops.vue` / `LineMap.vue` / 车速榜 / 发车时刻）会显示还原后并补全的自编号（如 `319N2379`），MD5 原值保留备查。
 
 **完整自编号补全（`src/utils/busNumber.js` + `src/static/data/bus-number-map.json`）**：MD5 字典只能还原出纯数字（如 `32379`），但真实车辆编号含批次码与车型字母（如 `319N2379`）。两套编号的对应关系是：**系统编号 = 公司号(首位) + 车号；buspedia 编号 = 公司号 + 批次码(1~2位，即年份后两位) + 车型字母 + 车号**——中间插入的批次码/字母无数字规律，只能查表。采集器 `scan-busnumber.mjs` 登录 buspedia 车队页，抓全集团车型的「自编号段」（如 `319N2379~2385`、`115Y562~596`）；**车型页按年份批次分多列，须抓所有含编号段特征的 `.data-cell`**（不能只取第一个，否则漏掉新年份），131 车型展开为 18614 个完整编号，按「公司号+车号」建映射 `byNum[系统编号] → [完整编号]`（车号前导零保留并同时登记去零版）。**新旧年份冲突**（同车号不同批次，如 `107E1314` 与 `117E1314`）按批次码降序排列，新年份排 `arr[0]` 优先显示。前端 `formatBusNo(orgId)` 查表补全显示，**原始纯数字 `orgId` 保持不变**（仍用于 MD5 反查车辆与公司推断）；映射表约 3.6MB，走 `uni.request` 懒加载 + 缓存 + `onBusNumberReady(cb)` 就绪回调（同 `busId.js` 模式），不打包进首屏。采集需 buspedia 账号（`BP_USER`/`BP_PASS`），页面有二次客户端重定向，须 `networkidle` + evaluate 重试才抓得到 `.data-cell`。映射表落 `src/static/data/bus-number-map.json`。
 
-**衍生用途：营运公司反推**（`scripts/scan-org-live.mjs`）。自编号首位数字即营运公司（1→一公司 … 9→九公司），是车辆归属的权威判据：把 `/detailData` 在线车辆的 `busId` 经上述字典还原后取首位，按线路两方向合并投票取众数（护栏防跨公司支援车带偏），写入 `data/lines.json` 的 `org`。这比停更的 buspedia 更准，专门补它未收录的 D/K/YX 线；因定制线多在班时段才有车，靠 CI 每 37 分钟反复跑累积覆盖。实测 1 路=二公司、337=三公司、10 路=七公司、408=一公司全部吻合。
+**衍生用途：营运公司反推**（`scripts/scan-org-live.mjs`）。自编号首位数字即营运公司（1→一公司 … 9→九公司），是车辆归属的权威判据：把 `/detailData` 在线车辆的 `busId` 经上述字典还原后取首位，按线路两方向合并投票取众数（护栏防跨公司支援车带偏），写入 `src/static/lines/lines.json` 的 `org`。这比停更的 buspedia 更准，专门补它未收录的 D/K/YX 线；因定制线多在班时段才有车，靠 CI 每 37 分钟反复跑累积覆盖。实测 1 路=二公司、337=三公司、10 路=七公司、408=一公司全部吻合。
 
 **衍生用途：自编号尾号查车**（`utils/cityBus.js` 的 `searchBusesByOrgSuffix()`）。地图页「🔍 查车」按自编号**末尾数字**在全网快照里本地反查，不额外发请求：取用户输入末尾连续数字作尾号（`321B2426`→`2426`、`325F311`→`311`），对每辆车的纯数字 `orgId` 做 `endsWith`，因此**跨所有公司**——输入后四位 `2426` 即列出全集团所有尾号为 2426 的车，输入后三位 `426` 则放宽到所有 426 结尾。至少 2 位数字（低于 2 位噪声太大），输入即查、实时呈现多结果列表（线路/方向/完整自编号/走向/车速/公司），点行选中车辆并在地图定位；完整编号靠 `parseBusNo()` 反查或显示编号直配做精确命中。⚠️ 尾号匹配只依赖已还原的 `orgId`，字典未就绪时该车不在结果里；收班车也不在快照内。
 
@@ -355,32 +388,31 @@ busId = MD5( orgBusId )
 
 ---
 
-## 六、线路详情页交互
+## 六、线路详情（站点 UI）
+
+线路详情不再单独成页，而是以 `FloatWin` 浮窗嵌在地图页里，由 `src/components/LineStops.vue` 承载站点 / 时刻表 / 换乘 / 线路带等全部 UI；`LineMap.vue` 负责地图上的走向与实时车辆。
 
 ### 站点列表：横版卡片 + 横向滚动
 
-站点采用**横向卡片条**，可左右滑动浏览：
-
-- 每张卡片包含：站号徽章（首站绿/末站红）+ 站名 + 地铁换乘标签 + 该站实时车辆
+- 站点以**横向线路带 + 站点卡片**呈现，可左右滑动（PC 支持鼠标拖拽 / 滚轮横向滚动）
+- 每张卡片：站号徽章（首站绿 / 末站红）+ 站名 + 地铁换乘标签 + 该站实时车辆
 - 车辆卡片：`自编号 | 状态 | 时间` 一行，`车速 · 距本站距离` 一行（不折行）
-- 卡片**等高**，车辆信息统一贴底对齐；左右边缘渐隐遮罩提示可横向滚动
-- 营运信息（首班/末班/票价/站点数/在线数）为**横向单行**布局
+- 营运信息（首班 / 末班 / 票价 / 站点数 / 在线数）横向单行布局
+- 线路带色随方向切换：上行青蓝 / 下行玫红 / 环线紫罗兰
 
 > ⚠️ 实现要点：滚动容器内的内容行必须**收缩到自身宽度**才能产生滚动距离。
 > uni-app H5 的 `scroll-view` 默认把内容行压到容器宽（`display:flex`），导致卡片溢出裁切而非滚动。
-> 解决：内容行改用 `display: inline-flex`（shrink-to-fit）+ `min-width: 100%`（见 `line.vue` 的 `.stop-row`）。
+> 解决：内容行改用 `display: inline-flex`（shrink-to-fit）+ `min-width: 100%`（见 `LineStops.vue` 的 `.strip-inner` / `.min-stop-row` 处）。
 
 ### 线路走向总览
 
-总览条：站点按**沿线路累计里程比例**分布（不是等距，由 `geo.js` 计算），车辆按最近站位插值定位并错开显示。
+线路带：站点按**沿线路累计里程比例**分布（非等距，由 `geo.js` 计算），车辆按最近站位插值定位并错开显示。
 
-### 车辆信息位置
+### 极简站牌与实时刷新
 
-车辆信息**不单独成页**，直接挂在对应站点下：
-
-- 每站下方内嵌该站车辆卡片（`matchBusesToStops` 匹配，按距离由近到远排序，多车可同站）
-- 实时数据每 15 秒自动刷新（`onUnload` 时清理定时器）
-- 底部提供「实时车辆 → 地图」入口
+- 浮窗窗头的 `🚏` 切换「极简站牌」模式：只留线路头、候车信息与站点序列
+- 实时数据默认 15 秒自动刷新，间隔可在刷新胶囊里调 0 / 15 / 20 / 30 秒（`whbis:line-refresh-sec`，与地图页的 `whbis:map-refresh-sec` 各自独立）
+- 定时器 `onShow` 拉起，`onHide` + `onUnload` 停止；浮窗拖动 / 缩放由 `panelPos.js` + `panelResize.js` 统一管理
 
 ---
 
@@ -401,8 +433,8 @@ Worker 会为预检直接应答 `204`，转发 POST 时补全 `Access-Control-Al
 
 **GitHub Pages 分支模型**（见 `scripts/deploy-pages.mjs`）：
 
-- `main` —— 源码主干（`origin/main`），仓库首页展示的就是它
-- `pages` —— 仅存放 H5 构建产物（`origin/pages`），Pages 从该分支根目录发布；用孤立提交强推，产物不含源码历史
+- 源码分支（`main` / `BETA`）—— 仅本地维护，**严禁推送远端**
+- `pages` —— 远端 `origin` 唯一接收的分支，仅存放 H5 构建产物，Pages 从该分支根目录发布；用孤立提交强推，产物不含源码历史
 
 ---
 
@@ -410,11 +442,12 @@ Worker 会为预检直接应答 `204`，转发 POST 时补全 `Access-Control-Al
 
 - [x] 工程初始化、架构搭建、双端构建验证
 - [x] 接口协议破解（POST + header openId）
-- [x] MD5 车辆编号还原
+- [x] MD5 车辆编号还原 + 完整自编号补全（buspedia 映射）
 - [x] 真实数据联调：线路 / 站点 / 时刻表 / 实时车辆 / 地图
 - [x] H5 生产部署：Cloudflare Worker 反代 + GitHub Pages 一键部署
-- [x] 地图 BYOK（用户自带高德 Key，解决内置 Key 安全问题）
+- [x] 线路收藏（`whbis:fav-lines:v1`，上限 10 条）+ 文本/Excel/图片三档复制
+- [x] 蔡城 / 木兰 / 汉奇非集团线路统一纳入检索与全市线网
+- [x] 本地账号制（预置账号 + 可选改密）
 - [ ] 配置高德 Key，验证 Android 真机原生地图
-- [ ] 线路收藏、历史查询等本地存储能力
 - [ ] 公交到站距离估算（基于 GPS 与站点坐标）
 - [ ] 如需原生渲染体验，评估 nvue / uni-app x 路线
