@@ -494,6 +494,16 @@ export function getFont() {
   return FONT_OPTS.some((o) => o.key === v) ? v : DEFAULT_FONT
 }
 
+/**
+ * 当前字体的完整 family 栈（与 applyFont 写入 --app-font 的值逐字一致）。
+ * 供 canvas 绘制（复制图片）复用，保证图片字体与界面「账号与设置 → 界面字体」完全一致。
+ * @param {string} [key] 指定档位；不传则取当前生效档
+ */
+export function getFontFamily(key) {
+  const opt = FONT_OPTS.find((o) => o.key === (key || getFont())) || FONT_OPTS[0]
+  return opt.family ? `${opt.family}, ${BASE_FONT_STACK}` : BASE_FONT_STACK
+}
+
 /** 幂等注入一个 <link rel=stylesheet>（同一 URL 只注一次，重复调用零开销） */
 function injectCss(url) {
   const ID = 'whbis-font-css'
@@ -525,8 +535,7 @@ export function applyFont(key) {
   try {
     const opt = FONT_OPTS.find((o) => o.key === (key || getFont())) || FONT_OPTS[0]
     opt.css.forEach(injectCss)
-    const family = opt.family ? `${opt.family}, ${BASE_FONT_STACK}` : BASE_FONT_STACK
-    document.documentElement.style.setProperty('--app-font', family)
+    document.documentElement.style.setProperty('--app-font', getFontFamily(key))
   } catch (e) { /* 忽略 */ }
   // #endif
 }

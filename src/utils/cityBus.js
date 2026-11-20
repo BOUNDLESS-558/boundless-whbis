@@ -431,6 +431,37 @@ export function findBusByOrgId(orgId, buses) {
 }
 
 /**
+ * 按自编号「末尾数字」跨公司模糊匹配全市快照。
+ *
+ * 用户输入可能是完整编号（如 321B2426 / 325F311）或纯尾号（2426 / 426）。
+ * 统一取末尾连续数字作为尾号，对每辆车的纯数字 orgId 做 endsWith 匹配：
+ *   - 321B2426 → 尾号 2426 → 命中所有公司里自编号后四位 2426 的车
+ *   - 426      → 尾号 426  → 命中所有自编号后三位 426 的车
+ * 不做 MD5 反查（尾号无法反推完整编号），只依赖已还原的 orgId。
+ *
+ * @param {string} input 用户输入
+ * @param {Array} buses 全市快照
+ * @param {number} minLen 尾号最少位数，低于此值结果噪声太大直接返回空
+ * @returns {{ digits: string, buses: Array }} 尾号与命中车辆（按线路/方向/自编号排序）
+ */
+export function searchBusesByOrgSuffix(input, buses, minLen = 2) {
+  const raw = String(input == null ? '' : input).trim()
+  const m = raw.match(/(\d+)\s*$/)
+  const digits = m ? m[1] : ''
+  if (digits.length < minLen || !Array.isArray(buses) || !buses.length) {
+    return { digits, buses: [] }
+  }
+  const matched = buses.filter((b) => b && b.orgId && String(b.orgId).endsWith(digits))
+  matched.sort((a, b) => {
+    const c = String(a.no || '').localeCompare(String(b.no || ''), 'zh', { numeric: true })
+    if (c) return c
+    if (a.dir !== b.dir) return (a.dir || 0) - (b.dir || 0)
+    return String(a.orgId).localeCompare(String(b.orgId))
+  })
+  return { digits, buses: matched }
+}
+
+/**
  * 补还原自编号（MD5 字典在后台构建，扫描时可能还没就绪）。
  * 就地改写字段，返回是否有变化（Vue 响应式数组元素属性变更可直接触发重算）。
  */
@@ -503,6 +534,7 @@ export default {
   saveSnapshot,
   snapshotAge,
   findBusByOrgId,
+  searchBusesByOrgSuffix,
   refreshOrgIds,
   clusterPoints,
   speedBandOf,

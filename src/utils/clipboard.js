@@ -12,7 +12,7 @@
  * 且复制内容是结构化表格而非 DOM 截图，直接绘制更轻、更清晰、可控分页。
  * 三种模式共用同一份 { title, columns, rows }，保证内容一致，只是载体不同。
  */
-import { getCopyMode } from './settings.js'
+import { getCopyMode, getFontFamily } from './settings.js'
 
 /** 由 {title, columns, rows} 拼出 TSV（三种模式共用同一份数据，保证内容一致） */
 export function tableToText({ title = '', columns = [], rows = [] }) {
@@ -49,6 +49,9 @@ function textWidth(s, fontSize) {
  */
 function renderTablePng({ title, columns, rows }) {
   const FONT = 14
+  // 与「账号与设置 → 界面字体」共用同一份 family 栈（applyFont 写入 --app-font 的值），
+  // 用户在界面看到的字体资源已加载，canvas 同步绘制即可正确命中，不会因异步加载破坏手势栈。
+  const FONT_FAMILY = getFontFamily()
   const PAD = 18
   const LINE_H = 26
   const HEAD_H = 30
@@ -75,16 +78,16 @@ function renderTablePng({ title, columns, rows }) {
   if (!ctx) return null
   ctx.fillStyle = '#ffffff'
   ctx.fillRect(0, 0, W, H)
-  ctx.font = `500 ${FONT}px -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif`
+  ctx.font = `500 ${FONT}px ${FONT_FAMILY}`
   ctx.textBaseline = 'middle'
 
   let y = PAD
   if (title) {
     ctx.fillStyle = '#111827'
-    ctx.font = `600 ${FONT + 3}px -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif`
+    ctx.font = `600 ${FONT + 3}px ${FONT_FAMILY}`
     ctx.fillText(title, PAD, y + TITLE_H / 2)
     y += TITLE_H
-    ctx.font = `500 ${FONT}px -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif`
+    ctx.font = `500 ${FONT}px ${FONT_FAMILY}`
   }
   // 表头
   ctx.fillStyle = '#eef2f7'
@@ -118,7 +121,7 @@ function renderTablePng({ title, columns, rows }) {
   ctx.strokeStyle = '#e5e7eb'
   ctx.beginPath(); ctx.moveTo(PAD, y + 4); ctx.lineTo(W - PAD, y + 4); ctx.stroke()
   ctx.fillStyle = '#64748b'
-  ctx.font = `400 ${FONT - 2}px -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif`
+  ctx.font = `400 ${FONT - 2}px ${FONT_FAMILY}`
   ctx.fillText(STAMP, PAD, y + FOOT_H / 2 + 7, W - PAD * 2)
   // dataURL → 二进制 → Blob，全程同步，保住调用栈里的用户手势
   const b64 = String(canvas.toDataURL('image/png')).split(',')[1] || ''

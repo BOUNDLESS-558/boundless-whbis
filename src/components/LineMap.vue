@@ -304,7 +304,7 @@
           <view class="cc-btn" v-else title="中止本轮拉取（保留已扫到的部分结果）" @click="cancelCity">✕ 中止</view>
           <view class="cc-btn" :class="{ on: cityFollow > 0 }" :title="cityFollowTitle" @click="cycleCityFollow">{{ cityFollowLabel }}</view>
           <view class="cc-btn" :class="{ on: cityShowOrgId }" title="近景给每辆车标出编号标签" @click="toggleCityTags">编号标签</view>
-          <view class="cc-btn ghost" :class="{ on: orgSearchOpen }" title="按车辆自编号在全市快照里查车并定位（本地反查，不发请求）" @click="toggleOrgSearch">🔍 查车</view>
+          <view class="cc-btn ghost" :class="{ on: orgSearchOpen }" title="按自编号尾号（后三位/后四位）跨所有公司查车并定位，本地匹配不发请求" @click="toggleOrgSearch">🔍 查车</view>
           <view class="cc-btn ghost" :class="{ on: rankOpen }" title="按车速从高到低列出全局在运车辆（纯本地排序，不发请求）" @click="toggleRank">🏁 车速榜</view>
         </view>
       </block>
@@ -344,8 +344,9 @@
       <view class="vt-btn wide" v-if="!useMap" :class="{ on: showBaseMap }" @click="toggleBaseMap" title="显示/隐藏底图">底图</view>
     </view>
 
-    <!-- 自编号查车：全市快照本地反查（自编号 → MD5 正算 busId），与车速榜互斥同占右上。
-         不另发请求；命中即选中车辆详情并在地图上定位，未命中给出明确提示 -->
+    <!-- 自编号查车：按输入末尾数字跨公司模糊匹配全市快照，随输入实时呈现。
+         完整编号（321B2426）取尾号 2426，前 3/4 位公司代码不参与匹配；
+         与车速榜互斥同占右上，纯本地过滤不发请求，点结果选中车辆并在地图定位 -->
     <view class="org-search" v-if="cityOn && orgSearchOpen">
       <view class="os-head">
         <text class="os-title">🔍 自编号查车</text>
@@ -357,25 +358,43 @@
             class="os-input"
             v-model="orgSearchInput"
             type="text"
-            placeholder="输入车辆自编号，如 3240 / 325F311"
+            placeholder="尾号查询：2426 / 426 / 325F311"
             confirm-type="search"
+            @input="onOrgInput"
             @confirm="doOrgSearch"
           />
           <view class="os-go" @click="doOrgSearch">查车</view>
         </view>
-        <view class="os-tip">基于当前全市快照（{{ cityBuses.length }} 辆）本地查找，不额外发请求；收班车不在快照内</view>
-        <view class="os-result" v-if="orgSearchHit" @click="onOrgHitPick">
-          <view class="osr-line">
-            <text class="osr-no">{{ orgSearchHit.no }} 路</text>
-            <text class="osr-dir" :class="'d' + orgSearchHit.dir">{{ orgSearchHit.dir === 0 ? '上行' : '下行' }}</text>
-            <text class="osr-org">{{ orgSearchHit.orgId ? fmtNo(orgSearchHit.orgId) : '—' }}</text>
+        <view class="os-tip">按自编号末尾数字跨所有公司匹配，输入时实时呈现；基于当前快照（{{ cityBuses.length }} 辆），不另发请求</view>
+
+        <block v-if="orgResults.length">
+          <view class="os-count" @click.stop>
+            <view class="os-count-info">
+              <text>找到 <text class="os-count-n">{{ orgResults.length }}</text> 辆</text>
+              <text class="os-count-key">尾号 {{ orgQueryDigits }}</text>
+            </view>
+            <!-- 复制结果：档位（文字 / Excel / 图片）与全站共享，放在计数行右侧避免头部挤压 -->
+            <CopyPill label="复制" :disabled="!orgResults.length" @copy="copyOrgResults" />
           </view>
-          <view class="osr-route">{{ orgSearchHit.routeText || (orgSearchHit.startName + ' → ' + orgSearchHit.endName) }}</view>
-          <view class="osr-meta">
-            <text>{{ orgSearchHit.speed != null ? orgSearchHit.speed + ' km/h' : '速度未知' }}</text>
-            <text class="osr-locate">点此定位 ›</text>
-          </view>
-        </view>
+          <scroll-view class="os-list" scroll-y>
+            <view class="os-row" v-for="b in orgResults" :key="b.busId" @click="onOrgHitPick(b)">
+              <view class="osr-top">
+                <text class="osr-no">{{ b.no }} 路</text>
+                <text class="osr-dir" :class="'d' + b.dir">{{ b.dir === 0 ? '上行' : '下行' }}</text>
+                <text class="osr-org">{{ fmtNo(b.orgId) }}</text>
+                <text class="osr-locate">定位 ›</text>
+              </view>
+              <view class="osr-sub">
+                <text class="osr-route">{{ b.routeText }}</text>
+                <text class="osr-speed">{{ b.speed != null ? b.speed + ' km/h' : '—' }}</text>
+              </view>
+              <view class="osr-foot">
+                <text class="osr-company" v-if="b.company">{{ b.company }}</text>
+                <text class="osr-stop" :title="b.stopName ? '所处站点：' + b.stopName : '站点信息加载中'">📍{{ b.stopName || '站点…' }}</text>
+              </view>
+            </view>
+          </scroll-view>
+        </block>
         <view class="os-miss" v-else-if="orgSearchMsg">{{ orgSearchMsg }}</view>
       </view>
     </view>
@@ -626,7 +645,7 @@ import { createResizable } from '../utils/panelResize.js'
 import { readPanelPos, writePanelPos, clampPanelPos } from '../utils/panelPos.js'
 import {
   citySweepCost, sweepCity, loadSnapshot, loadLastSnapshot, snapshotAge,
-  findBusByOrgId, refreshOrgIds, clusterPoints, SPEED_BANDS, CITY_FRESH_MS,
+  findBusByOrgId, searchBusesByOrgSuffix, refreshOrgIds, clusterPoints, SPEED_BANDS, CITY_FRESH_MS,
   cityWarned, markCityWarned, loadCityNet, netSearchLines, bboxIntersects,
 } from '../utils/cityBus.js'
 import LinePlan from './LinePlan.vue'
@@ -907,11 +926,15 @@ export default {
       })(),
       // 榜单是否折叠（由 SpeedRank 抛回）：折叠后只剩标题一条，不该继续占用右侧绘制区
       rankFolded: false,
-      // 自编号查车浮窗：基于已扫到的全市快照本地反查，与车速榜互斥（同占右上绘制区）
+      // 自编号查车浮窗：按输入末尾数字跨公司模糊匹配全市快照，与车速榜互斥（同占右上绘制区）
       orgSearchOpen: false,
       orgSearchInput: '',
-      orgSearchHit: null,
+      orgQueryDigits: '',
+      orgResults: [],
       orgSearchMsg: '',
+      // 查车结果「所处站点」缓存：{ [线路号|方向]: [{stopName,latitude,longitude}] }
+      // 站点明细按线路异步加载，命中后回填 b.stopName；复制时数据已就绪，保证富格式在手势栈内同步写入
+      orgStopCache: {},
       // 按线路号筛选（缩小到某条线的车，不重新请求）
       cityFilterNo: '',
       // 自动跟随间隔（分钟，0=手动）
@@ -3502,47 +3525,134 @@ export default {
       this.focusBus(bus)
     },
 
-    // —— 自编号查车（基于全市快照本地反查，零请求）——
+    // —— 自编号查车（按末尾数字跨公司模糊匹配全市快照，零请求）——
     toggleOrgSearch() {
       // 与车速榜互斥：两者同占右上绘制区，避免叠在一起
       if (!this.orgSearchOpen) this.rankOpen = false
       this.orgSearchOpen = !this.orgSearchOpen
+      if (this.orgSearchOpen) this.doOrgSearch()
       this.$nextTick(() => this.measureUi())
     },
     closeOrgSearch() {
       this.orgSearchOpen = false
       this.$nextTick(() => this.measureUi())
     },
+    // 输入即查：uni-app 的 input 事件在 H5 是 e.target.value、小程序是 e.detail.value
+    onOrgInput(e) {
+      const v = e && e.detail && e.detail.value != null
+        ? e.detail.value
+        : (e && e.target && e.target.value != null ? e.target.value : this.orgSearchInput)
+      this.orgSearchInput = v
+      this.doOrgSearch()
+    },
     doOrgSearch() {
-      const q = String(this.orgSearchInput || '').trim()
-      if (!q) {
-        this.orgSearchHit = null
-        this.orgSearchMsg = '请输入车辆自编号'
+      const raw = String(this.orgSearchInput || '').trim()
+      const { digits, buses } = searchBusesByOrgSuffix(raw, this.cityBuses, 2)
+      this.orgQueryDigits = digits
+      if (!raw) {
+        this.orgResults = []
+        this.orgSearchMsg = '输入自编号末尾数字，如 2426（后四位）或 426（后三位），跨所有公司匹配'
+        return
+      }
+      if (digits.length < 2) {
+        this.orgResults = []
+        this.orgSearchMsg = '至少输入 2 位数字（后三位 / 后四位最常用）'
         return
       }
       if (!this.cityBuses.length) {
-        this.orgSearchHit = null
+        this.orgResults = []
         this.orgSearchMsg = '当前没有全市快照，请先在控制卡点「↻ 重扫」'
         return
       }
-      const bus = findBusByOrgId(q, this.cityBuses)
-      if (!bus) {
-        this.orgSearchHit = null
-        this.orgSearchMsg = `快照（${this.cityBuses.length} 辆）里没有找到「${q}」；收班车或超过快照时段的车辆不在其中`
+      if (!buses.length) {
+        this.orgResults = []
+        this.orgSearchMsg = `快照（${this.cityBuses.length} 辆）里没有自编号尾号为「${digits}」的车；可试试更短的尾号（如后三位）`
         return
       }
-      const rt = routeOf(bus.no, bus.dir)
       this.orgSearchMsg = ''
       // 展示用的轻量对象：复用车速榜同一套走向/公司口径
-      this.orgSearchHit = {
-        ...bus,
-        routeText: rt.known ? rt.text : (bus.lineName || '走向未知'),
-        company: orgCompanyOf(bus),
-      }
+      this.orgResults = buses.map((bus) => {
+        const rt = routeOf(bus.no, bus.dir)
+        return {
+          ...bus,
+          routeText: rt.known ? rt.text : (bus.lineName || '走向未知'),
+          company: orgCompanyOf(bus),
+          stopName: this.nearestOrgStopName(bus),
+        }
+      })
+      // 站点明细按线路异步加载并回填，复制时已就绪（富格式须在手势栈内同步写入，不能等）
+      this.fillOrgStopNames(this.orgResults)
     },
-    // 点命中卡片：详情窗 + 精确定位；为避免筛选把目标藏起来，先清掉线路筛选
-    onOrgHitPick() {
-      const bus = this.orgSearchHit
+    // 异步预取查车结果的站点明细：按线路号去重，in-flight Promise 防止输入即查反复请求。
+    // 站点只存 {stopName, lat, lng}，结果行与复制共用 nearestOrgStopName 同步取最近站。
+    async fillOrgStopNames(results) {
+      if (!results || !results.length) return
+      if (!this._orgStopLoading) this._orgStopLoading = {}
+      const nos = [...new Set(results.map((b) => String(b.no)).filter(Boolean))]
+      await Promise.all(nos.map(async (no) => {
+        if (this.orgStopCache[no + '|0'] && this.orgStopCache[no + '|1']) return
+        let p = this._orgStopLoading[no]
+        if (!p) {
+          p = (async () => {
+            let row = null
+            try { row = await loadLineAsset(no) } catch (e) { row = null }
+            for (const d of [0, 1]) {
+              const dirRow = row ? assetDir(row, d) : null
+              const stops = (dirRow && dirRow.stops) || []
+              this.orgStopCache[no + '|' + d] = stops
+                .map((s) => ({
+                  stopName: s.stopName || '',
+                  latitude: parseFloat(s.latitude),
+                  longitude: parseFloat(s.longitude),
+                }))
+                .filter((s) => !isNaN(s.latitude) && !isNaN(s.longitude))
+            }
+          })()
+          this._orgStopLoading[no] = p
+        }
+        try { await p } finally { delete this._orgStopLoading[no] }
+      }))
+      // 回填到结果对象（仍用传入的 results，避免查询已切换时污染新结果）
+      results.forEach((b) => { b.stopName = this.nearestOrgStopName(b) })
+    },
+    // 同步：按车辆 GPS 在已缓存的「该线路该方向」站点里找最近站名；无缓存返回空串
+    nearestOrgStopName(bus) {
+      if (!bus) return ''
+      const stops = this.orgStopCache[String(bus.no) + '|' + bus.dir]
+      if (!stops || !stops.length || isNaN(bus.lat) || isNaN(bus.lng)) return ''
+      let best = '', bestD = Infinity
+      for (const s of stops) {
+        const d = distance(bus.lat, bus.lng, s.latitude, s.longitude)
+        if (d < bestD) { bestD = d; best = s.stopName }
+      }
+      return best
+    },
+    // 复制查车结果：档位由 CopyPill 的全站设置决定（文字 / Excel / 图片）。
+    // 全程同步（站点已由 fillOrgStopNames 预取到缓存），保证图片/Excel 的 ClipboardItem 在手势栈内写入。
+    copyOrgResults() {
+      if (!this.orgResults.length) {
+        uni.showToast({ title: '暂无可复制的查车结果', icon: 'none' })
+        return
+      }
+      const dirName = (d) => (d === 0 ? '上行' : d === 1 ? '下行' : '—')
+      const rows = this.orgResults.map((r) => [
+        r.no || '',
+        r.company || '',
+        (r.stopName || this.nearestOrgStopName(r)) || '—',
+        r.orgId ? this.fmtNo(r.orgId) : '',
+        dirName(r.dir),
+      ])
+      copyTable({
+        title: `自编号查车 尾号 ${this.orgQueryDigits} · 命中 ${this.orgResults.length} 辆 · 快照 ${this.cityBuses.length} 辆`,
+        columns: ['线路号', '营运公司', '所处站点', '自编号', '上下行'],
+        rows,
+        toast: `已复制查车结果 ${rows.length} 辆`,
+        imageToast: `已复制查车结果 ${rows.length} 辆为图片`,
+        excelToast: `已复制查车结果 ${rows.length} 辆为 Excel 表格`,
+      })
+    },
+    // 点结果行：详情窗 + 精确定位；为避免筛选把目标藏起来，先清掉线路筛选
+    onOrgHitPick(bus) {
       if (!bus) return
       if (this.cityFilterNo) {
         this.cityFilterNo = ''
@@ -3948,26 +4058,16 @@ export default {
     busStateText(bus) {
       return busStateOf(bus)
     },
-    // 车辆距该方向站点序列中最近的一站（K-d Tree，O(log N) 替换 O(N) 线性扫描）
+    // 车辆所处站点名（与该方向站点序列最近的一站，K-d Tree O(log N)）。
+    // 只返回站名这一个值：复制表格的「所在站点」单元格直接用它，不含坐标/换行，避免破坏 TSV/图片表格。
     nearStopOf(b) {
       const tree = this.kdtrees[b.dir]
       if (!tree) return '未知站点'
       const target = { lat: parseFloat(b.lat), lng: parseFloat(b.lng) }
       const res = kdtreeNearest(tree, target)
-      if (!res) return '未知站点'
+      if (!res || res.index < 0) return '未知站点'
       const station = this.stopsByDir[b.dir]?.[res.index] || this.stopsByDir[0]?.[0]
-      const la = station ? parseFloat(station.latitude) : 0
-      const ln = station ? parseFloat(station.longitude) : 0
-      const dist = res.dist
-      const dir = this.dirLabel(b.dir)
-      const state = b.arrived === '1' ? '已到站' : '行驶中'
-      const coord = b.lat != null && b.lng != null ? `${b.lat}, ${b.lng}` : '经纬度未知'
-      return (
-        `${dir} · ${b.orgId ? this.fmtNo(b.orgId) : (b.busNo || '?')} · ${this.busCompanyText(b)}\n` +
-        `所在站点：${station ? `${station.latitude},${station.longitude}` : '未知站点'}\n` +
-        `${String(b.time || '--').slice(0, 5)} · ${b.gpsSpeed}km/h · ${state}\n` +
-        coord
-      )
+      return station && station.stopName ? station.stopName : '未知站点'
     },
     // 在线车辆悬浮提示：方向 / 编号 / 营运公司 / 所在站点 / 时间 / 速度 / 状态 / 经纬度
     busTip(b) {
@@ -5755,7 +5855,7 @@ export default {
   -webkit-backdrop-filter: blur(30px) saturate(180%);
   border: 2rpx solid rgba(255, 255, 255, 0.16);
   box-shadow: 0 24rpx 64rpx rgba(0, 0, 0, 0.48);
-  overflow: hidden;
+  /* 不用 overflow:hidden：头部复制胶囊的下拉要能溢出；列表自身 scroll-view 已裁剪 */
 }
 .os-head {
   display: flex;
@@ -5816,42 +5916,97 @@ export default {
   line-height: 1.6;
   color: rgba(255, 255, 255, 0.42);
 }
-.os-result {
-  margin-top: 18rpx;
-  padding: 18rpx 20rpx;
-  border-radius: 16rpx;
-  background: rgba(var(--ac-rgb), 0.1);
-  border: 2rpx solid rgba(var(--ac-rgb), 0.35);
-  cursor: pointer;
-  transition: background 0.18s;
+/* 结果计数条：命中数 + 当前尾号一眼可见 */
+.os-count {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12rpx;
+  margin-top: 16rpx;
+  padding: 0 4rpx 10rpx;
+  font-size: 20rpx;
+  color: rgba(255, 255, 255, 0.6);
 }
-.os-result:hover { background: rgba(var(--ac-rgb), 0.18); }
-.osr-line {
+.os-count-info {
+  display: flex;
+  align-items: center;
+  gap: 10rpx;
+  min-width: 0;
+  white-space: nowrap;
+}
+.os-count-n { font-size: 26rpx; font-weight: 800; color: var(--ac-hi); }
+.os-count-key {
+  padding: 3rpx 12rpx;
+  border-radius: 10rpx;
+  font-size: 18rpx;
+  color: #fcd34d;
+  background: rgba(252, 211, 77, 0.1);
+}
+/* 结果列表：固定高度滚动，多结果不会把浮窗撑出屏幕 */
+.os-list { height: 520rpx; }
+.os-row {
+  padding: 14rpx 16rpx;
+  margin-bottom: 8rpx;
+  border-radius: 14rpx;
+  background: rgba(255, 255, 255, 0.04);
+  border: 2rpx solid transparent;
+  cursor: pointer;
+  transition: background 0.16s, border-color 0.16s;
+}
+.os-row:hover { background: rgba(var(--ac-rgb), 0.14); border-color: rgba(var(--ac-rgb), 0.4); }
+.osr-top {
   display: flex;
   align-items: center;
   gap: 10rpx;
   min-width: 0;
 }
-.osr-no { font-size: 27rpx; font-weight: 800; color: #fff; white-space: nowrap; }
+.osr-no { font-size: 25rpx; font-weight: 800; color: #fff; white-space: nowrap; }
 .osr-dir { padding: 1rpx 9rpx; border-radius: 7rpx; font-size: 18rpx; }
 .osr-dir.d0 { color: #67e8f9; background: rgba(6, 182, 212, 0.18); }
 .osr-dir.d1 { color: #fda4af; background: rgba(225, 29, 72, 0.18); }
 .osr-org { font-size: 20rpx; font-weight: 600; color: #fcd34d; white-space: nowrap; }
-.osr-route {
-  margin-top: 10rpx;
-  font-size: 20rpx;
-  line-height: 1.5;
-  color: rgba(255, 255, 255, 0.66);
+.osr-locate { margin-left: auto; font-size: 18rpx; color: var(--ac-hi); font-weight: 600; white-space: nowrap; }
+.osr-sub {
+  display: flex;
+  align-items: center;
+  gap: 12rpx;
+  margin-top: 8rpx;
+  min-width: 0;
 }
-.osr-meta {
+.osr-route {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  font-size: 19rpx;
+  color: rgba(255, 255, 255, 0.62);
+}
+.osr-speed { flex: 0 0 auto; font-size: 19rpx; color: rgba(255, 255, 255, 0.5); font-variant-numeric: tabular-nums; }
+.osr-foot {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-top: 10rpx;
-  font-size: 19rpx;
-  color: rgba(255, 255, 255, 0.5);
+  gap: 12rpx;
+  margin-top: 7rpx;
+  font-size: 17rpx;
 }
-.osr-locate { color: var(--ac-hi); font-weight: 600; }
+.osr-company {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  color: rgba(255, 255, 255, 0.34);
+}
+.osr-stop {
+  flex: 0 0 auto;
+  max-width: 55%;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  color: rgba(255, 255, 255, 0.46);
+}
 .os-miss {
   margin-top: 18rpx;
   padding: 16rpx 18rpx;
