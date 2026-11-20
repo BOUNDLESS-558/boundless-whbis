@@ -8,6 +8,7 @@
     "scan:lines": "node scripts/scan-lines.mjs --merge",
     "scan:org": "node scripts/scan-org.mjs",
     "scan:org:live": "node scripts/scan-org-live.mjs",
+    "scan:busnumber": "node scripts/scan-busnumber.mjs",
     "scan:net": "node scripts/scan-lines.mjs --net --concurrency 8 --delay 40",
     "scan:routes": "node scripts/scan-routes.mjs",
     "scan:routes:stops": "node scripts/scan-routes.mjs --no-route",

@@ -30,3 +30,7 @@ accounts.txt
 scripts/.changed-lines.txt
 # 高德采集进度台账（运行时产物，CI 每轮从资产自动回填，不入库）
 scripts/.amap-progress.json
+# buspedia 登录态（含 token）与完整编号采集进度：仅本地采集用，不入库
+scripts/.buspedia-state.json
+scripts/.buspedia-cookie.txt
+scripts/.busnumber-runtime.json

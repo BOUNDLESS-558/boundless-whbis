@@ -120,7 +120,7 @@
                 :key="b.busId"
                 :title="busTip(b, stop)"
               >
-                <text class="b-org">{{ b.orgId || '?' }}</text>
+                <text class="b-org">{{ b.orgId ? fmtNo(b.orgId) : '?' }}</text>
                 <text class="b-meta">{{ b.time }} · {{ b.gpsSpeed }}km/h</text>
                 <text class="b-state">{{ b.arrived === '1' ? '到站' : '行驶' }}</text>
               </view>
@@ -256,7 +256,7 @@
               v-for="b in stop.buses.slice(0, 3)"
               :key="b.busId"
               :title="busTip(b, stop)"
-            >{{ b.orgId || b.busNo || '?' }}</text>
+            >{{ b.orgId ? fmtNo(b.orgId) : (b.busNo || '?') }}</text>
             <text class="min-bus-more" v-if="stop.buses.length > 3">+{{ stop.buses.length - 3 }}</text>
           </view>
         </view>
@@ -289,6 +289,7 @@ import { attachDropdown } from '../utils/dropdown.js'
 import { companyKeyOfNo, orgInfo } from '../utils/companies.js'
 import { isLoopLine } from '../utils/lineIndex.js'
 import { assetUrl } from '../utils/asset.js'
+import { formatBusNo, onBusNumberReady } from '../utils/busNumber.js'
 import FavStar from './FavStar.vue'
 import CopyPill from './CopyPill.vue'
 
@@ -312,6 +313,8 @@ export default {
   emits: ['set-dir', 'updated'],
   data() {
     return {
+      // 完整编号映射加载版本号（就绪后 ++，触发车辆编号显示刷新）
+      mapVersion: 0,
       dir: Number(this.direction || 0),
       // 双方向数据：0=上行，1=下行
       diagram: {
@@ -444,6 +447,8 @@ export default {
     this.loadAll()
     // 编号字典就绪后重新还原自编号并刷新
     onBusIdReady(() => this.loadLive())
+    // 完整编号映射加载完成后刷新显示
+    onBusNumberReady(() => { this.mapVersion++ })
     this.restartAutoRefresh()
   },
   beforeUnmount() {
@@ -459,6 +464,11 @@ export default {
     }
   },
   methods: {
+    // 纯数字自编号 → 完整编号（依赖 mapVersion，映射就绪后重渲染）
+    fmtNo(orgId) {
+      void this.mapVersion
+      return formatBusNo(orgId)
+    },
     // 刷新间隔下拉：展开权交给全站仲裁器，点复制胶囊等其它菜单时自动收起
     toggleRefreshMenu() { if (this._dd) this._dd.toggle() },
     closeRefreshMenu() { if (this._dd) this._dd.close() },
@@ -524,7 +534,7 @@ export default {
       const state = b.arrived === '1' ? '已到站' : '行驶中'
       const coord = b.lat != null && b.lng != null ? `${b.lat}, ${b.lng}` : '经纬度未知'
       return (
-        `${b.orgId || b.busNo || '?'} · ${this.companyOf(b.orgId || b.busNo)}\n` +
+        `${b.orgId ? this.fmtNo(b.orgId) : (b.busNo || '?')} · ${this.companyOf(b.orgId || b.busNo)}\n` +
         `所在站点：${stop.stopName || '未知站点'}\n` +
         `${b.time || '--'} · ${b.gpsSpeed != null ? b.gpsSpeed + 'km/h' : '--'} · ${state}\n` +
         coord
@@ -538,7 +548,7 @@ export default {
           const state = b.arrived === '1' ? '到站' : '行驶'
           const coord = b.lat != null && b.lng != null ? `${b.lat},${b.lng}` : '--'
           lines.push(
-            `${b.orgId || b.busNo || '?'}\t${this.companyOf(b.orgId || b.busNo)}\t${stop.stopName || '未知站点'}\t${b.time}\t${b.gpsSpeed}km/h\t${state}\t${coord}`
+            `${b.orgId ? this.fmtNo(b.orgId) : (b.busNo || '?')}\t${this.companyOf(b.orgId || b.busNo)}\t${stop.stopName || '未知站点'}\t${b.time}\t${b.gpsSpeed}km/h\t${state}\t${coord}`
           )
         })
       })

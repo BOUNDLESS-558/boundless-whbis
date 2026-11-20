@@ -393,8 +393,8 @@
               </view>
               <view class="bus-item" v-for="(bus, i) in g.buses" :key="bus.dir + '-' + i" @click="selectBus(bus)" :title="busTip(bus)">
                 <view class="bus-left">
-                  <!-- ★ 自编号（由 MD5 加密值还原，如 3240） -->
-                  <view class="bus-org">{{ bus.orgId || '未知' }}</view>
+                  <!-- ★ 自编号（由 MD5 加密值还原，补全车型字母，如 325F311） -->
+                  <view class="bus-org">{{ bus.orgId ? fmtNo(bus.orgId) : '未知' }}</view>
                   <view class="bus-hash">{{ bus.busNo }}</view>
                 </view>
                 <view class="bus-right">
@@ -467,7 +467,7 @@
       <view class="sheet-grid">
         <view class="sg-cell">
           <text class="sg-k">自编号</text>
-          <view class="sg-v">{{ selectedBus.orgId || '编号还原中…' }}</view>
+          <view class="sg-v">{{ selectedBus.orgId ? fmtNo(selectedBus.orgId) : '编号还原中…' }}</view>
         </view>
         <view class="sg-cell">
           <text class="sg-k">车速</text>
@@ -596,6 +596,7 @@ import {
 import { cleanStops, pointsOf, fromFlat } from '../utils/routeClean.js'
 import { loadLineAsset, assetDir } from '../utils/lineAsset.js'
 import { orgCompanyOf, routeOf } from '../utils/speedRank.js'
+import { formatBusNo, onBusNumberReady } from '../utils/busNumber.js'
 import { copyTable } from '../utils/clipboard.js'
 import { attachDropdown } from '../utils/dropdown.js'
 import { orgInfo, COMPANIES, companyKeyOfNo, companyOf } from '../utils/companies.js'
@@ -770,6 +771,8 @@ export default {
   },
   data() {
     return {
+      // 完整编号映射加载版本号（就绪后 ++，触发车辆编号显示刷新）
+      mapVersion: 0,
       lineCode: '',
       // 线路号（lineCode 的第二段，双方向编码共用）
       lineNo: '',
@@ -1328,6 +1331,12 @@ export default {
   },
   mounted() {
     this.initFromProps()
+    // 完整编号映射加载完成后刷新车辆编号显示（列表/详情窗自动更新，画布标签手动重绘）
+    onBusNumberReady(() => {
+      this.mapVersion++
+      try { if (this.drawCityTags) this.drawCityTags() } catch (e) {}
+      try { if (this.renderMap) this.renderMap() } catch (e) {}
+    })
     attachDropdown(this, 'refreshMenu', 'refresh-map')
     // 恢复详情窗上次拖动过的位置（车辆窗 / 站点窗共用同一套浮窗与位置）
     // 此刻浮窗还没渲染，先按估算尺寸夹一次；开窗后 bindSheetDrag 会用实际尺寸再夹
@@ -1380,6 +1389,11 @@ export default {
     this.cleanup()
   },
   methods: {
+    // 纯数字自编号 → 完整编号（依赖 mapVersion，映射就绪后重渲染）
+    fmtNo(orgId) {
+      void this.mapVersion
+      return formatBusNo(orgId)
+    },
     // 刷新间隔下拉：展开权交给全站仲裁器，点复制 / 搜索联想等其它菜单时自动收起
     toggleRefreshMenu() { if (this._dd) this._dd.toggle() },
     closeRefreshMenu() { if (this._dd) this._dd.close() },
@@ -2234,7 +2248,7 @@ export default {
       const out = []
       for (const d of cands) {
         if (out.length >= CITY_TAG_MAX) break
-        const text = String(d.bus.orgId)
+        const text = this.fmtNo(d.bus.orgId)
         const bw = textW(text) * 0.8
         const y = d.y - 17
         const box = { x1: d.x - bw / 2, x2: d.x + bw / 2, y1: y - 6, y2: y + 6 }
@@ -3741,7 +3755,7 @@ export default {
       const state = b.arrived === '1' ? '已到站' : '行驶中'
       const coord = b.lat != null && b.lng != null ? `${b.lat}, ${b.lng}` : '经纬度未知'
       return (
-        `${dir} · ${b.orgId || b.busNo || '?'} · ${this.busCompanyText(b)}\n` +
+        `${dir} · ${b.orgId ? this.fmtNo(b.orgId) : (b.busNo || '?')} · ${this.busCompanyText(b)}\n` +
         `所在站点：${station ? `${station.latitude},${station.longitude}` : '未知站点'}\n` +
         `${String(b.time || '--').slice(0, 5)} · ${b.gpsSpeed}km/h · ${state}\n` +
         coord
@@ -3753,7 +3767,7 @@ export default {
       const state = b.arrived === '1' ? '已到站' : '行驶中'
       const coord = b.lat != null && b.lng != null ? `${b.lat}, ${b.lng}` : '经纬度未知'
       return (
-        `${dir} · ${b.orgId || b.busNo || '?'} · ${this.busCompanyText(b)}\n` +
+        `${dir} · ${b.orgId ? this.fmtNo(b.orgId) : (b.busNo || '?')} · ${this.busCompanyText(b)}\n` +
         `所在站点：${this.nearStopOf(b)}\n` +
         `${String(b.time || '--').slice(0, 5)} · ${b.gpsSpeed}km/h · ${state}\n` +
         coord

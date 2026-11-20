@@ -44,7 +44,7 @@
             <view class="rk-line1">
               <text class="rk-line">{{ r.no }} 路</text>
               <text class="rk-dir" :class="'d' + r.dir">{{ r.dir === 0 ? '上行' : '下行' }}</text>
-              <text class="rk-org">{{ r.orgId || '编号还原中' }}</text>
+              <text class="rk-org">{{ r.orgId ? fmtNo(r.orgId) : '编号还原中' }}</text>
             </view>
             <!-- 走向：起点站开往终点站（下行已按方向反转） -->
             <view class="rk-line2">
@@ -74,6 +74,7 @@
 <script>
 import { RANK_LIMITS, DEFAULT_RANK_LIMIT, DRIFT_SPEED, rankBySpeed } from '../utils/speedRank.js'
 import { SPEED_BANDS } from '../utils/cityBus.js'
+import { formatBusNo, onBusNumberReady } from '../utils/busNumber.js'
 
 const RANK_LIMIT_KEY = 'whbis:rank-limit'
 const RANK_FOLD_KEY = 'whbis:rank-folded'
@@ -93,6 +94,7 @@ export default {
       limit: DEFAULT_RANK_LIMIT,
       folded: false,
       driftSpeed: DRIFT_SPEED,
+      mapVersion: 0,
     }
   },
   computed: {
@@ -122,6 +124,8 @@ export default {
   mounted() {
     // 组件可能因切视图被卸载重建：把本机恢复出来的折叠态立即同步给父组件
     this.$emit('fold', !!this.folded)
+    // 完整编号映射加载完成后刷新显示
+    onBusNumberReady(() => { this.mapVersion++ })
   },
   watch: {
     folded(v) {
@@ -142,6 +146,10 @@ export default {
     bandColor(band) {
       const b = SPEED_BANDS[band]
       return b ? b.color : '#e2e8f0'
+    },
+    fmtNo(orgId) {
+      void this.mapVersion // 依赖版本号，映射就绪后重渲染
+      return formatBusNo(orgId)
     },
   },
 }

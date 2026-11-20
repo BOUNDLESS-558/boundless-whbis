@@ -1,5 +1,6 @@
 <script>
 import { warmUp } from './utils/api.js'
+import { warmUpBusNumber } from './utils/busNumber.js'
 import { applySkin, watchSystemSkin, applyAccent, applyFont } from './utils/settings.js'
 // #ifdef H5
 import { assetUrl } from './utils/asset.js'
@@ -9,6 +10,8 @@ export default {
   onLaunch: function () {
     // 启动时后台构建车辆编号字典（分片执行，不阻塞界面）
     warmUp()
+    // 后台预加载完整自编号映射表（含车型字母，走 HTTP 缓存）
+    warmUpBusNumber()
     // 皮肤：按设置（黑 / 白 / 跟随系统）应用到 <html data-skin>，并监听系统深浅色切换
     applySkin()
     watchSystemSkin()
