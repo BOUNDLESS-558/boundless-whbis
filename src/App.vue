@@ -21,10 +21,10 @@ export default {
     applyFont()
     // #ifdef H5
     // 子路径部署（如 GitHub Pages /repo/）时，将基址感知的背景图写入 CSS 变量
-    document.documentElement.style.setProperty('--app-bg-image', `url("${assetUrl('/static/background.jpg')}")`)
+    document.documentElement.style.setProperty('--app-bg-image', `url("${assetUrl('/static/img/background.jpg')}")`)
     // favicon 同样基址感知（manifest 生成的 link 带的是站点根绝对路径）
     const fav = document.querySelector('link[rel="icon"]')
-    if (fav) fav.setAttribute('href', assetUrl('/static/logo.png'))
+    if (fav) fav.setAttribute('href', assetUrl('/static/img/logo.png'))
     // #endif
   },
   onShow: function () {},
@@ -61,7 +61,7 @@ page {
   /* 背景图 + 深色遮罩（保证文字可读）+ 底部渐变兑底 */
   background-image:
     linear-gradient(rgba(7, 11, 24, 0.62), rgba(7, 11, 24, 0.72)),
-    var(--app-bg-image, url('/static/background.jpg')),
+    var(--app-bg-image, url('/static/img/background.jpg')),
     linear-gradient(160deg, #070b18 0%, #0b1130 46%, #080d1e 100%);
   background-size: cover, cover, auto;
   background-position: center, center, center;

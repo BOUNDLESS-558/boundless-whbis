@@ -975,7 +975,7 @@ node scripts/scan-routes-amap.mjs --retry-unmatched   # 只重试未命中线
 ```
 
 **流程**：
-1. 读 `src/static/lines.json`（线路库），逐条线按线路号调高德
+1. 读 `src/static/lines/lines.json`（线路库），逐条线按线路号调高德
 2. 高德返回 `buslines` 数组（一条线可能有多个方向）
 3. 用**清洗后的首末站名**匹配高德方向（`matchBusline()`）：
    - 先按正序匹配（起点→终点）
@@ -1005,7 +1005,7 @@ node scripts/scan-foreign.mjs --only C1,P2     # 只采指定号
 调 `inputtips` → 过滤 `/汉奇/` → `lineid` 取详情。
 
 **产物**：
-1. `src/static/foreign-lines.json` — 线路库摘要（供 `lineIndex.js` 合并进检索池）
+1. `src/static/lines/foreign-lines.json` — 线路库摘要（供 `lineIndex.js` 合并进检索池）
 2. `src/static/lines/CCB01.json` / `MLB01.json` / `HQB01.json` … — 资产分片
    （命名规则：公司缩写 + `B` + 两位桶号，由 `foreignShardOf()` 定位）
 
@@ -1335,7 +1335,7 @@ npm run scan:manifest    # 最后刷新索引
 | `src/utils/companies.js` | 营运公司字典（唯一真源） |
 | `src/utils/osrm.js` | OSRM 贴路（运行时，7 天缓存） |
 | `src/static/lines/` | 资产分片目录（bNN.json + CCB/MLB/HQB） |
-| `src/static/foreign-lines.json` | 非集团线路库摘要 |
+| `src/static/lines/foreign-lines.json` | 非集团线路库摘要 |
 | `src/static/lines/manifest.json` | 资产索引（开发者用） |
 | `scripts/.amap-progress.json` | 高德采集进度台账（不进仓库） |
 | `scripts/scan-poi-newbus.mjs` | 兼容模式采集器（`getPoiNewbus`，免 Web 服务 Key / 需 `AMAP_WEB_COOKIE`，`npm run scan:poi-newbus`） |

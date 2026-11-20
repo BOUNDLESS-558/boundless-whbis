@@ -1,5 +1,5 @@
 /**
- * 线网扫描：枚举武汉公交线路号 → 生成 src/static/lines.json
+ * 线网扫描：枚举武汉公交线路号 → 生成 src/static/lines/lines.json
  *
  * 背景：后端只有「按 lineCode 查单条线路」的 /line，没有线路列表接口。
  * 因此把线路号当枚举空间逐个探测：只要 lineDetailBaseDto.lineName 有值，即判定该线路真实存在
@@ -18,7 +18,7 @@
  *   node scripts/scan-lines.mjs --merge             # 与现有 JSON 合并（分批扫描累加）
  *   node scripts/scan-lines.mjs --no-dir1           # 跳过反向复核（请求量减半，dirs 只记 [0]）
  *   node scripts/scan-lines.mjs --out other.json    # 改输出路径
- *   node scripts/scan-lines.mjs --net               # 只生全市线网底图 src/static/network.json（站点坐标串）
+ *   node scripts/scan-lines.mjs --net               # 只生全市线网底图 src/static/net/network.json（站点坐标串）
  *
  * --net 单独一条道：它读已生成的 lines.json 拿“哪些线在营运”，再逐方向把站点经纬度拉回来，
  * 产物是地图全市视图的线网底图（静态资产，走 HTTP 缓存，不占运行时 API 配额）。
@@ -90,9 +90,9 @@ const VERIFY_DIR1 = !has('no-dir1')
 const MERGE = has('merge')
 // 只对现有 JSON 重跑第 6 步（编号规整 / 白名单 / 去重），不联网；改完后处理逻辑时用它
 const NORMALIZE_ONLY = has('normalize-only')
-// 全市线网底图模式（产物是 src/static/network.json，与线路库互不干扰）
+// 全市线网底图模式（产物是 src/static/net/network.json，与线路库互不干扰）
 const NET = has('net')
-const OUT = path.resolve(argOf('out', NET ? 'src/static/network.json' : 'src/static/lines.json'))
+const OUT = path.resolve(argOf('out', NET ? 'src/static/net/network.json' : 'src/static/lines/lines.json'))
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
 
@@ -170,9 +170,9 @@ async function pool(items, worker, concurrency) {
 const fmt = (n) => String(n).padStart(4, ' ')
 const t0 = Date.now()
 
-// —— --net：全市线网底图（读线路库→逐方向拉站点坐标→落 src/static/network.json）——
+// —— --net：全市线网底图（读线路库→逐方向拉站点坐标→落 src/static/net/network.json）——
 if (NET) {
-  const LIB = path.resolve(argOf('lib', 'src/static/lines.json'))
+  const LIB = path.resolve(argOf('lib', 'src/static/lines/lines.json'))
   if (!fs.existsSync(LIB)) { console.error('找不到线路库：' + LIB + '（先跑一次普通的 scan-lines）'); process.exit(1) }
   const lib = JSON.parse(fs.readFileSync(LIB, 'utf8'))
   // 只扫营运线：停运线没有在运车辆，画在地图上纯属干扰

@@ -110,7 +110,7 @@ export default {
   },
   computed: {
     logoUrl() {
-      return assetUrl('/static/logo.png')
+      return assetUrl('/static/img/logo.png')
     },
   },
   onLoad(query) {

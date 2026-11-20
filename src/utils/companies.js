@@ -12,23 +12,23 @@
 export const COMPANIES = {
   JT: {
     abbr: 'JT', assetPrefix: 'b', name: '武汉公交集团', short: '公交集团',
-    // 集团徽标用官方蓝色 e 标（static/logo.png），与品牌行 / favicon 同一张图；
+    // 集团徽标用官方蓝色 e 标（static/img/logo.png），与品牌行 / favicon 同一张图；
     // 不再用旧的 logo-jt.svg（靛蓝方块 + 公交简笔画），保持全站品牌一致
-    color: '#6366f1', logo: '/static/logo.png', prefixRe: /^(\d|电|BRT|K|D|YX)/i,
+    color: '#6366f1', logo: '/static/img/logo.png', prefixRe: /^(\d|电|BRT|K|D|YX)/i,
   },
   CC: {
     abbr: 'CC', assetPrefix: 'CCB', name: '武汉蔡城公交客运公司', short: '蔡城公交',
-    color: '#f59e0b', logo: '/static/logo-cc.svg', prefixRe: /^C\d/i,
+    color: '#f59e0b', logo: '/static/img/logo-cc.svg', prefixRe: /^C\d/i,
     amapNames: [/蔡城/, /蔡甸/],
   },
   ML: {
     abbr: 'ML', assetPrefix: 'MLB', name: '武汉木兰公交客运公司', short: '木兰公交',
-    color: '#10b981', logo: '/static/logo-ml.svg', prefixRe: /^P\d/i,
+    color: '#10b981', logo: '/static/img/logo-ml.svg', prefixRe: /^P\d/i,
     amapNames: [/木兰/, /黄陂/],
   },
   HQ: {
     abbr: 'HQ', assetPrefix: 'HQB', name: '汉奇智慧出行', short: '汉奇公交',
-    color: '#a855f7', logo: '/static/logo-hq.svg', prefixRe: /^(汉奇|HQ)/i,
+    color: '#a855f7', logo: '/static/img/logo-hq.svg', prefixRe: /^(汉奇|HQ)/i,
     amapNames: [/汉奇/],
   },
 }

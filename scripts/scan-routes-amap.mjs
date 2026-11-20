@@ -84,7 +84,7 @@ const argOf = (name, dflt) => {
   return dflt
 }
 const has = (name) => argv.includes('--' + name)
-const LIB = path.resolve(argOf('lib', 'src/static/lines.json'))
+const LIB = path.resolve(argOf('lib', 'src/static/lines/lines.json'))
 const OUT = path.resolve(argOf('out', 'src/static/lines'))
 const ONLY = String(argOf('only', '')).split(',').map((s) => s.trim()).filter(Boolean)
 const CITYNAME = argOf('city', '武汉')

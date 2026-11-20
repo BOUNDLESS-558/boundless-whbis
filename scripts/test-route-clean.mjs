@@ -1,7 +1,7 @@
 /**
  * 站点序列清洗回归测试（纯离线、不发请求、不写文件）
  *
- * 用 src/static/network.json 的 1187 个方向 / 25199 个站点坐标当样本，
+ * 用 src/static/net/network.json 的 1187 个方向 / 25199 个站点坐标当样本，
  * 验证 cleanStops 能消掉上游错误坐标造成的折返，且不误伤正常线路。
  * 用法：npm run test:routeclean
  */
@@ -9,7 +9,7 @@ import fs from 'node:fs'
 import RC from './_loadRouteClean.mjs'
 
 const { cleanStops, pointsOf, routeStats, shardOf } = RC
-const NET = JSON.parse(fs.readFileSync(new URL('../src/static/network.json', import.meta.url), 'utf8'))
+const NET = JSON.parse(fs.readFileSync(new URL('../src/static/net/network.json', import.meta.url), 'utf8'))
 
 const before = { points: 0, jumps: 0, huge: 0, foldbacks: 0, dupPairs: 0, backs: 0, outliers: 0, dups: 0, maxJump: 0 }
 const after = { points: 0, jumps: 0, huge: 0, foldbacks: 0, dupPairs: 0, backs: 0, outliers: 0, dups: 0, maxJump: 0 }

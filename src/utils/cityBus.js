@@ -2,7 +2,7 @@
  * 全市公交数据层 —— 线网底图 + 在运车辆快照
  *
  * 两块数据各自保鲜：
- *   1) 线网底图 `src/static/network.json`（静态资产，`npm run scan:net` 生成）：
+ *   1) 线网底图 `src/static/net/network.json`（静态资产，`npm run scan:net` 生成）：
  *      每条营运线每个方向的站点坐标串，用于在地图上画「全部线路走向」。
  *      为何不进 bundle 而是放 static：1000+ 条 / 5w+ 个站点≈ 1MB，import 进来会拖垮首屏；
  *      而它跟 lines.json 一样几乎不变，走 HTTP 缓存最划算（也因此不能进 localStorage，配额会顶满）。
@@ -70,7 +70,7 @@ function loadForeignNet() {
   if (FOREIGN_PROMISE) return FOREIGN_PROMISE
   FOREIGN_PROMISE = new Promise((resolve) => {
     uni.request({
-      url: assetUrl('/static/network-foreign.json'),
+      url: assetUrl('/static/net/network-foreign.json'),
       method: 'GET',
       timeout: 20000,
       success: (res) => {
@@ -138,7 +138,7 @@ export function loadCityNet() {
   if (NET_PROMISE) return NET_PROMISE
   NET_PROMISE = new Promise((resolve) => {
     uni.request({
-      url: assetUrl('/static/network.json'),
+      url: assetUrl('/static/net/network.json'),
       method: 'GET',
       timeout: 30000,
       success: async (res) => {

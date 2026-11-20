@@ -39,9 +39,9 @@
 ## 可选优化
 
 ### 2. `lines.json` 改为运行时 fetch（消除冗余副本）
-- **现状**：`src/static/lines.json` 仍被 `src/utils/lineIndex.js` 以 `import` 方式**打包进 bundle**；
+- **现状**：`src/static/lines/lines.json` 仍被 `src/utils/lineIndex.js` 以 `import` 方式**打包进 bundle**；
   uni-app 又会把整个 `static/` 拷到产物，导致它在 `dist/static/` 里多一份冗余副本（APP 实际用的是 bundle 内那份）。
-- **方案**：改成与 `src/static/network.json` 一致的**运行时 HTTP 拉取**（异步初始化），
+- **方案**：改成与 `src/static/net/network.json` 一致的**运行时 HTTP 拉取**（异步初始化），
   缩小首屏 bundle，也契合最初“线路库/线网数据走 HTTP 缓存”的设计意图。
 - **代价**：`suggestLines / findLine / allLines / LINE_COUNT` 需异步化，牵连所有调用方（多为 Vue computed/watch，需加 `ensureLoaded()`）。
 

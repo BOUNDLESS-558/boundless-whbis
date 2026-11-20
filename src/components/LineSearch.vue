@@ -148,7 +148,7 @@ export default {
       return getLineCount()
     },
     logoUrl() {
-      return assetUrl('/static/logo.png')
+      return assetUrl('/static/img/logo.png')
     },
     // 线路库联想（本地 JSON，输入即出；不请求接口）
     // 上限 24：配合多列网格，常见输入基本一屏看全；超出时面板底部提示继续细化

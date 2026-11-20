@@ -15,10 +15,10 @@ const RC = (await import('./_loadRouteClean.mjs')).default
 const { shardOf } = RC
 
 const DIR = path.resolve('src/static/lines')
-const lib = JSON.parse(fs.readFileSync(path.resolve('src/static/lines.json'), 'utf8'))
+const lib = JSON.parse(fs.readFileSync(path.resolve('src/static/lines/lines.json'), 'utf8'))
 const foreignLib = (() => {
   try {
-    return JSON.parse(fs.readFileSync(path.resolve('src/static/foreign-lines.json'), 'utf8'))
+    return JSON.parse(fs.readFileSync(path.resolve('src/static/lines/foreign-lines.json'), 'utf8'))
   } catch {
     return { lines: [] }
   }

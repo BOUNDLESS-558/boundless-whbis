@@ -13,7 +13,7 @@
  *      linename 返回 10044 时汉奇链路仍可正常采集。
  *
  * 产出：
- *   1) src/static/foreign-lines.json   线路库（摘要，供 lineIndex 合并进检索池）
+ *   1) src/static/lines/foreign-lines.json   线路库（摘要，供 lineIndex 合并进检索池）
  *   2) src/static/lines/CCB01.json ... 站点 + 走向资产分片（结构与 bNN.json 一致）
  *      - 集团资产仍是 bNN.json；非集团按「公司缩写 + B + 数字」命名，互不影响
  *      - 站点 stopId 改写为 `${abbr}B${序号}`（高德原 BV... 存进 originId 备查）
@@ -44,7 +44,7 @@ if (!KEY) {
 }
 const HOST = 'https://restapi.amap.com'
 const CITY = '武汉'
-const LINES_OUT = path.resolve('src/static/foreign-lines.json')
+const LINES_OUT = path.resolve('src/static/lines/foreign-lines.json')
 const ASSET_DIR = path.resolve('src/static/lines')
 
 const argv = process.argv.slice(2)

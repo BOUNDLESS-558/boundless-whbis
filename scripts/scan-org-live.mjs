@@ -32,7 +32,7 @@ import { fileURLToPath } from 'node:url'
 import { md5 } from '../src/utils/md5.js'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
-const FILE = path.resolve(__dirname, '../src/static/lines.json')
+const FILE = path.resolve(__dirname, '../src/static/lines/lines.json')
 const BASE = process.env.SCAN_BASE || 'https://customized.wuhanbus.com/gps-resapi/wechat/bus'
 const CITY = '420100'
 const HEADERS = { 'Content-Type': 'application/json', openId: 'wx_openid_dev_001' }

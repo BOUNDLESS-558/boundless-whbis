@@ -11,8 +11,8 @@ Git 仓库 main 存源码、pages 分支只存 H5 构建产物（远端 `origin`
 武汉公交不止公交集团，还有**蔡城（C 线）/ 木兰（P 线）/ 汉奇**等独立营运主体。用户明确要求
 **统一通过高德获取**这些线路（不再用历史「汉奇智慧出行」小程序接口：该接口现已要求签名，返回 401）。
 
-- `scripts/scan-foreign.mjs`（`npm run scan:foreign`）→ `src/static/foreign-lines.json`（摘要）
-  + `src/static/lines/CCB01.json` / `MLB01.json` / `HQB01.json` …（站点 + 走向资产）。
+- `scripts/scan-foreign.mjs`（`npm run scan:foreign`）→ `src/static/lines/foreign-lines.json`（摘要）
+  + `src/static/lines/cc/CCB01.json` / `ml/MLB01.json` / `hq/HQB01.json` …（站点 + 走向资产，按公司分目录）。
   - **两条高德链路**（配额池互相独立，一条耗尽不影响另一条）：
     - 蔡城 `C*` / 木兰 `P*`：`/v3/bus/linename?keywords=线路号` 按号段枚举。
     - **汉奇线路号是中文前缀**：`汉奇K6路`、`汉奇12路`、`汉奇22号线`、`汉奇定制公交1~4号线`、
@@ -30,7 +30,7 @@ Git 仓库 main 存源码、pages 分支只存 H5 构建产物（远端 `origin`
   - 汉奇 **8 条已实测采集完成**（`汉奇K6` 双向 11/10 站带走向，落 `HQB01` 等分片）。
     2026-11-09 曾误判「高德不收录汉奇」，原因是关键词写成「汉奇1」且解析正则只认字母数字；
     已修正为中文前缀解析 + `inputtips`/`lineid` 链路，不要再退回旧结论。
-- `scripts/build-foreign-net.mjs`（`npm run build:foreign-net`）→ `src/static/network-foreign.json`，
+- `scripts/build-foreign-net.mjs`（`npm run build:foreign-net`）→ `src/static/net/network-foreign.json`，
   单独成文件，不并进 `network.json`（`scan:net` 重跑不会覆盖）。
 - `utils/companies.js` 是**公司字典唯一真源**（缩写 / Logo / 颜色 / 号段正则 / 分片名）。
   `companyOf(line)` 是公司判定与徽标展示的**统一出口，永不返回 null**：集团线路即使 `org`
@@ -72,7 +72,7 @@ npm run build:app    # → dist/build/app（之后必须 HBuilderX 云打包，�
 npm run test:md5     # MD5 单测（RFC 1321 向量 + 实测对照）
 npm run test:busid   # 车辆编号还原（全量建字典约 400ms，30s 超时保护）
 npm run test:routeclean # 站点序列清洗回归（离线读 network.json，不发请求/不写文件）
-npm run scan:lines   # 枚举探测线路网，合并写入 src/static/lines.json（数据生成器，会写文件）
+npm run scan:lines   # 枚举探测线路网，合并写入 src/static/lines/lines.json（数据生成器，会写文件）
 npm run scan:org     # 从 buspedia.top 采集营运公司填充 lines.json 的 org 字段（会写文件）
 npm run scan:routes:stops # 只拉站点→清洗→落 src/static/lines/（不调 OSRM，快）
 npm run scan:routes  # 在上面的基础上补算 OSRM 贴路几何（免 Key，慢，可断点续跑）
@@ -111,8 +111,8 @@ npm run deploy:pages # 构建 + 强推 origin/pages（GitHub Pages）
 
 后端只有「按 lineCode 查单条」的 `/line`，**没有线路列表接口**，所以线路库靠枚举探测生成：
 
-- `scripts/scan-lines.mjs` → `src/static/lines.json`（当前 1137 条：数字 529 / D 546 / K 56 / 电 5 / BRT 1）。它是**允许主动写文件的生成器之一**（产物就是数据资产）。`utils/lineIndex.js` 直接 `import` 该 JSON，构建期进 bundle，联想时 0 请求。
-- `src/static/lines.json` 是武汉公交线路库数据资产，由 `scripts/scan-lines.mjs` 生成（`lineIndex.js` 直接 `import`，构建期进 bundle，联想时 0 请求）。`scan-lines.mjs` 重写时**只补强不降级**，别改成整文件覆盖。
+- `scripts/scan-lines.mjs` → `src/static/lines/lines.json`（当前 1137 条：数字 529 / D 546 / K 56 / 电 5 / BRT 1）。它是**允许主动写文件的生成器之一**（产物就是数据资产）。`utils/lineIndex.js` 直接 `import` 该 JSON，构建期进 bundle，联想时 0 请求。
+- `src/static/lines/lines.json` 是武汉公交线路库数据资产，由 `scripts/scan-lines.mjs` 生成（`lineIndex.js` 直接 `import`，构建期进 bundle，联想时 0 请求）。`scan-lines.mjs` 重写时**只补强不降级**，别改成整文件覆盖。
 - **判据是「`lineName` 有值」**，不是「站点非空」：2/3/5/11/19 路都是 `20000` + 有 `lineName` + `stopDetailList` 为空，按站点判会漏 14 条。反向复核顺便用另一方向补站数/起讫站（反向起点 = 正向终点）。
 - **`lineCode` ≠ 线路号**：后端 lineCode 是内部编码，`1001` 实际是「电1」、`2001` 是「J1」、`81` 是「H81」。JSON 里 `no` = 按 `lineName` 归一后的真实线路号（展示/联想用），`code` = lineCode（查询用）。别把两者混用，否则 J/H 线会以数字编号混进库里。
 - **前缀白名单只有 `电 / BRT / K / D`**（用户确认）：`--prefix` 传其它字母会直接报错退出，别再扫 26 个字母；落盘前还会剔除名字带 H/J 前缀及「测试/内部线路」的条目。

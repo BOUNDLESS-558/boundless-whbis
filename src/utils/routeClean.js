@@ -6,7 +6,7 @@
  * 离线脚本通过 scripts/_loadRouteClean.mjs 用 data: URL 载入本文件源码（项目 package.json
  * 未声明 type:module，Node 不能直接 import src/utils/*.js），避免维护两套算法。
  *
- * 为什么需要清洗（2026-11-05 用 src/static/network.json 的 1187 个方向 / 25199 个坐标实测）：
+ * 为什么需要清洗（2026-11-05 用 src/static/net/network.json 的 1187 个方向 / 25199 个坐标实测）：
  *   - 1616 段相邻站跳变 >1.5km（384 个方向），其中 119 段 >10km，最大 79.6km（287 路）；
  *   - 815 段连续三点大回头 >120°（32.4% 的方向）；268 段相邻站重合 <5m；
  *   - 66 个「孤立离群站」：去 >3km、回 >3km，但前后两站相距很近（221 路前后仅 20m

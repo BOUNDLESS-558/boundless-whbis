@@ -115,11 +115,8 @@ step('交叉验证报告', ['scripts/validate-cross.mjs'], { optional: true })
 
 // ── 9. 提交数据到当前分支（main）──
 const DATA_PATHS = [
-  'src/static/lines.json',
   'src/static/lines',
-  'src/static/foreign-lines.json',
-  'src/static/network-foreign.json',
-  'src/static/lines/manifest.json',
+  'src/static/net',
   'reports',
   'scripts/.amap-progress.json',
   'scripts/.stops-sig.json',

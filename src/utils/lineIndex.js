@@ -2,8 +2,8 @@
  * 线路号本地索引
  *
  * 数据来源：
- *   - src/static/lines.json         集团线路，由 scripts/scan-lines.mjs 枚举官方 /line 生成
- *   - src/static/foreign-lines.json 非集团线路（蔡城 C / 木兰 P / 汉奇），
+ *   - src/static/lines/lines.json         集团线路，由 scripts/scan-lines.mjs 枚举官方 /line 生成
+ *   - src/static/lines/foreign-lines.json 非集团线路（蔡城 C / 木兰 P / 汉奇），
  *                                   由 scripts/scan-foreign.mjs 经高德公交接口离线采集
  * 两者恒定合并进检索池（不设开关，默认全部可查询搜索）。
  * 非集团线路只有静态站点与走向，realtime=false。
@@ -11,8 +11,8 @@
  * 库里的 `no` 是**真实线路号**，`code` 才是后端 lineCode（电1 的 lineCode 是 1001）。
  * 查询用 code，展示用 no。
  */
-import DB from '../static/lines.json'
-import FDB from '../static/foreign-lines.json'
+import DB from '../static/lines/lines.json'
+import FDB from '../static/lines/foreign-lines.json'
 import { companyKeyOfNo } from './companies.js'
 
 /** 线路库总条数 / 生成时间（页面可直接展示） */

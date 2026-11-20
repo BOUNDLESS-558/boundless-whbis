@@ -47,7 +47,7 @@
     },
     "quickapp" : {},
     "h5" : {
-        "favicon" : "static/logo.png",
+        "favicon" : "static/img/logo.png",
         /* GitHub Pages 项目子路径部署基准；若部署到根域名/自定义域改为 "/"；hash 路由无需服务端重写 */
         "router" : {
             "base" : "/boundless-whbis/",

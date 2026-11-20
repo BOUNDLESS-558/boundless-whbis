@@ -13,14 +13,14 @@ const RC = (await import('./_loadRouteClean.mjs')).default
 const H = RC.haversine
 
 const LINES_DIR = 'src/static/lines'
-const LIB = 'src/static/lines.json'
+const LIB = 'src/static/lines/lines.json'
 const OUT = path.join(LINES_DIR, 'manifest.json')
 
 const lib = JSON.parse(fs.readFileSync(LIB, 'utf8'))
 const nameOf = new Map((lib.lines || []).map((l) => [String(l.no), l.name]))
 // 非集团线路的展示名也并进来，清单里不再显示 name:null
 try {
-  const fl = JSON.parse(fs.readFileSync('src/static/foreign-lines.json', 'utf8'))
+  const fl = JSON.parse(fs.readFileSync('src/static/lines/foreign-lines.json', 'utf8'))
   for (const l of fl.lines || []) nameOf.set(String(l.no), l.name || l.no)
 } catch (e) { /* 资产未生成时忽略 */ }
 

@@ -1,5 +1,5 @@
 /**
- * 由非集团线路资产分片生成全市线网补充底图 src/static/network-foreign.json
+ * 由非集团线路资产分片生成全市线网补充底图 src/static/net/network-foreign.json
  *
  * 与 network.json 同构（lines[].dirs[].p 为展平 GCJ-02 坐标），但只含蔡城 / 木兰 / 汉奇线路。
  * 单独成文件而不是直接并进 network.json：集团线网由 scan:net 生成，重跑不会覆盖这部分；
@@ -11,8 +11,8 @@ import fs from 'node:fs'
 import path from 'node:path'
 
 const DIR = path.resolve('src/static/lines')
-const OUT = path.resolve('src/static/network-foreign.json')
-const LIB = JSON.parse(fs.readFileSync(path.resolve('src/static/foreign-lines.json'), 'utf8'))
+const OUT = path.resolve('src/static/net/network-foreign.json')
+const LIB = JSON.parse(fs.readFileSync(path.resolve('src/static/lines/foreign-lines.json'), 'utf8'))
 
 // 公司前缀分片：CCBnn / MLBnn / HQBnn
 const files = fs.readdirSync(DIR).filter((f) => /^(CC|ML|HQ)B\d+\.json$/.test(f))

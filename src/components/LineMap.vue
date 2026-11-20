@@ -1144,7 +1144,7 @@ export default {
             longitude: lng,
             // 不传 title：uni-h5 会把 title 当成 callout 内容，虽然默认隐藏，
             // 但 MapMarker 的 click 监听会 callout.visible = !visible —— 点一下就冒出一个白框盖住站名。站名已由 label 渲染。
-            iconPath: assetUrl(isEnd ? `/static/stop-end-${dir}.png` : `/static/stop-dot-${dir}.png`),
+            iconPath: assetUrl(isEnd ? `/static/img/stop-end-${dir}.png` : `/static/img/stop-dot-${dir}.png`),
             // 11px 在整线视野（scale ~13）下几乎看不见，提到 13px；首末站 19px 保持明显加重
             width: isEnd ? 19 : 13,
             height: isEnd ? 19 : 13,
@@ -1178,7 +1178,7 @@ export default {
             id: (dir + 2) * 10000 + idx,
             latitude: b.lat,
             longitude: b.lng,
-            iconPath: assetUrl(`/static/bus-live-${dir}.png`),
+            iconPath: assetUrl(`/static/img/bus-live-${dir}.png`),
             width: 30,
             height: 30,
             // 不给 marker 挂 callout，也**不能传 title**：uni-h5 的 MapMarker 会在点击时
@@ -2407,7 +2407,7 @@ export default {
             latitude: c.bus.lat,
             longitude: c.bus.lng,
             // 同样不传 title：uni-h5 会在点击时把 title 生成的 callout 切到可见
-            iconPath: assetUrl(`/static/bus-city-${c.bus.band}.png`),
+            iconPath: assetUrl(`/static/img/bus-city-${c.bus.band}.png`),
             width: 15,
             height: 15,
           }
@@ -2434,7 +2434,7 @@ export default {
             id,
             latitude: ll.lat,
             longitude: ll.lng,
-            iconPath: assetUrl('/static/bus-city-cluster.png'),
+            iconPath: assetUrl('/static/img/bus-city-cluster.png'),
             width: 30,
             height: 30,
             label: {
