@@ -27,6 +27,7 @@ const AMAP_KEY = has('AMAP_KEY')
 const AMAP_COOKIE = has('AMAP_WEB_COOKIE')
 const FULL_SCAN = has('FULL_SCAN')
 const SKIP_DEPLOY = has('SKIP_DEPLOY')
+const OVERWRITE = has('OVERWRITE')
 const NPM = process.platform === 'win32' ? 'npm.cmd' : 'npm'
 
 // 采集器统一透传的环境变量
@@ -100,7 +101,7 @@ if (AMAP_KEY) {
 }
 // 高德 SSR 补充字段：仅需会话 Cookie，与 Key 互独立（无 Key 也能跑）
 if (AMAP_COOKIE) {
-  step('高德 SSR 补充字段', ['scripts/scan-poi-newbus.mjs', '--delay', '350'], { optional: true })
+  step('高德 SSR 补充字段', ['scripts/scan-poi-newbus.mjs', '--delay', '350', ...(OVERWRITE ? ['--overwrite'] : [])], { optional: true })
 } else {
   console.log('\n（跳过高德 SSR 补充字段：未配置 AMAP_WEB_COOKIE）')
 }
