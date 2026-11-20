@@ -3377,8 +3377,7 @@ export default {
       // 3) 站点与站名（左右交替 + 纵向避让 + 双方向同名去重 + 避开车辆标签）
       const stops = []
       const labels = []
-      const usedR = []
-      const usedL = []
+      const usedBoxes = []
       const placedNames = []
       // 窄屏抽稀：整条线在 390px 宽里挤 29 个站名只会全部碰撞丢弃（实测只剩首末站），
       // 改成每隔 stride 个站标一个名，覆盖均匀且能真正显示出来
@@ -3415,12 +3414,12 @@ export default {
             endTag,
             color,
           })
-          // 放太小时不标站名（避免叠成一团）；窄屏因为有 stride 抽稀，可以放宽到能看站序的级别
-          const zoomGate = w < 600 ? 10.5 : 13
+          // 放到极小时才隐藏中间站名（如手动缩到全城尺度）。旧版宽屏门槛 13 太高：
+          // 长线路自适应全览的 zoom 常落在 12 附近，中间站会被整批隐藏、只剩首末站两个。
+          // 站名是否相撞已由下方 usedBoxes 文字框碰撞保证，这里只需挡住极端缩放。
+          const zoomGate = w < 600 ? 8.5 : 9.5
           if (!this.showStopLabels || !(terminal || this.cam.zoom >= zoomGate)) return
           if (!terminal && stride > 1 && i % stride !== 0) return
-          // 上下行同一站点不重复标注
-          if (placedNames.some((p) => p.name === st.stopName && Math.abs(p.x - x) < 90 && Math.abs(p.y - y) < 30)) return
           // 靠边时强制把文字放到画布内侧（先定方向，才能算出文字框做碰撞判定）
           let right = i % 2 === 0
           if (x < 110) right = true
@@ -3435,10 +3434,16 @@ export default {
             (p) => !(box.x2 <= p.x - 10 || p.x + 10 <= box.x1 || box.y2 <= p.y - 10 || p.y + 10 <= box.y1)
           )
           if (!terminal && onDot) return
-          const bucket = right ? usedR : usedL
-          // 同一侧纵向太近就挤不下（首末站例外，它们必须显示，后面还会上下微移）
-          if (!terminal && bucket.some((py) => Math.abs(py - y) < 17)) return
-          bucket.push(y)
+          // 与已放站名做文字框相交判定（首末站例外，它们必须显示，后面还会上下微移）。
+          // 旧版只看同侧 y 差 <17px：东西走向线路相邻站 y 几乎相同、x 相隔很远，
+          // 名字根本不重叠却被误删，导致大量中间站只剩圆点没有名字。
+          // 加 4px 容差：相邻站名虽不直接重叠但距离极近时也会互相干扰阅读。
+          const MARGIN = 4
+          const hitBox = usedBoxes.some(
+            (bb) => !(box.x2 <= bb.x1 + MARGIN || bb.x2 <= box.x1 + MARGIN || box.y2 <= bb.y1 + MARGIN || bb.y2 <= box.y1 + MARGIN)
+          )
+          if (!terminal && hitBox) return
+          usedBoxes.push(box)
           placedNames.push({ name: st.stopName, x, y })
           labels.push({
             dir: d,
