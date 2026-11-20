@@ -27,7 +27,7 @@
 
         <view class="plan-row" v-for="(p, i) in g.plans" :key="p.busId || i">
           <!-- 左：车辆自编号（沿用车辆面板 .bus-org 字体：主色 800 等宽数字，无图标无胶囊）；右：发车时间 -->
-          <text class="plan-org" v-if="p.bus">{{ p.bus }}</text>
+          <text class="plan-org" v-if="p.bus">{{ fmtNo(p.bus) }}</text>
           <text class="plan-time">{{ p.planStartTime || '--' }}</text>
         </view>
 
@@ -45,6 +45,7 @@ import { fetchPlanTime, decryptBusId, onBusIdReady, isBusIdReady } from '../util
 import { buildLineCode } from '../config.js'
 import { isLoopLine } from '../utils/lineIndex.js'
 import { copyTable } from '../utils/clipboard.js'
+import { formatBusNo, onBusNumberReady } from '../utils/busNumber.js'
 import CopyPill from './CopyPill.vue'
 
 // 方向常量：0 上行 / 1 下行（两方向同屏，顺序与地图控制卡一致）
@@ -58,6 +59,8 @@ export default {
   },
   data() {
     return {
+      // 完整编号映射加载版本号（就绪后 ++，触发班次自编号显示刷新）
+      mapVersion: 0,
       DIRS,
       // 双方向各存一份：/detailPlanTime 按方向（lineId 末位 0|1）分别拉
       plansByDir: { 0: [], 1: [] },
@@ -117,8 +120,15 @@ export default {
     this.loadPlan()
     // 车辆自编号靠 MD5 字典还原：字典还没建好时先订阅，就绪后补拉一次
     if (!isBusIdReady()) onBusIdReady(() => this.loadPlan())
+    // 完整编号映射加载完成后刷新显示
+    onBusNumberReady(() => { this.mapVersion++ })
   },
   methods: {
+    // 纯数字自编号 → 完整编号（依赖 mapVersion，映射就绪后重渲染）
+    fmtNo(orgId) {
+      void this.mapVersion
+      return formatBusNo(orgId)
+    },
     // 单个方向的计划发车（/detailPlanTime 用 lineId，格式与 lineCode 相同）
     async fetchDir(no, dir) {
       const data = await fetchPlanTime(buildLineCode(no, dir))
@@ -161,7 +171,7 @@ export default {
       // 直接按展示分组导出：普通线路方向列是「上行/下行」，环形线统一「环形」
       this.groups.forEach((g) => {
         g.plans.forEach((p) => {
-          rows.push([g.name, p.planStartTime || '--', p.bus || '--'])
+          rows.push([g.name, p.planStartTime || '--', p.bus ? this.fmtNo(p.bus) : '--'])
         })
       })
       if (!rows.length) { uni.showToast({ title: '暂无可复制班次', icon: 'none' }); return }
