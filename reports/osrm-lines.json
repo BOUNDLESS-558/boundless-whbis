@@ -1,7 +1,7 @@
 {
-  "updatedAt": "2026-11-20T14:25:06.711Z",
+  "updatedAt": "2026-11-20T15:07:37.605Z",
   "rule": "source=osrm 表示该方向走向由 OSRM 驾车路网近似生成，非高德公交 API 官方轨迹（API 未收录时的兜底）。",
-  "total": 366,
+  "total": 365,
   "lines": [
     {
       "no": "1",
@@ -926,16 +926,6 @@
       "shard": "jt/b41.json",
       "osrmDirs": [
         "0"
-      ]
-    },
-    {
-      "no": "电2",
-      "name": "",
-      "company": "公交集团",
-      "shard": "jt/b06.json",
-      "osrmDirs": [
-        "0",
-        "1"
       ]
     },
     {
@@ -2041,15 +2031,6 @@
       "name": "",
       "company": "公交集团",
       "shard": "jt/b39.json",
-      "osrmDirs": [
-        "0"
-      ]
-    },
-    {
-      "no": "D667",
-      "name": "",
-      "company": "公交集团",
-      "shard": "jt/b20.json",
       "osrmDirs": [
         "0"
       ]
@@ -3401,6 +3382,16 @@
       "name": "",
       "company": "公交集团",
       "shard": "jt/b56.json",
+      "osrmDirs": [
+        "0",
+        "1"
+      ]
+    },
+    {
+      "no": "电2",
+      "name": "",
+      "company": "公交集团",
+      "shard": "jt/b06.json",
       "osrmDirs": [
         "0",
         "1"
