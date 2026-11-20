@@ -8,7 +8,7 @@
  *
  * 数据源（需登录，用户 2026-11-20 提供账号）：
  *   1) https://buspedia.top/comp/zek3io          —— 武汉集团车队表，提取所有 /model/{id} 车型
- *   2) https://buspedia.top/comp/zek3io/fleet/{id} —— 每个车型页的「自编号段」字段（第一个 .data-cell）
+ *   2) https://buspedia.top/comp/zek3io/fleet/{id} —— 每个车型页各年份批次列的「自编号段」（所有含编号段特征的 .data-cell）
  *
  * 编号段格式：每行 `{公司号}{25}{车型字母}{车号范围}`，7 行对应 1~7 公司。
  *   范围写法：`2023~2025`（连号）、`311~313, 315~321`（多段）、`2043`（单号）。
@@ -37,7 +37,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url'
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const ROOT = path.resolve(__dirname, '..')
 const RUNTIME = path.join(__dirname, '.busnumber-runtime.json')
-const OUT = path.resolve(ROOT, 'src/static/bus-number-map.json')
+const OUT = path.resolve(ROOT, 'src/static/data/bus-number-map.json')
 const EDGE = process.env.EDGE_PATH || 'C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe'
 const USER = process.env.BP_USER || ''
 const PASS = process.env.BP_PASS || ''
@@ -79,6 +79,7 @@ export function expandSegment(line) {
   const m = String(line).trim().match(/^(\d)(\d{1,2})?([A-Z])?(.+)$/)
   if (!m) return out
   const company = Number(m[1])
+  const batch = Number(m[2] || 0) // 批次码=年份后两位（如 07→2007、17→2017），用于新旧年份冲突时优先取新
   const letter = m[3] || ''
   const body = m[4]
   // 拆分逗号段，展开 ~ 范围
@@ -91,11 +92,11 @@ export function expandSegment(line) {
       if (b >= a && b - a <= 2000) {
         for (let n = a; n <= b; n++) {
           const s = String(n).padStart(width, '0')
-          out.push({ company, letter, num: s, full: `${company}${m[2] || ''}${letter}${s}` })
+          out.push({ company, batch, letter, num: s, full: `${company}${m[2] || ''}${letter}${s}` })
         }
       }
     } else if (/^\d+$/.test(p)) {
-      out.push({ company, letter, num: p, full: `${company}${m[2] || ''}${letter}${p}` })
+      out.push({ company, batch, letter, num: p, full: `${company}${m[2] || ''}${letter}${p}` })
     }
   }
   return out
@@ -110,7 +111,7 @@ function buildMap(rows) {
       if (!line.trim()) continue
       segLines++
       for (const x of expandSegment(line)) {
-        byFull[x.full] = { company: x.company, letter: x.letter, num: x.num, model: r.model, modelId: r.id }
+        byFull[x.full] = { company: x.company, batch: x.batch, letter: x.letter, num: x.num, model: r.model, modelId: r.id }
         // 系统编号 = 公司号(首位) + 车号，中间不含批次码/字母
         //   buspedia 319N2379（3公司+19批次+N车型+2379车号）→ 系统 32379
         // 车号可能带前导零（如 322N001），系统 MD5 还原无零 → 同时登记去零版本
@@ -120,7 +121,11 @@ function buildMap(rows) {
         ])
         for (const key of keys) {
           const arr = (byNum[key] ||= [])
-          if (!arr.includes(x.full)) arr.push(x.full)
+          if (arr.includes(x.full)) continue
+          arr.push(x.full)
+          // 新旧年份冲突（车号相同、批次不同）：按批次码降序，新年份排最前（前端取 arr[0]）
+          //   如 107E1314(批次07) 与 117E1314(批次17) → 以 117E1314 为准
+          arr.sort((a, b) => (byFull[b]?.batch || 0) - (byFull[a]?.batch || 0))
         }
       }
     }
@@ -151,10 +156,8 @@ if (!USER || !PASS) {
 
 const pw = await loadPlaywright()
 const { chromium } = pw
-// 用系统代理（本机 127.0.0.1:7890），与浏览器正常上网一致；ENV 可覆盖
-const PROXY = process.env.BP_PROXY || process.env.HTTPS_PROXY || 'http://127.0.0.1:7890'
+// 走系统代理：Edge 默认读取系统代理设置。显式传 --proxy-server 反而在部分代理下 ERR_PROXY_CONNECTION_FAILED
 const launchOpts = { executablePath: EDGE, headless: true }
-if (PROXY) launchOpts.proxy = { server: PROXY, bypass: 'localhost,127.0.0.1' }
 const browser = await chromium.launch(launchOpts)
 
 let state = { models: [], done: {} }
@@ -283,8 +286,21 @@ for (const m of todo) {
   const url = `${BASE}/comp/${COMP}/fleet/${m.id}`
   let cell = ''
   for (let t = 1; t <= 3; t++) {
-    if (await goto(p0, url, 4, 800)) {
-      cell = await p0.evaluate(() => document.querySelector('.data-cell')?.innerText?.trim() || '').catch(() => '')
+    if (await goto(p0, url, 4, 300)) {
+      // 该站有二次客户端重定向，等 networkidle 稳定后再取，否则 evaluate 上下文被销毁抓到空
+      await p0.waitForLoadState('networkidle', { timeout: 10000 }).catch(() => {})
+      await p0.waitForTimeout(800)
+      for (let r = 1; r <= 4 && !cell; r++) {
+        cell = await p0.evaluate(() => {
+          // 车队页每个年份批次列都有一个 .data-cell 自编号段；取所有含编号段特征的格子
+          const cells = [...document.querySelectorAll('.data-cell')]
+          const segs = cells
+            .map((e) => e.innerText.trim())
+            .filter((t) => t && /\d+[A-Z]?\d*\s*[~,]/.test(t) && /\d{3,}/.test(t))
+          return segs.join('\n')
+        }).catch(() => '')
+        if (!cell) await p0.waitForTimeout(1000)
+      }
       if (cell) { consecutiveEmpty = 0; break }
     }
     // 连续抓不到：强制表单登录刷新 token（旧 token 可能已作废）
