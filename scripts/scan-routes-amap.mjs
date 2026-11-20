@@ -95,6 +95,9 @@ const MAX_LINES = Math.max(0, Number(argOf('max-lines', 0)))
 const CI_LOG = has('ci-log') || !!process.env.GITHUB_ACTIONS
 const FORCE = has('force')
 const DRY = has('dry')
+// 补齐模式：只重采「source=amap 但站点仍是集团站」的方向（高德日配额耗尽时留下的半成品），
+// 跳过已换成高德站的线路，把每日有限配额集中在待补数据上；供 CI 每轮增量补齐。
+const BACKFILL_STOPS = has('backfill-stops')
 // 采集前先复校验：把台账里标 done 但几何校验不过的线撤销，让本轮重拉
 const VALIDATE_DONE = has('validate-done')
 // 纯校验模式：不发任何请求，只扫现有资产并报告（可配合 --unmark-stale 清台账）
@@ -137,6 +140,19 @@ function putRow(no, dir, row) {
   if (!shard.lines[k]) shard.lines[k] = { no: k, dirs: {} }
   shard.lines[k].dirs[String(dir)] = row
   dirty.add(key)
+}
+// 站点是否已是高德（BV... 前缀）：backfill 用它区分「已转换 / 待补」方向
+function isAmapStops(row) {
+  return !!(row && Array.isArray(row.stops) && row.stops.length >= 2 && /^BV/.test(String(row.stops[0].stopId || '')))
+}
+// 线路是否有方向「采过高德几何但站点仍是集团站」——这些就是补齐模式要重采的对象
+function needsStopBackfill(no, dirs) {
+  // 高德已明确「未收录」的线不再每轮重试，把有限日配额留给真能补的线路
+  if (progress.lines[String(no)] === 'not-found') return false
+  return dirs.some((d) => {
+    const r = rowOf(no, d)
+    return !!(r && r.source === 'amap' && !isAmapStops(r))
+  })
 }
 let writeBytes = 0
 function flushDirty() {
@@ -184,7 +200,7 @@ function saveProgress() {
 }
 function mark(no, state) { progress.lines[String(no)] = state }
 function isLogged(no) {
-  if (FORCE) return false
+  if (FORCE || BACKFILL_STOPS) return false
   const s = progress.lines[String(no)]
   if (!s) return false
   // --retry-unmatched：只放行未完成的，done 的绝不重打
@@ -494,8 +510,11 @@ for (const l of todoFinal) {
   const no = String(l.no)
   const dirs = (l.dirs && l.dirs.length ? l.dirs : [0]).map(Number)
 
+  // 补齐模式：只重采「站点仍是集团站」的线路，两方向都已换成高德站的不浪费配额
+  if (BACKFILL_STOPS) {
+    if (!needsStopBackfill(no, dirs)) { stats.skipped++; continue }
   // 增量重拉：清单内线路强制重拉（无视台账 / 已 amap），实现「线路更新后获取最新走向」
-  if (changedLines) {
+  } else if (changedLines) {
     // 不跳过，直接走下方高德查询
   } else {
     // 台账命中即跳过：包括「高德未收录」「方向未匹配」这些过去每轮都会重打的线路
@@ -525,8 +544,10 @@ for (const l of todoFinal) {
   let transient = false   // /line 探测失败属临时故障 → 不记账，下轮重试
   for (const d of dirs) {
     const prev = rowOf(no, d)
+    // 补齐模式：站点已是高德的方向跳过，只补仍是集团站的方向
+    if (BACKFILL_STOPS && isAmapStops(prev)) { stats.skipped++; continue }
     // 增量重拉时强制重写（含原已 amap 的方向）；否则遵守「amap 不覆盖」
-    if (!changedLines && !FORCE && prev && prev.source === 'amap') { stats.skipped++; continue }
+    if (!BACKFILL_STOPS && !changedLines && !FORCE && prev && prev.source === 'amap') { stats.skipped++; continue }
 
     // 取该方向的清洗后站点（优先复用现有资产，缺则补 /line）
     let base, rawStops
@@ -648,6 +669,7 @@ if (!CI_LOG) process.stdout.write('\n')
 const tally = {}
 for (const s of Object.values(progress.lines)) tally[s] = (tally[s] || 0) + 1
 const files = [...SHARDS.keys()].filter((k) => !DRY && fs.existsSync(shardPath(k)))
+if (BACKFILL_STOPS) console.log('（--backfill-stops：仅补齐站点仍为集团站的方向，已转好的不动）')
 console.log(`\n完成：写入 amap 方向 ${stats.matched} 个（覆盖线路 ${stats.done} 条），跳过 ${stats.skipped}`)
 console.log(`高德未收录 ${stats.amapMiss} 条线（保留 OSRM 兜底），方向未匹配 ${stats.dirMiss}，补 /line ${stats.probe}，几何校验未通过 ${stats.valMiss}`)
 console.log(`分片 ${files.length} 个，本次写出 ${(writeBytes / 1024).toFixed(1)} KB${DRY ? '（dry 未落盘）' : ''}`)
