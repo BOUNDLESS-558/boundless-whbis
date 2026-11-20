@@ -551,10 +551,10 @@
               <text class="org-name" :title="t.company.label">{{ t.orgTag.short }}</text>
             </view>
             <text class="st-cur" v-if="t.cur">当前</text>
-            <text class="st-go" v-else>↗</text>
+            <view class="st-go" v-else>↗</view>
           </view>
           <view class="st-end" :title="(t.start || '?') + ' → ' + (t.end || '?')">
-            <text class="st-to">开往</text>{{ t.end || '起讫站未知' }}
+            <text class="st-to">开往</text><text class="st-dest">{{ t.end || '起讫站未知' }}</text>
           </view>
         </view>
         <view class="st-none" v-if="stopLinesBusy"><text>正在全市线网中匹配途经本站的线路…</text></view>
@@ -4363,11 +4363,12 @@ export default {
   align-items: center;
   max-width: 100%;
   min-width: 0;
-  background: rgba(251, 191, 36, 0.12);
-  border: 2rpx solid rgba(251, 191, 36, 0.35);
+  background: linear-gradient(135deg, rgba(251, 191, 36, 0.18), rgba(251, 191, 36, 0.06));
+  border: 2rpx solid rgba(251, 191, 36, 0.42);
   border-radius: 999rpx;
-  padding: 2rpx 16rpx 2rpx 2rpx;
+  padding: 2rpx 18rpx 2rpx 2rpx;
   white-space: nowrap;
+  box-shadow: inset 0 1rpx 0 rgba(255, 255, 255, 0.14), 0 3rpx 8rpx rgba(251, 191, 36, 0.12);
 }
 .org-no {
   display: inline-flex;
@@ -4379,19 +4380,22 @@ export default {
   font-size: 26rpx;
   font-weight: 800;
   color: #1a1205;
-  background: linear-gradient(135deg, #fbbf24, #f59e0b);
-  box-shadow: 0 4rpx 12rpx rgba(251, 191, 36, 0.45), inset 0 1rpx 0 rgba(255, 255, 255, 0.4);
+  background: linear-gradient(135deg, #fde68a, #fbbf24 45%, #f59e0b);
+  box-shadow: 0 4rpx 12rpx rgba(251, 191, 36, 0.5), inset 0 1rpx 0 rgba(255, 255, 255, 0.6),
+    inset 0 -2rpx 4rpx rgba(180, 83, 9, 0.3);
   margin-right: 12rpx;
   flex-shrink: 0;
 }
 .org-name {
   font-size: 20rpx;
   line-height: 1;
-  color: #fcd34d;
+  font-weight: 700;
+  color: #fde68a;
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  text-shadow: 0 1rpx 2rpx rgba(0, 0, 0, 0.3);
 }
 /* 非集团线路的公司徽标：左侧直接放公司自己的 SVG 标（自带配色），文字走中性白不抢色；
    圆标尺寸与集团线的 .org-no 对齐，同一行混排时高度不跳 */
@@ -4972,180 +4976,270 @@ export default {
 }
 /* 站点详情窗：换乘线路改两列卡片网格，10 条左右一屏可见，超出才滚动 */
 .st-list {
-  margin-top: 12rpx;
+  margin-top: 16rpx;
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 10rpx;
+  gap: 12rpx;
   align-content: start;
   max-height: 540rpx;
   overflow-y: auto;
   overscroll-behavior: contain;
-  padding-right: 6rpx;
+  padding: 2rpx 8rpx 6rpx 2rpx;
 }
 .st-list::-webkit-scrollbar {
   width: 6rpx;
 }
 .st-list::-webkit-scrollbar-thumb {
   border-radius: 6rpx;
-  background: rgba(255, 255, 255, 0.18);
+  background: linear-gradient(180deg, rgba(var(--ac-rgb), 0.6), rgba(139, 92, 246, 0.5));
 }
+/* 换乘卡：带内高光的玻璃质感 + 细亮边，整张卡有“抬起来”的层次。
+   左侧一条色带随方向色，hover/当前态点亮，静止时低调不抢戏。 */
 .st-chip {
+  position: relative;
   min-width: 0;
   box-sizing: border-box;
   display: flex;
   flex-direction: column;
-  gap: 6rpx;
-  padding: 10rpx 12rpx 12rpx;
-  border: 2rpx solid rgba(255, 255, 255, 0.09);
-  border-radius: 14rpx;
-  background: rgba(255, 255, 255, 0.035);
+  gap: 10rpx;
+  padding: 14rpx 14rpx 16rpx 18rpx;
+  border: 2rpx solid rgba(255, 255, 255, 0.1);
+  border-radius: 18rpx;
+  background: linear-gradient(145deg, rgba(255, 255, 255, 0.075), rgba(255, 255, 255, 0.025));
+  box-shadow: inset 0 1rpx 0 rgba(255, 255, 255, 0.08), 0 6rpx 18rpx rgba(0, 0, 0, 0.18);
   cursor: pointer;
-  transition: background 0.2s, border-color 0.2s, transform 0.15s;
+  overflow: hidden;
+  transition: background 0.22s, border-color 0.22s, box-shadow 0.22s, transform 0.15s;
+}
+/* 左侧方向色带 */
+.st-chip::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 16rpx;
+  bottom: 16rpx;
+  width: 5rpx;
+  border-radius: 0 6rpx 6rpx 0;
+  background: linear-gradient(180deg, rgba(var(--ac-rgb), 0.9), rgba(139, 92, 246, 0.7));
+  opacity: 0.45;
+  transition: opacity 0.22s;
 }
 .st-chip:hover {
-  background: rgba(var(--ac-rgb), 0.12);
-  border-color: rgba(var(--ac-rgb), 0.5);
-  transform: translateY(-2rpx);
+  background: linear-gradient(145deg, rgba(var(--ac-rgb), 0.18), rgba(var(--ac-rgb), 0.06));
+  border-color: rgba(var(--ac-rgb), 0.55);
+  box-shadow: inset 0 1rpx 0 rgba(255, 255, 255, 0.14), 0 10rpx 26rpx rgba(var(--ac-rgb), 0.18);
+  transform: translateY(-3rpx);
+}
+.st-chip:hover::before {
+  opacity: 1;
 }
 .st-chip:active {
-  opacity: 0.75;
-  transform: none;
+  opacity: 0.82;
+  transform: translateY(0) scale(0.985);
 }
-/* 当前线路：琥珀描边 + 淡底，一眼从换乘清单里挑出来 */
+/* 当前线路：琥珀色温 + 暖光晕 + 左侧亮色带，从换乘清单里一眼挑出 */
 .st-chip.cur {
-  border-color: rgba(252, 211, 77, 0.5);
-  background: rgba(252, 211, 77, 0.08);
+  border-color: rgba(252, 211, 77, 0.62);
+  background: linear-gradient(145deg, rgba(252, 211, 77, 0.2), rgba(251, 191, 36, 0.07));
+  box-shadow: inset 0 1rpx 0 rgba(255, 255, 255, 0.18), 0 8rpx 26rpx rgba(251, 191, 36, 0.25),
+    0 0 0 1rpx rgba(252, 211, 77, 0.12);
+}
+.st-chip.cur::before {
+  background: linear-gradient(180deg, #fde68a, #f59e0b);
+  opacity: 1;
+  width: 6rpx;
 }
 .st-chip.cur:hover {
-  background: rgba(252, 211, 77, 0.14);
+  background: linear-gradient(145deg, rgba(252, 211, 77, 0.28), rgba(251, 191, 36, 0.1));
+  box-shadow: inset 0 1rpx 0 rgba(255, 255, 255, 0.2), 0 12rpx 30rpx rgba(251, 191, 36, 0.32);
 }
 .st-top {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 8rpx;
+  gap: 10rpx;
   min-width: 0;
 }
-/* 线路号徽章：实体靛蓝牌，公交站牌视觉；当前线路换成琥珀 */
+/* 线路号徽章：立体公交站牌质感（顶部高光 + 底部阴影），等宽数字；
+   当前线路换成琥珀金牌 */
 .st-no {
   flex: 0 1 auto;
   min-width: 0;
   max-width: 100%;
   box-sizing: border-box;
-  padding: 2rpx 12rpx;
+  padding: 2rpx 14rpx;
   overflow: hidden;
   text-overflow: ellipsis;
   text-align: center;
   white-space: nowrap;
-  border-radius: 8rpx;
-  background: rgba(var(--ac-rgb), 0.88);
+  border-radius: 10rpx;
+  background: linear-gradient(160deg, rgba(var(--ac-rgb), 0.96), rgba(var(--ac-rgb), 0.72));
   color: #ffffff;
-  font-size: 24rpx;
+  font-size: 26rpx;
   font-weight: 800;
-  line-height: 36rpx;
+  line-height: 40rpx;
+  letter-spacing: 0.5rpx;
   font-variant-numeric: tabular-nums;
+  box-shadow: inset 0 1rpx 0 rgba(255, 255, 255, 0.32), 0 4rpx 10rpx rgba(var(--ac-rgb), 0.3);
+  text-shadow: 0 1rpx 2rpx rgba(0, 0, 0, 0.25);
 }
 .st-chip.cur .st-no {
-  background: rgba(252, 211, 77, 0.92);
-  color: #0b1020;
+  background: linear-gradient(160deg, #fde68a, #f59e0b);
+  color: #3a2703;
+  box-shadow: inset 0 1rpx 0 rgba(255, 255, 255, 0.6), 0 4rpx 12rpx rgba(245, 158, 11, 0.45);
+  text-shadow: none;
 }
 /* 换乘卡里线路号后方的所属公司徽标：统一走 .org-tag（金色圆圈+公司名），
   非集团线加 .foreign（白边+logo）。全名在 title 里 */
-/* 第二行：乘客最关心的「开往哪」。只允许一行显示，超长终点站名以省略号截断，
-   保证两列卡片网格等高整齐；完整起讫站见卡片 title / .st-end title */
+/* 第二行：乘客最关心的「开往哪」——单独成标签 + 高亮目的地，字号加大提亮；
+   超长终点站名以省略号截断，保证两列卡片网格等高整齐 */
 .st-end {
   min-width: 0;
   width: 100%;
-  display: block;
-  font-size: 20rpx;
-  line-height: 28rpx;
-  color: rgba(255, 255, 255, 0.8);
+  display: flex;
+  align-items: baseline;
+  gap: 6rpx;
+}
+.st-to {
+  flex: 0 0 auto;
+  font-size: 18rpx;
+  line-height: 26rpx;
+  color: rgba(255, 255, 255, 0.45);
+}
+.st-dest {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-size: 22rpx;
+  line-height: 30rpx;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.92);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
-.st-to {
-  margin-right: 6rpx;
-  font-size: 18rpx;
-  color: rgba(255, 255, 255, 0.4);
+.st-chip.cur .st-dest {
+  color: #fde68a;
 }
+/* “当前”胶囊：琥珀实心小标，和线路金牌呼应 */
 .st-cur {
   flex: 0 0 auto;
+  margin-left: auto;
   font-size: 18rpx;
   line-height: 1;
-  color: #fcd34d;
+  color: #3a2703;
+  font-weight: 800;
   letter-spacing: 1rpx;
+  padding: 6rpx 12rpx;
+  border-radius: 999rpx;
+  background: linear-gradient(135deg, #fde68a, #f59e0b);
+  box-shadow: 0 3rpx 8rpx rgba(245, 158, 11, 0.35);
 }
+/* 切换箭头：圆形幽灵按钮，hover 时点亮成方向色 */
 .st-go {
   flex: 0 0 auto;
-  font-size: 22rpx;
+  margin-left: auto;
+  width: 40rpx;
+  height: 40rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  font-size: 24rpx;
   line-height: 1;
-  color: rgba(255, 255, 255, 0.28);
-  transition: color 0.2s;
+  color: rgba(255, 255, 255, 0.38);
+  background: rgba(255, 255, 255, 0.06);
+  border: 2rpx solid rgba(255, 255, 255, 0.1);
+  transition: color 0.2s, background 0.2s, border-color 0.2s, transform 0.2s;
 }
 .st-chip:hover .st-go {
-  color: var(--ac-text);
+  color: #ffffff;
+  background: rgba(var(--ac-rgb), 0.85);
+  border-color: rgba(var(--ac-rgb), 0.9);
+  transform: translate(2rpx, -2rpx);
 }
 .st-none {
   grid-column: 1 / -1;
   font-size: 22rpx;
-  color: rgba(255, 255, 255, 0.42);
-  padding: 8rpx 0;
+  color: rgba(255, 255, 255, 0.5);
+  padding: 20rpx 8rpx;
+  text-align: center;
+  border-radius: 14rpx;
+  background: rgba(255, 255, 255, 0.03);
+  border: 2rpx dashed rgba(255, 255, 255, 0.1);
 }
 .sheet-line {
-  flex: 0 0 auto;
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
   font-size: 36rpx;
   font-weight: 800;
   color: #fff;
   white-space: nowrap;
+  letter-spacing: 0.5rpx;
+  text-shadow: 0 2rpx 6rpx rgba(0, 0, 0, 0.3);
 }
 .sheet-dir {
-  font-size: 22rpx;
-  font-weight: 700;
+  flex: 0 0 auto;
+  font-size: 20rpx;
+  font-weight: 800;
+  letter-spacing: 1rpx;
   border-radius: 999rpx;
-  padding: 4rpx 20rpx;
+  padding: 6rpx 22rpx;
+  box-shadow: inset 0 1rpx 0 rgba(255, 255, 255, 0.25);
 }
 .sheet-dir.d0 {
-  color: #a5f3fc;
-  background: rgba(6, 182, 212, 0.26);
-  border: 2rpx solid rgba(34, 211, 238, 0.5);
+  color: #ecfeff;
+  background: linear-gradient(135deg, rgba(6, 182, 212, 0.4), rgba(34, 211, 238, 0.24));
+  border: 2rpx solid rgba(34, 211, 238, 0.65);
+  box-shadow: 0 4rpx 12rpx rgba(6, 182, 212, 0.28), inset 0 1rpx 0 rgba(255, 255, 255, 0.25);
 }
 .sheet-dir.d1 {
-  color: #ffe4e6;
-  background: rgba(225, 29, 72, 0.26);
-  border: 2rpx solid rgba(251, 113, 133, 0.5);
+  color: #fff1f2;
+  background: linear-gradient(135deg, rgba(225, 29, 72, 0.4), rgba(251, 113, 133, 0.24));
+  border: 2rpx solid rgba(251, 113, 133, 0.65);
+  box-shadow: 0 4rpx 12rpx rgba(225, 29, 72, 0.28), inset 0 1rpx 0 rgba(255, 255, 255, 0.25);
 }
 .sheet-dir.loop {
-  color: #ede9fe;
-  background: rgba(139, 92, 246, 0.26);
-  border: 2rpx solid rgba(167, 139, 250, 0.5);
+  color: #f5f3ff;
+  background: linear-gradient(135deg, rgba(139, 92, 246, 0.4), rgba(167, 139, 250, 0.24));
+  border: 2rpx solid rgba(167, 139, 250, 0.65);
+  box-shadow: 0 4rpx 12rpx rgba(139, 92, 246, 0.28), inset 0 1rpx 0 rgba(255, 255, 255, 0.25);
 }
-/* 元数据行：左小标签 + 右单行值，长公司名 / 站名不再折行 */
+/* 元数据行：左侧线路归属胶囊 + 右侧换乘条数胶囊，分列两端、各自成标 */
 .sheet-sub {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 16rpx;
   min-width: 0;
-  padding: 14rpx 0;
-  border-bottom: 2rpx solid rgba(255, 255, 255, 0.06);
+  padding: 16rpx 0;
+  border-bottom: 2rpx solid rgba(255, 255, 255, 0.08);
 }
 .ss-tag {
-  flex: 0 0 auto;
-  font-size: 20rpx;
-  color: rgba(255, 255, 255, 0.44);
-  white-space: nowrap;
-}
-.ss-org {
-  flex: 1 1 0;
+  flex: 0 1 auto;
   min-width: 0;
-  text-align: right;
-  font-size: 22rpx;
-  font-weight: 600;
-  color: rgba(255, 255, 255, 0.82);
-  white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  font-size: 20rpx;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.6);
+  white-space: nowrap;
+  padding: 6rpx 16rpx;
+  border-radius: 999rpx;
+  background: rgba(255, 255, 255, 0.06);
+  border: 2rpx solid rgba(255, 255, 255, 0.08);
+}
+.ss-org {
+  flex: 0 0 auto;
+  text-align: right;
+  font-size: 20rpx;
+  font-weight: 700;
+  color: var(--ac-text, #a5f3fc);
+  white-space: nowrap;
+  padding: 6rpx 16rpx;
+  border-radius: 999rpx;
+  background: rgba(var(--ac-rgb), 0.14);
+  border: 2rpx solid rgba(var(--ac-rgb), 0.32);
 }
 /* 2×2 指标网格：标签在上、数值在下；竖线只在右列、横线只在第二行 */
 .sheet-grid {
