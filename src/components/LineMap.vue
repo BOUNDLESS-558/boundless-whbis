@@ -748,6 +748,26 @@ function busStateOf(b, stops, kdtree) {
   return '行驶'
 }
 
+// 把点投影到线段数组上，返回最近段索引 bestI 和投影点坐标 proj{Lat,Lng}
+function projectOnSegs(segs, lat, lng) {
+  let bestDist = Infinity, bestI = -1
+  for (let i = 0; i < segs.length - 1; i++) {
+    const a = segs[i], c = segs[i + 1]
+    const dx = c.lng - a.lng, dy = c.lat - a.lat
+    const len2 = dx * dx + dy * dy
+    const t = len2 > 0 ? Math.max(0, Math.min(1, ((lng - a.lng) * dx + (lat - a.lat) * dy) / len2)) : 0
+    const projLat = a.lat + t * dy, projLng = a.lng + t * dx
+    const d = (projLat - lat) ** 2 + (projLng - lng) ** 2
+    if (d < bestDist) { bestDist = d; bestI = i }
+  }
+  if (bestI < 0) return null
+  const a = segs[bestI], c = segs[bestI + 1]
+  const dx = c.lng - a.lng, dy = c.lat - a.lat
+  const len2 = dx * dx + dy * dy
+  const t = len2 > 0 ? Math.max(0, Math.min(1, ((lng - a.lng) * dx + (lat - a.lat) * dy) / len2)) : 0
+  return { i: bestI, lat: a.lat + t * dy, lng: a.lng + t * dx }
+}
+
 // —— 自绘走向图的 Web Mercator 投影工具 ——
 // 经纬度 → 单位平面坐标（u/v 均在 0~1），屏幕像素 = (u - cam.u) * 256 * 2^zoom + 屏幕偏移
 const mercX = (lng) => (lng + 180) / 360
@@ -4106,11 +4126,14 @@ export default {
     /**
      * 计算车辆当前所在站点名。
      *
-     * 策略：先找 K-d tree 最近站 idx，再取前后相邻站（idx-1 / idx+1），
-     * 结合上一帧位置推算车辆 heading，判断车辆正在远离前站还是靠近后站：
-     *   - 若正朝向后站且距离后站更近 → 显示后站（即将到站）
-     *   - 若正朝向前站或刚离开前站且速度低（停站/已发车）→ 显示前站（刚刚离站或临近）
-     *   - 否则回退到纯最近站
+     * 双层策略：
+     *   ① K-d tree 初筛最近站 curIdx（快，但地理相近的平行路段可能误判）
+     *   ② route polyline 投影校正：把车位投到路线段上，看落点是否落在 curIdx 附近；
+     *      若不落在附近则替换 curIdx 为投影点两侧的站。
+     *   ③ 取前后相邻站，结合上一帧 heading 决定显示前站/当前站/后站：
+     *      - 正向行驶 + 后站更近(<600m) → 后站（即将到站）
+     *      - 反向或停站内（距前后站都 >500m） → 当前站（停靠）
+     *      - 其余 → 当前站
      *
      * 仅返回站名字符串，供「所在站点」列与复制表格直接使用。
      */
@@ -4118,55 +4141,81 @@ export default {
       const dir = b.dir
       const stops = this.stopsByDir[dir]
       const tree = this.kdtrees[dir]
+      const route = this.routeByDir[dir]
       if (!stops?.length || !tree) return '未知站点'
-      const target = { lat: parseFloat(b.lat) || 0, lng: parseFloat(b.lng) || 0 }
+      const lat = parseFloat(b.lat)
+      const lng = parseFloat(b.lng)
+      if (isNaN(lat) || isNaN(lng)) return '未知站点'
+
+      // —— 第一步：K-d tree 初筛 ——
+      const target = { lat, lng }
       const res = kdtreeNearest(tree, target)
       if (!res || res.index < 0 || res.index >= stops.length) return '未知站点'
-      const curIdx = res.index
-      const prevSt = stops[curIdx - 1]  // 线路序号上的前一站
-      const nextSt = stops[curIdx + 1]  // 线路序号上的后一站
+      let curIdx = res.index
+
+      // —— 第二步：route polyline 校正 ——
+      // K-d tree 只看欧氏距离，路线回头/并行时可能选错站；用 route 投影二次验证。
+      if (Array.isArray(route) && route.length >= 2) {
+        const segs = Array.isArray(route[0]) && typeof route[0][0] === 'number'
+          ? route.map(([ll, la]) => ({ lat: la, lng: ll }))
+          : route
+        const proj = projectOnSegs(segs, lat, lng)
+        if (proj) {
+          // 在 kdtree 结果 ±3 站内找路线投影最近点附近的站
+          const lo = Math.max(0, curIdx - 3), hi = Math.min(stops.length - 1, curIdx + 3)
+          let bestSi = -1, bestSD = Infinity
+          for (let si = lo; si <= hi; si++) {
+            const s = stops[si]; if (!s) continue
+            const sd = (parseFloat(s.latitude) - proj.lat) ** 2 + (parseFloat(s.longitude) - proj.lng) ** 2
+            if (sd < bestSD) { bestSD = sd; bestSi = si }
+          }
+          if (bestSi >= 0 && Math.sqrt(bestSD) < 0.005) { // ~550m 容差
+            curIdx = bestSi
+          }
+        }
+      }
+
+      const prevSt = stops[curIdx - 1]
+      const nextSt = stops[curIdx + 1]
 
       // 计算各候选站到车辆的 haversine 距离（米）
-      const toCur = distance(b.lat, b.lng, stops[curIdx].latitude, stops[curIdx].longitude)
+      const toCur = distance(lat, lng, stops[curIdx].latitude, stops[curIdx].longitude)
       const prevDist = prevSt
-        ? distance(b.lat, b.lng, prevSt.latitude, prevSt.longitude)
+        ? distance(lat, lng, prevSt.latitude, prevSt.longitude)
         : Infinity
       const nextDist = nextSt
-        ? distance(b.lat, b.lng, nextSt.latitude, nextSt.longitude)
+        ? distance(lat, lng, nextSt.latitude, nextSt.longitude)
         : Infinity
 
       // 默认：显示最近站
       let result = stops[curIdx].stopName || '未知站点'
 
-      // 有前一帧时，尝试用 heading 推断应显示的站
+      // 有前一帧时，用 heading 推断
       const prevArr = this.prevBusesByDir[dir] || []
       const prevBus = prevArr.find(p => (p.busId === b.busId || p.orgId === b.orgId) && p.lat != null)
       if (prevBus && prevBus.lat != null && prevBus.lng != null) {
-        // 位移向量 heading（度）；prevBus / b 均有 {lat, lng}
         const vHeading = heading(prevBus, b)
-        // 线路段向：从前站到后站的航向（站点字段为 latitude/longitude，需转换）
         let lineHeading = null
         if (prevSt && nextSt) {
           lineHeading = heading(
             { lat: prevSt.latitude, lng: prevSt.longitude },
             { lat: nextSt.latitude, lng: nextSt.longitude }
           )
-        } else if (prevSt) {
-          // 当前已在第一站，看向后方
+        } else if (nextSt) {
+          // 末站情形：路线向前延伸方向
           lineHeading = heading(
-            { lat: stops[curIdx + 1].latitude, lng: stops[curIdx + 1].longitude },
-            { lat: prevSt.latitude, lng: prevSt.longitude }
+            { lat: stops[curIdx].latitude, lng: stops[curIdx].longitude },
+            { lat: nextSt.latitude, lng: nextSt.longitude }
           )
         }
         if (lineHeading != null) {
-          // 计算 vHeading 与线路方向的夹角（0~180°）
           const diffDeg = Math.abs(((vHeading - lineHeading + 540) % 360) - 180)
-          // 若车正沿线路方向前进（夹角 ≤ 90°）且后站更近 → 显示后站（即将到站）
+          // 正向且后站更近 → 显示后站（即将到站）
           if (diffDeg <= 90 && nextDist < prevDist && nextDist < 600) {
-            result = nextSt?.stopName || result
+            result = nextSt.stopName || result
           }
-          // 若车逆行但停在某站附近（速度低、距离近）→ 保持当前站
-          else if (parseFloat(b.gpsSpeed || 0) < 3 && toCur <= prevDist && toCur <= nextDist) {
+          // 反向或停站内（距前后站都 >500m） → 保持当前站（停靠中）
+          else if (diffDeg > 90 || (toCur > 500 && prevDist > 500 && nextDist > 500)) {
             result = stops[curIdx].stopName || result
           }
         }
