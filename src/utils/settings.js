@@ -609,6 +609,23 @@ export function setAmapKey(key) {
   return v
 }
 
+/** 读取 KEY：返回 { key, secret }。兼容旧版「一个输入框、英文逗号拼接」的存储格式。 */
+export function getAmapKeyPair() {
+  const v = getAmapKey()
+  const parts = String(v).split(/[,，]/)
+  return {
+    key: (parts[0] || '').trim(),
+    secret: (parts.slice(1).join(',') || '').trim(),
+  }
+}
+
+/** 分别保存 KEY 与安全密钥：存储仍用 `key,secret` 拼接，loadAmapJsApi 已有拆分逻辑，无需改动 */
+export function setAmapKeyPair(key, secret) {
+  const k = String(key == null ? '' : key).trim()
+  const s = String(secret == null ? '' : secret).trim()
+  return setAmapKey(s ? `${k},${s}` : k)
+}
+
 // 高德官方轨迹的日调用计数（本机、按自然日）：每次 LineSearch 查询 +1，跨天自动归零。
 // 只作本机用量参考（不上传、不代表高德账号实际账单），帮用户估算当日配额消耗。
 const AMAP_USAGE_KEY = 'whbis:amap-usage'

@@ -329,21 +329,35 @@
               <text class="amap-apply-txt">还没有 KEY？前往高德开放平台免费申请（Web端 JS API 类型）</text>
               <text class="amap-apply-link" @click="openAmapApply">立即申请 ›</text>
             </view>
+            <view class="amap-field-label">Key（Web端 JS API）</view>
             <view class="amap-input-row">
               <input
                 class="amap-input"
                 v-model="amapKeyInput"
                 type="text"
                 :password="!amapKeyShow"
-                placeholder="粘贴 Web端(JS API) Key；带安全密钥时用英文逗号分隔"
+                placeholder="粘贴 Web端(JS API) Key"
                 confirm-type="done"
                 @confirm="onAmapKeySave"
               />
               <view class="acct-eye" :class="{ on: amapKeyShow }" @click="amapKeyShow = !amapKeyShow" v-html="amapKeyShow ? svgEyeOn : svgEyeOff" />
             </view>
+            <view class="amap-field-label">安全密钥（JS API 2.0，选填）</view>
+            <view class="amap-input-row">
+              <input
+                class="amap-input"
+                v-model="amapSecretInput"
+                type="text"
+                :password="!amapSecretShow"
+                placeholder="粘贴安全密钥（securityJsCode）"
+                confirm-type="done"
+                @confirm="onAmapKeySave"
+              />
+              <view class="acct-eye" :class="{ on: amapSecretShow }" @click="amapSecretShow = !amapSecretShow" v-html="amapSecretShow ? svgEyeOn : svgEyeOff" />
+            </view>
             <view class="amap-btn-row">
               <view class="amap-btn primary" @click="onAmapKeySave">保存 KEY</view>
-              <view class="amap-btn" v-if="amapKey" @click="onAmapKeyClear">清空</view>
+              <view class="amap-btn" v-if="amapKey || amapSecretInput" @click="onAmapKeyClear">清空</view>
             </view>
 
             <view class="amap-quota">
@@ -359,7 +373,7 @@
             </view>
 
             <view class="amap-note">
-              填 KEY 后线路走向改用高德官方公交轨迹，通常比免 Key 的 OSRM 贴路更精确；KEY 与高德账号绑定，调用可能按高德规则计费或占用免费配额，费用与额度以高德平台为准。本机计数仅供参考，不代表实际账单。留空则始终走免 Key 方案。
+              填 KEY 后线路走向改用高德官方公交轨迹，通常比免 Key 的 OSRM 贴路更精确。⚠ 必须是高德开放平台创建的「Web端(JS API)」类型 Key（Web服务 / REST Key 会报平台不匹配而不生效）；JS API 2.0 若配了安全密钥，填在下方「安全密钥」框即可。KEY 与高德账号绑定，调用可能按高德规则计费或占用免费配额，费用与额度以高德平台为准。本机计数仅供参考，不代表实际账单。留空则始终走免 Key 方案。
             </view>
           </view>
 
@@ -446,7 +460,8 @@ import {
   getSessionDays,
   setSessionDays,
   getAmapKey,
-  setAmapKey,
+  getAmapKeyPair,
+  setAmapKeyPair,
   getAmapUsageToday,
 } from '../../utils/settings.js'
 import { getAvatar, removeAvatar, pickAvatar } from '../../utils/avatar.js'
@@ -508,10 +523,12 @@ export default {
       // 地图来源：自绘走向图底图瓦片源
       mapSource: 'amap',
       mapSourceOpts: MAP_SOURCE_OPTS,
-      // 高德地图 KEY：自填后拉官方公交真实轨迹，让线路走向更精确（本机记忆）
+      // 高德地图 KEY + 安全密钥：自填后拉官方公交真实轨迹（本机记忆）
       amapKey: '',
       amapKeyInput: '',
+      amapSecretInput: '',
       amapKeyShow: false,
+      amapSecretShow: false,
       amapUsageToday: 0,
       amapApplyUrl: 'https://console.amap.com/dev/key/app',
       amapQuotaUrl: 'https://console.amap.com/dev/statistic',
@@ -824,8 +841,10 @@ export default {
       this.accent = getAccent()
       this.refreshDefault = getRefreshSec()
       this.mapSource = getMapSource()
-      this.amapKey = getAmapKey()
-      this.amapKeyInput = this.amapKey
+      const amapPair = getAmapKeyPair()
+      this.amapKey = amapPair.key
+      this.amapKeyInput = amapPair.key
+      this.amapSecretInput = amapPair.secret
       this.amapUsageToday = getAmapUsageToday()
       this.sessionDays = getSessionDays()
       this.uiFont = getFont()
@@ -925,15 +944,18 @@ export default {
     openAmapQuota() { this.openAmapUrl(this.amapQuotaUrl) },
     // 保存高德 KEY：落库后重置地图的轨迹标记并对当前线路重新规划，立即生效
     onAmapKeySave() {
-      const key = setAmapKey(this.amapKeyInput)
-      this.amapKey = key
-      this.amapKeyInput = key
+      const key = setAmapKeyPair(this.amapKeyInput, this.amapSecretInput)
+      const pair = getAmapKeyPair()
+      this.amapKey = pair.key
+      this.amapKeyInput = pair.key
+      this.amapSecretInput = pair.secret
       const c = this.$refs.mapC
       if (c && typeof c.onAmapKeyChange === 'function') c.onAmapKeyChange()
       uni.showToast({ title: key ? '高德 KEY 已保存' : '已清空，使用免 Key 方案', icon: 'none' })
     },
     onAmapKeyClear() {
       this.amapKeyInput = ''
+      this.amapSecretInput = ''
       this.onAmapKeySave()
     },
     // 仿真站牌设计：纯展示开关，落库后由 prop 下发给 LineMap 即时切换
@@ -1602,6 +1624,13 @@ export default {
   font-weight: 700;
   color: rgba(255, 255, 255, 0.85);
   margin: 6rpx 0 8rpx;
+}
+/* Key / 安全密钥两个输入框各自的小标题 */
+.amap-field-label {
+  font-size: 19rpx;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.6);
+  margin: 12rpx 0 6rpx;
 }
 .amap-sub-hint {
   display: block;
