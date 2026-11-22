@@ -369,6 +369,63 @@ export async function sweepCity(opts = {}) {
   return snap
 }
 
+/**
+ * 只查一条线路的在运车辆（线路榜「查询」用）——按线路号找到它的各方向，
+ * 逐方向调 /detailData（1~2 个请求，而不是全网 1500+），返回与快照同结构的车辆数组。
+ * 车辆字段与 sweepCity 完全一致，便于 SpeedRank 直接复用 rankByLine 的行渲染。
+ * @param {string} lineNo 线路号（337 / 337路 / code 内嵌号均可）
+ * @returns {Promise<{at, buses, total, failed, lineNo}|null>} 无匹配线路返回 null
+ */
+export async function fetchLineVehicles(lineNo) {
+  const raw = String(lineNo == null ? '' : lineNo).trim()
+  const norm = (v) => String(v == null ? '' : v).trim().replace(/路$/, '').toUpperCase()
+  const want = norm(raw)
+  if (!want) return null
+  // 线路库里该号的所有方向（营运中）；用归一后的线路号精确比对，
+  // 输入 337 只匹配 337，不误命 D337/K337；code 中段参与匹配，兼容 420100-337-0
+  const dirs = cityDirections().filter((d) => {
+    const codeSeg = String(d.code || '').split('-')[1]
+    return [d.no, d.name, codeSeg].some((v) => norm(v) === want)
+  })
+  if (!dirs.length) return { at: Date.now(), buses: [], total: 0, failed: 0, lineNo: raw, noMatch: true }
+
+  const buses = []
+  const seen = new Set()
+  let failed = 0
+  await Promise.all(dirs.map(async (d) => {
+    try {
+      const data = await fetchRealTime(d.id)
+      const list = (data && data.lineBusDtoList) || []
+      list.forEach((b) => {
+        const busId = b.busId || b.busNo
+        if (!busId || seen.has(busId)) return
+        const lat = parseFloat(b.latitude)
+        const lng = parseFloat(b.longitude)
+        if (isNaN(lat) || isNaN(lng)) return
+        seen.add(busId)
+        buses.push({
+          busId,
+          orgId: decryptBusId(busId) || '',
+          no: d.no,
+          code: d.code,
+          dir: d.dir,
+          lineName: d.name,
+          lat,
+          lng,
+          speed: parseFloat(b.gpsSpeed) || 0,
+          gpsSpeed: b.gpsSpeed,
+          arrived: b.arrived,
+          time: fmtGps(b.gpsTime),
+          band: speedBandOf(b.gpsSpeed),
+        })
+      })
+    } catch (e) {
+      failed++
+    }
+  }))
+  return { at: Date.now(), buses, total: dirs.length, failed, lineNo: raw }
+}
+
 /** 读缓存快照；@param maxAge 允许的最大年龄（ms），超期返回 null */
 export function loadSnapshot(maxAge = CITY_STALE_MS) {
   try {

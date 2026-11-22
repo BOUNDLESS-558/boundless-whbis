@@ -3,10 +3,11 @@ name: 每 37 分钟自动采集与部署
 # 需求 2/3/5：基于 GitHub Actions + Pages 全自动采集武汉公交集团、木兰、汉奇、蔡城线路，
 # 交叉验证后同步到源码分支并提交，再构建并部署到 Pages。
 #
-# 数据来源标注规则：每轮采集后由 auto-collect.mjs 导出 reports/osrm-lines.json，
-# 明确列出任一方向 source=osrm（高德 API 未收录、改用 OSRM 驾车路网近似的兜底走向，
-# 即「非 API 获取」）的线路；source=amap 为高德公交 API 官方轨迹，不列入。
-# 排查走向偏差/回环时先查该清单，例如曾出问题的 646 路已改回 amap，故不在其中。
+# 数据来源标注规则：每轮采集（全量/增量）都会逐方向重新探测上游 /line 站点签名，
+# 高德官方站点命中即复用。收尾时 auto-collect.mjs 在 Actions 日志里逐条、分组打印
+# 全部线路的站点来源：营运公司 / 线路号 / 高德站点 or OSRM 兜底 / 信息存储文件名，
+# 并把 OSRM 兜底线路导出 reports/osrm-lines.json 随 reports 提交。
+# 排查走向偏差/回环时先查日志与清单（如 646 路已用高德站点，不在兜底清单内）。
 #
 # ⚠ GitHub 硬规则：schedule / workflow_dispatch 只认「默认分支」上的 workflow 文件。
 #   本仓库需把默认分支设为 main（Settings → Branches → Default branch）。

@@ -65,22 +65,45 @@ function hasStagedChanges() {
   }
 }
 
-// ── 规则：标注「非 API 获取、走 OSRM 兜底」的线路 ──
+// ── 规则：逐线路标注站点数据来源（高德 API vs OSRM 兜底）──
 // 集团线路走向有两条来源（见 AGENTS.md「线路静态资产优先」）：
-//   source='amap' —— 高德公交 API 官方轨迹（A，优选）；
-//   source='osrm' —— 高德未收录时，用 OSRM 驾车路网近似的兜底走向（B，非 API 获取）。
-// 本函数每轮采集后扫描所有资产分片，把任一方向 source='osrm' 的线路导出到
-// reports/osrm-lines.json，随 reports 目录一起提交，便于明确追溯这些线路。
-function writeOsrmLineReport() {
+//   source='amap' —— 高德公交 API 官方轨迹 + 高德站点（A，优选）；
+//   source='osrm' —— 高德未收录时，用 OSRM 驾车路网近似的兜底走向 + 集团站点（B，非 API 获取）。
+// 每次采集（无论全量/增量）都会由 scan-routes.mjs --detect-changes 逐方向重新探测上游
+// /line 的站点签名；高德侧命中官方站点即复用。本函数在收尾时扫描全部资产分片，
+// 在 Actions 日志里逐条、分组、可读地打印每条线路实际采用的站点来源与存储文件名，
+// 并把 OSRM 兜底的线路导出到 reports/osrm-lines.json 随 reports 一起提交。
+const COMPANY_GROUPS = [
+  { dir: 'jt', label: '公交集团' },
+  { dir: 'cc', label: '蔡城公交' },
+  { dir: 'ml', label: '木兰公交' },
+  { dir: 'hq', label: '汉奇公交' },
+]
+
+// 读取线路库 no -> org，用于在日志里显示「具体营运公司」
+function loadLineOrgMap() {
+  const map = {}
+  const p = path.join(ROOT, 'src/static/lines/lines.json')
+  try {
+    const lib = JSON.parse(fs.readFileSync(p, 'utf8'))
+    const arr = Array.isArray(lib.lines) ? lib.lines : (Array.isArray(lib) ? lib : [])
+    for (const l of arr) if (l && l.no) map[l.no] = l.org || ''
+  } catch {}
+  return map
+}
+
+// 把集团 org 全名压成「第三营运公司」这类短标签
+function shortOrg(org, fallback) {
+  if (!org) return fallback
+  const m = String(org).match(/第([一二三四五六七八九])营运公司/)
+  return m ? `公交集团·第${m[1]}营运公司` : fallback
+}
+
+function scanStationSources() {
   const linesRoot = path.join(ROOT, 'src/static/lines')
-  const groups = [
-    { dir: 'jt', label: '公交集团' },
-    { dir: 'cc', label: '蔡城公交' },
-    { dir: 'ml', label: '木兰公交' },
-    { dir: 'hq', label: '汉奇公交' },
-  ]
-  const rows = []
-  for (const { dir, label } of groups) {
+  const orgMap = loadLineOrgMap()
+  const all = []
+  for (const { dir, label } of COMPANY_GROUPS) {
     const full = path.join(linesRoot, dir)
     if (!fs.existsSync(full)) continue
     for (const file of fs.readdirSync(full).filter((f) => f.endsWith('.json'))) {
@@ -93,28 +116,75 @@ function writeOsrmLineReport() {
       for (const no of Object.keys(data.lines || {})) {
         const line = data.lines[no]
         const dirs = (line && line.dirs) || {}
+        const d0 = dirs['0'], d1 = dirs['1']
+        const amapDirs = ['0', '1'].filter((k) => dirs[k] && dirs[k].source === 'amap')
         const osrmDirs = ['0', '1'].filter((k) => dirs[k] && dirs[k].source === 'osrm')
-        if (!osrmDirs.length) continue
-        rows.push({
+        if (!amapDirs.length && !osrmDirs.length) continue
+        all.push({
           no,
           name: (line && (line.name || line.lineName)) || '',
-          company: label,
+          company: dir === 'jt' ? shortOrg(orgMap[no], label) : label,
+          group: label,
           shard: `${dir}/${file}`,
-          osrmDirs, // '0'=上行, '1'=下行；数组表示该方向为 OSRM 兜底（非 API）
+          file: file,
+          amapDirs,
+          osrmDirs,
+          stops: (d0 && d0.stops ? d0.stops.length : (d1 && d1.stops ? d1.stops.length : 0)),
         })
       }
     }
   }
-  rows.sort((a, b) => String(a.no).localeCompare(String(b.no), undefined, { numeric: true }))
+  const byNo = (a, b) => String(a.no).localeCompare(String(b.no), undefined, { numeric: true })
+  all.sort(byNo)
+  return all
+}
+
+function writeStationSourceReport() {
+  const all = scanStationSources()
+  const osrmRows = all.filter((r) => r.osrmDirs.length)
+    .map((r) => ({ no: r.no, name: r.name, company: r.company, shard: r.shard, osrmDirs: r.osrmDirs }))
+
+  // ── 可读日志：每次采集后逐条标注全部线路的站点来源 ──
+  const pad = (s, n) => {
+    const str = String(s == null ? '' : s)
+    // 中文按 2 列宽计，保证等宽对齐
+    const w = [...str].reduce((a, c) => a + (c.charCodeAt(0) > 255 ? 2 : 1), 0)
+    return str + ' '.repeat(Math.max(0, n - w))
+  }
+  console.log('\n' + '═'.repeat(72))
+  console.log('  线路站点数据来源清单')
+  console.log('  ★ 每次执行 Actions 都重新获取全部线路的站点信息：逐方向探测上游 /line，高德官方站点命中即复用')
+  console.log('═'.repeat(72))
+  for (const { label } of COMPANY_GROUPS) {
+    const rows = all.filter((r) => r.group === label)
+    if (!rows.length) continue
+    const amapCount = rows.filter((r) => r.amapDirs.length && !r.osrmDirs.length).length
+    const osrmCount = rows.filter((r) => r.osrmDirs.length).length
+    console.log(`\n【${label}】高德站点 ${amapCount} 条 · OSRM 兜底 ${osrmCount} 条`)
+    console.log('  ' + '─'.repeat(68))
+    for (const r of rows) {
+      const dirDesc = (ds) => ds.map((k) => (k === '0' ? '上行' : '下行')).join('/')
+      const src = r.osrmDirs.length && r.amapDirs.length
+        ? `高德站点(${dirDesc(r.amapDirs)}) + OSRM兜底(${dirDesc(r.osrmDirs)})`
+        : r.osrmDirs.length
+          ? `无高德站点数据，正在使用 OSRM 兜底(${dirDesc(r.osrmDirs)})`
+          : `正在使用高德地图站点数据信息(${dirDesc(r.amapDirs)})`
+      console.log(`  ${pad(r.no, 14)}${pad(r.company, 26)} ${src}，信息存储文件名『${r.file}』`)
+    }
+  }
+  console.log('═'.repeat(72))
+  console.log(`  合计 ${all.length} 条：高德站点 ${all.filter((r) => r.amapDirs.length && !r.osrmDirs.length).length} 条 · OSRM 兜底 ${osrmRows.length} 条`)
+  console.log('═'.repeat(72) + '\n')
+
   const report = {
     updatedAt: new Date().toISOString(),
-    rule: 'source=osrm 表示该方向走向由 OSRM 驾车路网近似生成，非高德公交 API 官方轨迹（API 未收录时的兜底）。',
-    total: rows.length,
-    lines: rows,
+    rule: '每条线路按方向标注站点来源：source=amap（高德官方站点）或 source=osrm（高德未收录、OSRM 兜底）。每次采集逐方向重新探测上游 /line 站点签名；高德官方站点命中即复用。',
+    total: osrmRows.length,
+    lines: osrmRows,
   }
   fs.mkdirSync(path.join(ROOT, 'reports'), { recursive: true })
   fs.writeFileSync(path.join(ROOT, 'reports/osrm-lines.json'), JSON.stringify(report, null, 2) + '\n')
-  return rows.length
+  return osrmRows.length
 }
 
 // ── 1. 线路枚举：全量(周) / 仅规范化(日) ──
@@ -166,9 +236,10 @@ step('非集团线网底图', ['scripts/build-foreign-net.mjs'])
 // ── 8. 交叉验证（官方 vs 高德，输出质量报告）──
 step('交叉验证报告', ['scripts/validate-cross.mjs'], { optional: true })
 
-// ── 8.5 规则：导出 OSRM 兜底（非 API 获取）线路清单 ──
-//   明确注明哪些线路任一方向 source=osrm，随 reports 一起提交，便于排查 646 这类问题。
-console.log(`\n=== OSRM 兜底线路清单 ===\n· 非 API 获取线路 ${writeOsrmLineReport()} 条 → reports/osrm-lines.json`)
+// ── 8.5 规则：逐线路标注站点来源（高德 API / OSRM 兜底）──
+//   Actions 日志逐条打印全部线路的站点来源（公司/线路/文件名），随 reports 提交 OSRM 清单。
+const osrmTotal = writeStationSourceReport()
+console.log(`· OSRM 兜底（非 API 获取）线路 ${osrmTotal} 条 → reports/osrm-lines.json`)
 
 // ── 9. 提交数据到当前分支（main）──
 const DATA_PATHS = [

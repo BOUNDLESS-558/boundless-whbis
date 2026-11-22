@@ -127,3 +127,78 @@ export function rankBySpeed(buses, limit = DEFAULT_RANK_LIMIT) {
     hasData: scored.length > 0,
   }
 }
+
+/**
+ * 线路车速榜（按线路号查询）：输入一条线路号，列出该线路当前快照里的全部在运车辆，
+ * 按营运车速从高到低排列（每行是一辆车，不是聚合行）。点击行定位该车。
+ *
+ * 线路号匹配：数字部分精确比对（"337" / "337路" / "B337" 都归一到 "337"），
+ * 也兼容 code 里内嵌的线路号（420100-337-0）。未输入线路号时返回空结果。
+ * 返回结构与 rankBySpeed 完全一致，UI 可复用同一套单车行渲染。
+ * @param {Array<Object>} buses 全市快照车辆（cityBuses）
+ * @param {string} lineNo 用户输入的线路号
+ * @param {number} limit 取前 N 辆
+ */
+export function rankByLine(buses, lineNo, limit = DEFAULT_RANK_LIMIT) {
+  const n = RANK_LIMITS.includes(Number(limit)) ? Number(limit) : DEFAULT_RANK_LIMIT
+  const raw = String(lineNo == null ? '' : lineNo).trim()
+  const norm = (v) => String(v == null ? '' : v).trim().replace(/路$/, '').toUpperCase()
+  const want = norm(raw)
+  if (!want) return { rows: [], total: 0, driftCount: 0, hasData: false, lineNo: raw, lineTotal: 0 }
+
+  const seen = new Set()
+  const scored = []
+  ;(Array.isArray(buses) ? buses : []).forEach((b) => {
+    if (!b || !b.busId || seen.has(b.busId)) return
+    // no / lineName / code 任一命中该线路号即可（精确比对，337 不误命 D337；code 形如 420100-337-0，按分段取）
+    const codeSeg = String(b.code || '').split('-')[1]
+    const hit = [b.no, b.lineName, codeSeg].some((v) => norm(v) === want)
+    if (!hit) return
+    const speed = Number(b.gpsSpeed != null ? b.gpsSpeed : b.speed)
+    if (!isFinite(speed) || speed < 0) return
+    seen.add(b.busId)
+    scored.push({ bus: b, speed })
+  })
+  scored.sort((a, b) => {
+    if (b.speed !== a.speed) return b.speed - a.speed
+    const ta = String(a.bus.time || '')
+    const tb = String(b.bus.time || '')
+    if (ta !== tb) return tb > ta ? 1 : -1
+    return String(a.bus.busId) < String(b.bus.busId) ? -1 : 1
+  })
+
+  const rows = scored.slice(0, n).map((x, i) => {
+    const b = x.bus
+    const rt = routeOf(b.no, b.dir)
+    return {
+      rank: i + 1,
+      speed: x.speed,
+      bus: b,
+      no: b.no,
+      lineName: b.lineName || '',
+      dir: b.dir,
+      orgId: b.orgId || '',
+      busId: b.busId,
+      time: b.time || '',
+      arrived: b.arrived,
+      lat: b.lat,
+      lng: b.lng,
+      band: typeof b.band === 'number' ? b.band : 0,
+      drift: x.speed > DRIFT_SPEED,
+      company: orgCompanyOf(b),
+      from: rt.from,
+      to: rt.to,
+      routeText: rt.known ? rt.text : (b.lineName || '走向未知'),
+      routeKnown: rt.known,
+    }
+  })
+
+  return {
+    rows,
+    total: scored.length,
+    driftCount: scored.filter((x) => x.speed > DRIFT_SPEED).length,
+    hasData: scored.length > 0,
+    lineNo: raw,
+    lineTotal: scored.length,
+  }
+}
