@@ -25,16 +25,26 @@
 ### 分支约定（★ 务必遵守）
 
 - **`main`**：当前维护分支（仓库当前分支），日常改动提交在这里，不直接新开功能分支。
-- **源码分支严禁推远端**：远端 `origin` 只接收 `pages` 分支（H5 构建产物，供 GitHub Pages 部署），**任何源码分支（`main` / `BETA`）都不能推到远端**，改动保留在本地即可。
+- **`BETA`**：开发分支，改动提交到 `main` 后合并进 `BETA`，保持两者同步。
 - **`pages`**：GitHub Pages 部署产物分支（孤立提交，由 `npm run deploy:pages` 自动维护），不用于开发。
 
-工作流：在源码分支上提交改动 → 需要发布网站时用 `npm run deploy:pages`（构建 + 强推 `origin/pages`）。
+工作流（按用户要求，三分支都推远端）：在 `main` 上提交改动 → 合并到 `BETA` → `git push origin main` 与 `git push origin BETA` → 需要发布网站时用 `npm run deploy:pages`（构建 + 强推 `origin/pages`）。远端 `origin/main`、`origin/BETA`、`origin/pages` 三个分支都保持存在并同步。
 
 ---
 
 ## 更新日志
 
-### 2026-11-20（最新）
+### 2026-11-23（最新）
+
+- **Actions 日志标注站点来源**：每轮采集收尾逐条打印全部线路——营运公司 / 线路号 / 「正在使用高德地图站点数据信息」或「无高德站点数据，正在使用 OSRM 兜底」/ 信息存储文件名（`bNN.json`）；抬头明确「每次执行 Actions 都重新获取全部线路站点信息」。同步导出 `reports/osrm-lines.json`（当前 366 条 OSRM 兜底线路），随 `reports` 一起提交，排查走向问题先查该清单
+- **646 路走向不完整（多次返修）**：根因是资产只有 24/25 站、丢了「官堤路公交场站」；用 `AMAP_KEY` 走 `inputtips → lineid` 链路重采，现双方向 36/35 站、首末站与 polyline 端点 0m 吻合，地图显示完整走向
+- **全市两浮窗常驻 + 位置/状态记忆**：车速榜、自编号查车默认打开（只有 ✕ 显式关闭才隐藏），标题栏 grip 可拖动（`utils/panelPos.js` 的 `bindFloatDrag`，只绑手柄不误触按钮/输入）；开关、折叠、位置、输入、档位全部 localStorage，二次进入或重载恢复上次位置与状态。拖动过的窗格自动解除「上下错开」约束自由摆放
+- **线路榜改为输入线路号**：单车榜 / 线路榜切换；线路榜输入线路号（337 / 337路 / code 内嵌号精确匹配，不再误命 D337）→ `fetchLineVehicles()` 只请求该线路各方向（1~2 个 `/detailData`，不触发全网 1500+ 扫描），列出该线路在运车辆按车速从高到低排序；重复点「查询」只重拉当前线路，标题显示「单线查询」时刻
+- **查无此线不再卡「正在加载」**：新增 `stopsLoaded` 标记区分「仍在加载」「查无此线（已加载完但无数据）」「未输入」，不存在的线路显示「未查询到『线路号』路的线路走向，请检查线路号」
+- **全市卡顿优化**：拖拽 / 滚轮 / 双指的高频重绘用 `requestAnimationFrame` 合并（每帧最多一次全量投影），`renderCityNet` 上万点 SVG 拼接用 `Math.round(v*10)/10` 替代 `toFixed(1)`，卸载时取消待执行帧
+- **高德 KEY 改为双输入框 + 生效修复**：设置面板把「Key」和「安全密钥」拆成两个独立输入框（各自显隐眼睛），`settings.js` 的 `getAmapKeyPair()`/`setAmapKeyPair()` 成对读写、存储仍用 `key,secret` 兼容旧格式；修复换 KEY 不生效（旧 `window.AMap` 未清导致新 KEY 被吞，现按 `window.__whbisAmapKey` 判定并重新注入）；LineSearch 平台不匹配（Web服务 Key 用在 JS API 报 `USERKEY_PLAT_NOMATCH`）不再静默，弹明确提示；面板文案注明必须「Web端(JS API)」类型 Key
+
+### 2026-11-20
 
 - **采集频率 6 小时 → 37 分钟**：`.github/workflows/daily-collect.yml` cron 改为 `*/37 * * * *`（GitHub 分钟按小时取模，实际每小时 00/37 分触发，平均约 30 分钟）
 - **收录 18 条 H 系惠民公交**：H81~H99（后端本无 H95），对外显示号 H81 / 内部编码 81，`scan-lines.mjs` 白名单放行 H 前缀；修复重复查询与手动输入时对外号退回内部码（`81`→`H81`）的 bug
@@ -322,7 +332,7 @@ openId: wx_openid_dev_001
 - **App 端**：`APP_CONFIG.mapKey` 非空 → 原生地图（Key 来自 `src/manifest.json` 的 `app-plus.distribute.sdkConfigs.maps.amap.key`）。
 - **H5 端**：`APP_CONFIG.mapKey` 留空（现状）→ `useNativeMap()` 恒为假 → 一律自绘走向图（免 Key 的 OSRM 贴路 + 高德免 Key 瓦片）。
 
-> BYOK（用户自填 Key）入口已整体移除：`config.js` 不再读 `amap_byok_config`，`main.js` 不再调 `applyAmapConfig()`，设置页也已移除对应抽屉。若将来需要 H5 原生地图，只填 `manifest.json` 里 H5 的 `sdkConfigs.maps.amap`（Web端 JS API Key + securityJsCode），构建期注入后重启 dev 服务器。
+> **自填高德 KEY 的用途与边界**：`config.js` 的 `mapKey` 留空（H5 现状），`useNativeMap()` 仍恒为假——自填 KEY **不会**把地图切成原生 `<map>`。它的作用是让**自绘走向图**通过 JS API 2.0 的 `AMap.LineSearch` 拉高德官方公交轨迹，替换 OSRM 贴路近似（`loadAmapJsApi` 动态注入 `webapi.amap.com/maps?v=2.0`，自绘模式没有原生 `<map>` 所以不会自动加载）。设置面板「账号与设置 → 高德地图 KEY」提供两个独立输入框：**Key（必须 Web端 JS API 类型，Web服务/REST Key 会报 `USERKEY_PLAT_NOMATCH` 不生效）** 与 **安全密钥（JS API 2.0 的 securityJsCode，选填）**；成对存 `whbis:amap-key`（`key,secret`，兼容旧格式）。换 KEY 会清掉旧 `window.AMap` 重新注入，LineSearch 失败弹明确提示且回退 OSRM。若将来需要 H5 原生地图，另填 `manifest.json` 里 H5 的 `sdkConfigs.maps.amap`（构建期注入后重启 dev）。
 
 **自绘走向图的两个底座**（都不依赖高德 JS API）：
 

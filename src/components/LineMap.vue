@@ -1932,7 +1932,11 @@ export default {
     // 再用 LineSearch 官方公交轨迹替换 OSRM 贴路，换取更精确的线路走向。
     // 注入失败 / 超时 / 轨迹不匹配时返回 false，由调用方回退 OSRM；全程静默不打扰用户。
     loadAmapJsApi(key) {
-      if (window.AMap && typeof window.AMap.plugin === 'function') return Promise.resolve(window.AMap)
+      // 只有「当前这个 KEY 注入的」AMap 才能复用。换 KEY 后全局 window.AMap 仍是旧 SDK，
+      // 直接复用会让新 KEY 永远不生效——必须先清掉再重新注入（这是「配置 KEY 不起作用」的根因之一）。
+      if (window.AMap && typeof window.AMap.plugin === 'function' && window.__whbisAmapKey === key) {
+        return Promise.resolve(window.AMap)
+      }
       // 同一 KEY 的注入只发一次，并发请求共享同一个 Promise
       if (this._amapInject && this._amapInject.key === key) return this._amapInject.promise
       const promise = new Promise((resolve, reject) => {
@@ -1945,6 +1949,10 @@ export default {
         // 安全密钥：高德 JS API 2.0 起 Web 端 key 需配对安全密钥，用户可在 KEY 后用英文逗号附带
         const [jsKey, jsSecret] = String(key).split(/[,，]/).map((s) => (s || '').trim())
         if (jsSecret) window._AMapSecurityConfig = { securityJsCode: jsSecret }
+        else { try { delete window._AMapSecurityConfig } catch (e) { window._AMapSecurityConfig = undefined } }
+        // 换 KEY / 重新注入：清掉旧 SDK，避免新 KEY 被旧实例吞掉
+        try { delete window.AMap } catch (e) { window.AMap = undefined }
+        window.__whbisAmapKey = key
         const script = document.createElement('script')
         script.src = `https://webapi.amap.com/maps?v=2.0&key=${encodeURIComponent(jsKey)}&plugin=AMap.LineSearch`
         script.async = true
@@ -2100,7 +2108,14 @@ export default {
           }
           bumpAmapUsage() // 本机日用量 +1（仅统计，不影响高德账号实际账单）
           ls.search(this.lineName, (status, result) => {
-            if (status !== 'complete') return done()
+            if (status !== 'complete') {
+              // KEY 无效 / 类型不匹配（Web服务 Key 用在 JS API 会返回 USERKEY_PLAT_NOMATCH）时
+              // 高德只回调 error，不给具体原因；这里给出明确可操作的提示，避免「配了没反应」。
+              if (getAmapKey()) {
+                uni.showToast({ title: '高德 KEY 未生效：需「Web端(JS API)」类型 Key', icon: 'none', duration: 3000 })
+              }
+              return done()
+            }
             const lines = (result && (result.lineInfo || result.lineList)) || []
             if (!lines.length) return done()
             // 每个方向选路径起点距该方向首站最近的轨迹（上下行各取一条，已用方向不重复选）
