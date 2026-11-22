@@ -169,10 +169,10 @@
           <text>{{ t.text }}</text>
         </view>
       </view>
-      <!-- 空态提示（不拦截手势） -->
+      <!-- 空态提示（不拦截手势）：区分「仍在加载」「查无此线（已加载完但无数据）」「未输入」 -->
       <view class="canvas-empty" v-if="!cityOn && !svgStops.length && !svgBuses.length">
-        <text class="empty-big">🚌</text>
-        <text class="empty-txt">{{ lineNo ? '正在加载线路走向…' : '输入线路号查询，即可绘制走向与在运车辆' }}</text>
+        <text class="empty-big">{{ lineNo && stopsLoaded ? '🔍' : '🚌' }}</text>
+        <text class="empty-txt">{{ !lineNo ? '输入线路号查询，即可绘制走向与在运车辆' : (stopsLoaded ? '未查询到「' + lineNo + '」路的线路走向，请检查线路号' : '正在加载线路走向…') }}</text>
       </view>
       <view class="canvas-empty" v-else-if="cityOn && !cityBusy && !cityDots.length">
         <text class="empty-big">🌐</text>
@@ -328,9 +328,12 @@
       :buses="cityBuses"
       :meta="cityMeta"
       :busy="cityBusy"
+      :stacked="orgSearchOpen && !rankPos"
+      :pos="rankPos"
       @pick="onRankPick"
       @fold="onRankFold"
       @close="closeRank"
+      @move="onRankMove"
     />
 
     <!-- 视图工具：缩放 / 全览 / 站名 / 底图，两种模式通用。从控制卡移到地图右下角浮动条，
@@ -346,9 +349,10 @@
 
     <!-- 自编号查车：按输入末尾数字跨公司模糊匹配全市快照，随输入实时呈现。
          完整编号（321B2426）取尾号 2426，前 3/4 位公司代码不参与匹配；
-         与车速榜互斥同占右上，纯本地过滤不发请求，点结果选中车辆并在地图定位 -->
-    <view class="org-search" v-if="cityOn && orgSearchOpen">
+         可与车速榜同时打开（此时下移到车速榜下方），纯本地过滤不发请求，点结果选中车辆并在地图定位 -->
+    <view class="org-search" :class="{ 'with-rank': rankOpen && !orgPos && !rankPos }" :style="orgStyle" v-if="cityOn && orgSearchOpen">
       <view class="os-head">
+        <text class="os-grip" title="按住拖动窗口" @click.stop>⣿</text>
         <text class="os-title">🔍 自编号查车</text>
         <view class="os-close" @click="closeOrgSearch" title="关闭">✕</view>
       </view>
@@ -648,7 +652,7 @@ import { assetUrl } from '../utils/asset.js'
 import { distance } from '../utils/geo.js'
 import { allLines, findLine, isLoopLine } from '../utils/lineIndex.js'
 import { createResizable } from '../utils/panelResize.js'
-import { readPanelPos, writePanelPos, clampPanelPos } from '../utils/panelPos.js'
+import { readPanelPos, writePanelPos, clampPanelPos, bindFloatDrag } from '../utils/panelPos.js'
 import {
   citySweepCost, sweepCity, loadSnapshot, loadLastSnapshot, snapshotAge,
   findBusByOrgId, searchBusesByOrgSuffix, refreshOrgIds, clusterPoints, SPEED_BANDS, CITY_FRESH_MS,
@@ -695,9 +699,14 @@ const LOOP_STYLE = {
 // 所以不给 15/30 秒这种线路态档位，最低 5 分钟且默认关闭，配额代价写在按钮提示里。
 const CITY_FOLLOW_OPTS = [0, 5, 15, 30]
 const CITY_FOLLOW_KEY = 'whbis:city-follow-sec'
-// 车速榜开启态：本机记忆。开启后只有点浮窗右上角 ✕ 才清除；
-// 切视图 / LineMap 被卸载重建都不该让它自动消失（榜单是全市态专属，回到全市态自动复现）
+// 车速榜 / 自编号查车开启态：本机记忆。两窗常驻——默认打开，只有点浮窗右上角 ✕ 才清除；
+// 切视图 / LineMap 被卸载重建都不该让它们自动消失（全市态专属，回到全市态自动复现）
 const RANK_OPEN_KEY = 'whbis:rank-open'
+const ORG_OPEN_KEY = 'whbis:org-search-open'
+const ORG_INPUT_KEY = 'whbis:org-search-input'
+// 两窗拖动后的位置：复用 panelPos.js 的读写/夹取，键名与浮窗 class 对齐
+const RANK_POS_KEY = 'rank-card'
+const ORG_POS_KEY = 'org-search'
 // 聚合网格边长（px）：原生 marker 是 DOM 节点，成本高→网格稀一点；自绘走 SVG，可以密一点
 const CITY_CELL_NATIVE = 52
 const CITY_CELL_SVG = 34
@@ -964,6 +973,8 @@ export default {
       dirFilter: 2,
       // 双方向数据缓存：站点 / 道路吸附轨迹 / 实时车辆
       stopsByDir: { 0: [], 1: [] },
+      // 本线路站点加载是否已结束（含「查无此线」的空结果）：用于区分「正在加载」与「线路不存在」
+      stopsLoaded: false,
       routeByDir: { 0: [], 1: [] },
       // K-d Tree 索引（按方向）：每方向站点变时重建，查询 nearest 是 O(log N)
       kdtrees: { 0: null, 1: null },
@@ -1039,14 +1050,23 @@ export default {
       // 车速榜浮窗开关（只在全市态显示，纯本地排序快照，不发额外请求）。
       // 初值从本机恢复：LineMap 常因「未选线路时切出全市视图」被整个卸载，
       // 只靠组件内 data 会丢状态；只有关闭按钮会把它清掉。
+      // 常驻：默认打开，只有显式存过 0（用户点过 ✕）才隐藏
       rankOpen: (() => {
-        try { return uni.getStorageSync(RANK_OPEN_KEY) === 1 } catch (e) { return false }
+        try { return uni.getStorageSync(RANK_OPEN_KEY) !== 0 } catch (e) { return true }
       })(),
       // 榜单是否折叠（由 SpeedRank 抛回）：折叠后只剩标题一条，不该继续占用右侧绘制区
       rankFolded: false,
-      // 自编号查车浮窗：按输入末尾数字跨公司模糊匹配全市快照，与车速榜互斥（同占右上绘制区）
-      orgSearchOpen: false,
-      orgSearchInput: '',
+      // 自编号查车浮窗：常驻，默认打开，只有显式存过 0 才隐藏
+      orgSearchOpen: (() => {
+        try { return uni.getStorageSync(ORG_OPEN_KEY) !== 0 } catch (e) { return true }
+      })(),
+      // 两窗拖动后的位置（{x,y} 视口绝对坐标，null=用 CSS 默认定位）
+      rankPos: clampPanelPos(readPanelPos(RANK_POS_KEY), 720, 460),
+      orgPos: clampPanelPos(readPanelPos(ORG_POS_KEY), 720, 320),
+      _unbindOrgDrag: null,
+      orgSearchInput: (() => {
+        try { return String(uni.getStorageSync(ORG_INPUT_KEY) || '') } catch (e) { return '' }
+      })(),
       orgQueryDigits: '',
       orgResults: [],
       orgSearchMsg: '',
@@ -1478,6 +1498,11 @@ export default {
         transform: 'none',
       }
     },
+    // 自编号查车浮窗拖动后的位置；未拖动走 CSS 默认定位（与车速榜上下错开）
+    orgStyle() {
+      if (!this.orgPos) return null
+      return { left: this.orgPos.x + 'px', top: this.orgPos.y + 'px', right: 'auto' }
+    },
   },
   watch: {
     // 详情窗出现后给标题栏挂上原生鼠标拖动（uni-app 对 view 的 mouse 事件绑定不可靠）
@@ -1509,8 +1534,10 @@ export default {
     },
     // 侧栏（实时车辆 + 发车时刻）随「全市 / 单线路」视图切换而销毁重建，
     // 重建后必须重新挂缩放手柄并把记忆的尺寸（宽 + 高）还原，否则宽度记不住
-    cityOn() {
+    cityOn(v) {
       this.$nextTick(() => this.setupPanelResize())
+      // 常驻面板随全市态 v-if 重建：重新绑拖动 grip（车速榜在子组件内自绑）
+      if (v) this.$nextTick(() => this.bindOrgDrag())
     },
     // 宿主页顶部「上行/下行」切换 → 地图视角单向跟随（地图内仍可用「全部 / ⇄」自由查看）
     initDirection(v) {
@@ -1615,6 +1642,13 @@ export default {
       if (this.isFullscreen) document.body.style.overflow = ''
       // #endif
       this._onWinResize = null
+      // 解绑查车浮窗拖动，避免切页后残留 document 监听
+      if (this._unbindOrgDrag) { this._unbindOrgDrag(); this._unbindOrgDrag = null }
+      // 取消待执行的重绘帧，避免卸载后仍跑一次全市全量投影
+      if (this._raf) {
+        if (typeof window !== 'undefined' && window.cancelAnimationFrame) window.cancelAnimationFrame(this._raf)
+        this._raf = null
+      }
       this.unbindGestures()
       this.unbindHover()
       this.unbindSheetDrag()
@@ -1642,6 +1676,7 @@ export default {
       if (!this.lineName && !this.lineNo) return
       // 清空旧线路缓存，避免叠加
       this.stopsByDir = { 0: [], 1: [] }
+      this.stopsLoaded = false
       this.routeByDir = { 0: [], 1: [] }
       this.routeState = { 0: 'idle', 1: 'idle' }
       this.assetSnapped = { 0: false, 1: false }
@@ -1760,6 +1795,7 @@ export default {
       this.lineCode = buildLineCode(no, dir)
       // 清空上一条线路的全部缓存，避免叠加
       this.stopsByDir = { 0: [], 1: [] }
+      this.stopsLoaded = false
       this.routeByDir = { 0: [], 1: [] }
       this.routeState = { 0: 'idle', 1: 'idle' }
       this.assetSnapped = { 0: false, 1: false }
@@ -1812,6 +1848,8 @@ export default {
           this.stopsByDir[d] = []
         }
       }
+      // 站点加载结束（资产 / /line 都试过），即便结果为空也是「查无此线」，不再是「正在加载」
+      this.stopsLoaded = true
       // 站点序列定稿后重建 K-d tree：下一次 loadLive 拿到的车辆就近站匹配从 O(N) 降到 O(log N)
       for (const d of [0, 1]) {
         const arr = this.stopsByDir[d] || []
@@ -2327,6 +2365,8 @@ export default {
       this._userMoved = false
       this._view = null
       this.loadCityPref()
+      // 常驻查车窗：恢复的输入立即重算结果，不必等用户再敲一次
+      if (this.orgSearchInput) this.doOrgSearch()
       // 线网是静态资产（不占 API 配额），与快照并行拉取：到位后自己重排
       this.ensureCityNet()
       this.restartAutoRefresh()
@@ -2493,19 +2533,22 @@ export default {
       const cy = this.projCenter.y
       const buf = [[], []]
       const per = []
+      // 热点：上千条线 × 上万点逐帧拼 SVG path。Math.round 数值拼接比 toFixed(1) 的字符串
+      // 格式化更快（两者都是 0.1px 精度），是拖动卡顿的主因之一。
+      const r1 = (v) => Math.round(v * 10) / 10
       for (const d of dirs) {
         const n = d.n
         if (n < 2) continue
         const seg = []
         for (let i = 0; i < n; i += step) {
-          const x = (d.mu[i] - cu) * s + cx
-          const y = (d.mv[i] - cv) * s + cy
-          seg.push((i === 0 ? 'M' : 'L') + x.toFixed(1) + ' ' + y.toFixed(1))
+          const x = r1((d.mu[i] - cu) * s + cx)
+          const y = r1((d.mv[i] - cv) * s + cy)
+          seg.push((i === 0 ? 'M' : 'L') + x + ' ' + y)
         }
         if ((n - 1) % step !== 0) {
-          const x = (d.mu[n - 1] - cu) * s + cx
-          const y = (d.mv[n - 1] - cv) * s + cy
-          seg.push('L' + x.toFixed(1) + ' ' + y.toFixed(1))
+          const x = r1((d.mu[n - 1] - cu) * s + cx)
+          const y = r1((d.mv[n - 1] - cv) * s + cy)
+          seg.push('L' + x + ' ' + y)
         }
         if (detail) per.push({ key: d.code + '-' + d.dir, d: seg.join(''), color: DIR_STYLE[d.dir].svgStroke, w: 4, op: 1 })
         else buf[d.dir].push(seg.join(''))
@@ -2610,6 +2653,8 @@ export default {
         partial: !!snap.partial,
       }
       this.cityBuses = snap.buses || []
+      // 常驻查车窗：快照刷新后按当前输入重算（首屏恢复的输入此时才有数据可匹配）
+      if (this.orgSearchInput) this.doOrgSearch()
       // 详情窗可能开着上一批的对象，跟到新对象上，跟不到就关掉
       if (this.selectedBus) {
         const again = this.cityBuses.find((b) => b.busId === this.selectedBus.busId)
@@ -3123,7 +3168,7 @@ export default {
         v: vUnder - (py - this.projCenter.y) / s1,
         zoom,
       }
-      this.renderSchematic()
+      this.scheduleRender()
     },
     // 指针坐标 → 画布内坐标（鼠标 / 触摸统一处理）
     _pointOf(t) {
@@ -3199,7 +3244,7 @@ export default {
       this._drag.y = p.y
       const s = zoomScale(this.cam.zoom)
       this.cam = { ...this.cam, u: this.cam.u - dx / s, v: this.cam.v - dy / s }
-      this.renderSchematic()
+      this.scheduleRender()
     },
     onDragEnd() {
       if (this._drag && this._drag.moved) {
@@ -3263,6 +3308,19 @@ export default {
       const st = (this.stopsByDir[s.dir] || [])[s.idx]
       if (!st) return
       this.selectStop({ name: st.stopName, dir: s.dir, lat: parseFloat(st.latitude), lng: parseFloat(st.longitude) })
+    },
+    // 高频交互（拖拽 / 滚轮 / 双指）合并到每帧一次重绘：touchmove/wheel 一秒可触发几十次，
+    // 而全市态每次重绘要投影上千条线 + 全部车点，同步逐事件跑会明显掉帧。
+    // 用 rAF 把同一帧内的多次请求折叠为一次；离散状态变化仍直接调 renderSchematic。
+    scheduleRender() {
+      if (this._raf) return
+      const raf = (typeof window !== 'undefined' && window.requestAnimationFrame)
+        ? (cb) => window.requestAnimationFrame(cb)
+        : (cb) => setTimeout(cb, 16)
+      this._raf = raf(() => {
+        this._raf = null
+        this.renderSchematic()
+      })
     },
     // 绘制自绘走向图：用相机做 Web Mercator 投影（走向线 + 站点 + 车辆 + 经纬网格）
     renderSchematic() {
@@ -3655,13 +3713,18 @@ export default {
       this.rankOpen = !this.rankOpen
       this.saveRankOpen()
     },
-    // 唯一「真正关闭」的入口：浮窗右上角 ✕（清掉记忆，下次不会自己冒出来）
+    // 浮窗右上角 ✕：记下关闭态，下次不常驻复现；位置本身仍保留
     closeRank() {
       this.rankOpen = false
       this.saveRankOpen()
     },
     saveRankOpen() {
       try { uni.setStorageSync(RANK_OPEN_KEY, this.rankOpen ? 1 : 0) } catch (e) { /* 存储不可用仅本次生效 */ }
+    },
+    // 车速榜拖动：移动即时更新位置；松手写盘，二次打开恢复到上次位置
+    onRankMove(pos, phase) {
+      this.rankPos = pos
+      if (phase === 'end') writePanelPos(RANK_POS_KEY, pos)
     },
     // 榜单折叠：同步状态并重新量占位（折叠后高度骤变，全览要重排）
     onRankFold(v) {
@@ -3681,15 +3744,34 @@ export default {
 
     // —— 自编号查车（按末尾数字跨公司模糊匹配全市快照，零请求）——
     toggleOrgSearch() {
-      // 与车速榜互斥：两者同占右上绘制区，避免叠在一起
-      if (!this.orgSearchOpen) this.rankOpen = false
+      // 与车速榜可同时打开：两块面板上下错开，不再互斥
       this.orgSearchOpen = !this.orgSearchOpen
-      if (this.orgSearchOpen) this.doOrgSearch()
+      this.saveOrgOpen()
+      if (this.orgSearchOpen) {
+        this.doOrgSearch()
+        this.$nextTick(() => this.bindOrgDrag())
+      }
       this.$nextTick(() => this.measureUi())
     },
     closeOrgSearch() {
       this.orgSearchOpen = false
+      this.saveOrgOpen()
       this.$nextTick(() => this.measureUi())
+    },
+    saveOrgOpen() {
+      try { uni.setStorageSync(ORG_OPEN_KEY, this.orgSearchOpen ? 1 : 0) } catch (e) { /* 忽略 */ }
+    },
+    // 自编号查车浮窗拖动：只绑标题栏 grip，松手写盘
+    bindOrgDrag() {
+      if (this._unbindOrgDrag) { this._unbindOrgDrag(); this._unbindOrgDrag = null }
+      if (typeof document === 'undefined') return
+      const panel = document.querySelector('.org-search')
+      const grip = panel && panel.querySelector('.os-grip')
+      if (!panel || !grip) return
+      this._unbindOrgDrag = bindFloatDrag(grip, panel, (pos, phase) => {
+        this.orgPos = pos
+        if (phase === 'end') writePanelPos(ORG_POS_KEY, pos)
+      })
     },
     // 输入即查：uni-app 的 input 事件在 H5 是 e.target.value、小程序是 e.detail.value
     onOrgInput(e) {
@@ -3697,6 +3779,7 @@ export default {
         ? e.detail.value
         : (e && e.target && e.target.value != null ? e.target.value : this.orgSearchInput)
       this.orgSearchInput = v
+      try { uni.setStorageSync(ORG_INPUT_KEY, this.orgSearchInput) } catch (err) { /* 忽略 */ }
       this.doOrgSearch()
     },
     doOrgSearch() {
@@ -6090,6 +6173,10 @@ export default {
   max-width: calc(100vw - 48rpx);
   z-index: 23;
   box-sizing: border-box;
+  max-height: 58vh;
+  display: flex;
+  flex-direction: column;
+  /* 与车速榜共存：下移到上半区榜单下方，限高与列表滚动由 .with-rank 覆盖 */
   border-radius: 28rpx;
   background: rgba(11, 16, 32, 0.9);
   backdrop-filter: blur(30px) saturate(180%);
@@ -6106,6 +6193,18 @@ export default {
   padding: 20rpx 24rpx 16rpx;
   border-bottom: 2rpx solid rgba(255, 255, 255, 0.1);
 }
+/* 拖动 grip：只此手柄可拖窗口，标题/输入不受影响 */
+.os-grip {
+  flex: 0 0 auto;
+  font-size: 26rpx;
+  line-height: 1;
+  color: rgba(255, 255, 255, 0.38);
+  cursor: grab;
+  user-select: none;
+  padding: 4rpx 6rpx;
+}
+.os-grip:active { cursor: grabbing; color: var(--ac-hi); }
+.os-title { flex: 1; min-width: 0; }
 .os-title { font-size: 27rpx; font-weight: 800; color: #fff; }
 .os-close {
   min-width: 44rpx;
@@ -6120,6 +6219,22 @@ export default {
   cursor: pointer;
 }
 .os-close:hover { color: #fff; background: rgba(var(--ac-rgb), 0.24); }
+/* 与车速榜共存：查车面板落到榜单（上半区 34vh）下方，列表在剩余空间内滚动 */
+.org-search.with-rank {
+  top: calc(34vh + 44rpx);
+  max-height: calc(58vh - 20rpx);
+}
+.org-search.with-rank .os-body {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+.org-search.with-rank .os-list {
+  flex: 1;
+  height: auto;
+  min-height: 160rpx;
+}
 .os-body { padding: 20rpx 24rpx 24rpx; }
 .os-input-row {
   display: flex;

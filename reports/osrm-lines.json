@@ -1,12 +1,12 @@
 {
-  "updatedAt": "2026-11-20T14:25:06.711Z",
-  "rule": "source=osrm 表示该方向走向由 OSRM 驾车路网近似生成，非高德公交 API 官方轨迹（API 未收录时的兜底）。",
+  "updatedAt": "2026-11-22T22:33:10.099Z",
+  "rule": "每条线路按方向标注站点来源：source=amap（高德官方站点）或 source=osrm（高德未收录、OSRM 兜底）。每次采集逐方向重新探测上游 /line 站点签名；高德官方站点命中即复用。",
   "total": 366,
   "lines": [
     {
       "no": "1",
       "name": "",
-      "company": "公交集团",
+      "company": "公交集团·第二营运公司",
       "shard": "jt/b28.json",
       "osrmDirs": [
         "0",
@@ -16,7 +16,7 @@
     {
       "no": "7",
       "name": "",
-      "company": "公交集团",
+      "company": "公交集团·第一营运公司",
       "shard": "jt/b54.json",
       "osrmDirs": [
         "0",
@@ -26,7 +26,7 @@
     {
       "no": "9",
       "name": "",
-      "company": "公交集团",
+      "company": "公交集团·第二营运公司",
       "shard": "jt/b52.json",
       "osrmDirs": [
         "0",
@@ -36,7 +36,7 @@
     {
       "no": "10",
       "name": "",
-      "company": "公交集团",
+      "company": "公交集团·第七营运公司",
       "shard": "jt/b04.json",
       "osrmDirs": [
         "0",
@@ -46,7 +46,7 @@
     {
       "no": "14",
       "name": "",
-      "company": "公交集团",
+      "company": "公交集团·第七营运公司",
       "shard": "jt/b56.json",
       "osrmDirs": [
         "0",
@@ -56,7 +56,7 @@
     {
       "no": "15",
       "name": "",
-      "company": "公交集团",
+      "company": "公交集团·第七营运公司",
       "shard": "jt/b11.json",
       "osrmDirs": [
         "0",
@@ -66,7 +66,7 @@
     {
       "no": "16",
       "name": "",
-      "company": "公交集团",
+      "company": "公交集团·第六营运公司",
       "shard": "jt/b30.json",
       "osrmDirs": [
         "0",
@@ -76,7 +76,7 @@
     {
       "no": "18",
       "name": "",
-      "company": "公交集团",
+      "company": "公交集团·第五营运公司",
       "shard": "jt/b44.json",
       "osrmDirs": [
         "0",
@@ -86,7 +86,7 @@
     {
       "no": "20",
       "name": "",
-      "company": "公交集团",
+      "company": "公交集团·第六营运公司",
       "shard": "jt/b63.json",
       "osrmDirs": [
         "0",
@@ -96,7 +96,7 @@
     {
       "no": "23",
       "name": "",
-      "company": "公交集团",
+      "company": "公交集团·第六营运公司",
       "shard": "jt/b18.json",
       "osrmDirs": [
         "0",
@@ -106,7 +106,7 @@
     {
       "no": "24",
       "name": "",
-      "company": "公交集团",
+      "company": "公交集团·第三营运公司",
       "shard": "jt/b51.json",
       "osrmDirs": [
         "0",
@@ -116,7 +116,7 @@
     {
       "no": "25",
       "name": "",
-      "company": "公交集团",
+      "company": "公交集团·第五营运公司",
       "shard": "jt/b32.json",
       "osrmDirs": [
         "0",
@@ -126,7 +126,7 @@
     {
       "no": "26",
       "name": "",
-      "company": "公交集团",
+      "company": "公交集团·第三营运公司",
       "shard": "jt/b25.json",
       "osrmDirs": [
         "0",
@@ -136,7 +136,7 @@
     {
       "no": "28",
       "name": "",
-      "company": "公交集团",
+      "company": "公交集团·第五营运公司",
       "shard": "jt/b23.json",
       "osrmDirs": [
         "0",
@@ -146,7 +146,7 @@
     {
       "no": "30",
       "name": "",
-      "company": "公交集团",
+      "company": "公交集团·第一营运公司",
       "shard": "jt/b54.json",
       "osrmDirs": [
         "0",
@@ -156,7 +156,7 @@
     {
       "no": "34",
       "name": "",
-      "company": "公交集团",
+      "company": "公交集团·第七营运公司",
       "shard": "jt/b02.json",
       "osrmDirs": [
         "0",
@@ -166,7 +166,7 @@
     {
       "no": "35",
       "name": "",
-      "company": "公交集团",
+      "company": "公交集团·第二营运公司",
       "shard": "jt/b21.json",
       "osrmDirs": [
         "0",
@@ -176,7 +176,7 @@
     {
       "no": "40",
       "name": "",
-      "company": "公交集团",
+      "company": "公交集团·第六营运公司",
       "shard": "jt/b41.json",
       "osrmDirs": [
         "0",
@@ -186,7 +186,7 @@
     {
       "no": "42",
       "name": "",
-      "company": "公交集团",
+      "company": "公交集团·第三营运公司",
       "shard": "jt/b03.json",
       "osrmDirs": [
         "0",
@@ -196,7 +196,7 @@
     {
       "no": "46",
       "name": "",
-      "company": "公交集团",
+      "company": "公交集团·第二营运公司",
       "shard": "jt/b15.json",
       "osrmDirs": [
         "0",
@@ -206,7 +206,7 @@
     {
       "no": "47",
       "name": "",
-      "company": "公交集团",
+      "company": "公交集团·第二营运公司",
       "shard": "jt/b60.json",
       "osrmDirs": [
         "0",
@@ -216,7 +216,7 @@
     {
       "no": "59",
       "name": "",
-      "company": "公交集团",
+      "company": "公交集团·第七营运公司",
       "shard": "jt/b11.json",
       "osrmDirs": [
         "0",
@@ -226,7 +226,7 @@
     {
       "no": "60",
       "name": "",
-      "company": "公交集团",
+      "company": "公交集团·第一营运公司",
       "shard": "jt/b59.json",
       "osrmDirs": [
         "0",
@@ -236,7 +236,7 @@
     {
       "no": "66",
       "name": "",
-      "company": "公交集团",
+      "company": "公交集团·第七营运公司",
       "shard": "jt/b45.json",
       "osrmDirs": [
         "0",
@@ -246,7 +246,7 @@
     {
       "no": "71",
       "name": "",
-      "company": "公交集团",
+      "company": "公交集团·第二营运公司",
       "shard": "jt/b05.json",
       "osrmDirs": [
         "0",
@@ -256,7 +256,7 @@
     {
       "no": "72",
       "name": "",
-      "company": "公交集团",
+      "company": "公交集团·第七营运公司",
       "shard": "jt/b12.json",
       "osrmDirs": [
         "0",
@@ -276,7 +276,7 @@
     {
       "no": "79",
       "name": "",
-      "company": "公交集团",
+      "company": "公交集团·第三营运公司",
       "shard": "jt/b29.json",
       "osrmDirs": [
         "0",
@@ -286,7 +286,7 @@
     {
       "no": "118",
       "name": "",
-      "company": "公交集团",
+      "company": "公交集团·第六营运公司",
       "shard": "jt/b61.json",
       "osrmDirs": [
         "0",
@@ -296,7 +296,7 @@
     {
       "no": "119",
       "name": "",
-      "company": "公交集团",
+      "company": "公交集团·第二营运公司",
       "shard": "jt/b42.json",
       "osrmDirs": [
         "0",
@@ -306,7 +306,7 @@
     {
       "no": "201",
       "name": "",
-      "company": "公交集团",
+      "company": "公交集团·第六营运公司",
       "shard": "jt/b10.json",
       "osrmDirs": [
         "0",
@@ -316,7 +316,7 @@
     {
       "no": "202",
       "name": "",
-      "company": "公交集团",
+      "company": "公交集团·第四营运公司",
       "shard": "jt/b55.json",
       "osrmDirs": [
         "0",
@@ -326,7 +326,7 @@
     {
       "no": "203",
       "name": "",
-      "company": "公交集团",
+      "company": "公交集团·第四营运公司",
       "shard": "jt/b36.json",
       "osrmDirs": [
         "0",
@@ -336,7 +336,7 @@
     {
       "no": "204",
       "name": "",
-      "company": "公交集团",
+      "company": "公交集团·第四营运公司",
       "shard": "jt/b17.json",
       "osrmDirs": [
         "0",
@@ -346,7 +346,7 @@
     {
       "no": "205",
       "name": "",
-      "company": "公交集团",
+      "company": "公交集团·第四营运公司",
       "shard": "jt/b62.json",
       "osrmDirs": [
         "0",
@@ -356,7 +356,7 @@
     {
       "no": "207",
       "name": "",
-      "company": "公交集团",
+      "company": "公交集团·第二营运公司",
       "shard": "jt/b24.json",
       "osrmDirs": [
         "0",
@@ -366,7 +366,7 @@
     {
       "no": "208",
       "name": "",
-      "company": "公交集团",
+      "company": "公交集团·第三营运公司",
       "shard": "jt/b05.json",
       "osrmDirs": [
         "0",
@@ -376,7 +376,7 @@
     {
       "no": "211",
       "name": "",
-      "company": "公交集团",
+      "company": "公交集团·第一营运公司",
       "shard": "jt/b39.json",
       "osrmDirs": [
         "0",
@@ -386,7 +386,7 @@
     {
       "no": "212",
       "name": "",
-      "company": "公交集团",
+      "company": "公交集团·第一营运公司",
       "shard": "jt/b58.json",
       "osrmDirs": [
         "0",
@@ -396,7 +396,7 @@
     {
       "no": "213",
       "name": "",
-      "company": "公交集团",
+      "company": "公交集团·第四营运公司",
       "shard": "jt/b13.json",
       "osrmDirs": [
         "0"
@@ -405,7 +405,7 @@
     {
       "no": "214",
       "name": "",
-      "company": "公交集团",
+      "company": "公交集团·第三营运公司",
       "shard": "jt/b08.json",
       "osrmDirs": [
         "0",
@@ -415,7 +415,7 @@
     {
       "no": "238",
       "name": "",
-      "company": "公交集团",
+      "company": "公交集团·第四营运公司",
       "shard": "jt/b30.json",
       "osrmDirs": [
         "0",
@@ -425,7 +425,7 @@
     {
       "no": "242",
       "name": "",
-      "company": "公交集团",
+      "company": "公交集团·第四营运公司",
       "shard": "jt/b19.json",
       "osrmDirs": [
         "0",
@@ -435,7 +435,7 @@
     {
       "no": "255",
       "name": "",
-      "company": "公交集团",
+      "company": "公交集团·第四营运公司",
       "shard": "jt/b15.json",
       "osrmDirs": [
         "0",
@@ -445,7 +445,7 @@
     {
       "no": "266",
       "name": "",
-      "company": "公交集团",
+      "company": "公交集团·第三营运公司",
       "shard": "jt/b61.json",
       "osrmDirs": [
         "0",
@@ -455,7 +455,7 @@
     {
       "no": "277",
       "name": "",
-      "company": "公交集团",
+      "company": "公交集团·第三营运公司",
       "shard": "jt/b35.json",
       "osrmDirs": [
         "0",
@@ -465,7 +465,7 @@
     {
       "no": "291",
       "name": "",
-      "company": "公交集团",
+      "company": "公交集团·第一营运公司",
       "shard": "jt/b47.json",
       "osrmDirs": [
         "0",
@@ -475,7 +475,7 @@
     {
       "no": "295",
       "name": "",
-      "company": "公交集团",
+      "company": "公交集团·第一营运公司",
       "shard": "jt/b35.json",
       "osrmDirs": [
         "0",
@@ -485,7 +485,7 @@
     {
       "no": "309",
       "name": "",
-      "company": "公交集团",
+      "company": "公交集团·第三营运公司",
       "shard": "jt/b29.json",
       "osrmDirs": [
         "0",
@@ -495,7 +495,7 @@
     {
       "no": "313",
       "name": "",
-      "company": "公交集团",
+      "company": "公交集团·第一营运公司",
       "shard": "jt/b14.json",
       "osrmDirs": [
         "0",
@@ -505,7 +505,7 @@
     {
       "no": "317",
       "name": "",
-      "company": "公交集团",
+      "company": "公交集团·第二营运公司",
       "shard": "jt/b26.json",
       "osrmDirs": [
         "0",
@@ -515,7 +515,7 @@
     {
       "no": "318",
       "name": "",
-      "company": "公交集团",
+      "company": "公交集团·第二营运公司",
       "shard": "jt/b35.json",
       "osrmDirs": [
         "0",
@@ -534,7 +534,7 @@
     {
       "no": "330",
       "name": "",
-      "company": "公交集团",
+      "company": "公交集团·第二营运公司",
       "shard": "jt/b41.json",
       "osrmDirs": [
         "0"
@@ -543,7 +543,7 @@
     {
       "no": "343",
       "name": "",
-      "company": "公交集团",
+      "company": "公交集团·第七营运公司",
       "shard": "jt/b35.json",
       "osrmDirs": [
         "0"
@@ -562,7 +562,7 @@
     {
       "no": "358",
       "name": "",
-      "company": "公交集团",
+      "company": "公交集团·第二营运公司",
       "shard": "jt/b23.json",
       "osrmDirs": [
         "0",
@@ -581,7 +581,7 @@
     {
       "no": "372",
       "name": "",
-      "company": "公交集团",
+      "company": "公交集团·第六营运公司",
       "shard": "jt/b39.json",
       "osrmDirs": [
         "0",
@@ -601,7 +601,7 @@
     {
       "no": "391",
       "name": "",
-      "company": "公交集团",
+      "company": "公交集团·第六营运公司",
       "shard": "jt/b48.json",
       "osrmDirs": [
         "0",
@@ -621,7 +621,7 @@
     {
       "no": "408内环",
       "name": "",
-      "company": "公交集团",
+      "company": "公交集团·第一营运公司",
       "shard": "jt/b39.json",
       "osrmDirs": [
         "0"
@@ -630,7 +630,7 @@
     {
       "no": "504",
       "name": "",
-      "company": "公交集团",
+      "company": "公交集团·第七营运公司",
       "shard": "jt/b60.json",
       "osrmDirs": [
         "0",
@@ -640,7 +640,7 @@
     {
       "no": "509",
       "name": "",
-      "company": "公交集团",
+      "company": "公交集团·第一营运公司",
       "shard": "jt/b27.json",
       "osrmDirs": [
         "0",
@@ -660,7 +660,7 @@
     {
       "no": "522",
       "name": "",
-      "company": "公交集团",
+      "company": "公交集团·第一营运公司",
       "shard": "jt/b28.json",
       "osrmDirs": [
         "0",
@@ -670,7 +670,7 @@
     {
       "no": "523",
       "name": "",
-      "company": "公交集团",
+      "company": "公交集团·第二营运公司",
       "shard": "jt/b47.json",
       "osrmDirs": [
         "1"
@@ -679,7 +679,7 @@
     {
       "no": "527",
       "name": "",
-      "company": "公交集团",
+      "company": "公交集团·第二营运公司",
       "shard": "jt/b35.json",
       "osrmDirs": [
         "0",
@@ -689,7 +689,7 @@
     {
       "no": "530内环",
       "name": "",
-      "company": "公交集团",
+      "company": "公交集团·第七营运公司",
       "shard": "jt/b63.json",
       "osrmDirs": [
         "0"
@@ -698,7 +698,7 @@
     {
       "no": "530外环",
       "name": "",
-      "company": "公交集团",
+      "company": "公交集团·第七营运公司",
       "shard": "jt/b24.json",
       "osrmDirs": [
         "0"
@@ -717,7 +717,7 @@
     {
       "no": "561",
       "name": "",
-      "company": "公交集团",
+      "company": "公交集团·第七营运公司",
       "shard": "jt/b25.json",
       "osrmDirs": [
         "0",
@@ -727,7 +727,7 @@
     {
       "no": "567内环",
       "name": "",
-      "company": "公交集团",
+      "company": "公交集团·第七营运公司",
       "shard": "jt/b51.json",
       "osrmDirs": [
         "0"
@@ -736,7 +736,7 @@
     {
       "no": "567外环",
       "name": "",
-      "company": "公交集团",
+      "company": "公交集团·第七营运公司",
       "shard": "jt/b44.json",
       "osrmDirs": [
         "0"
@@ -755,7 +755,7 @@
     {
       "no": "598",
       "name": "",
-      "company": "公交集团",
+      "company": "公交集团·第二营运公司",
       "shard": "jt/b09.json",
       "osrmDirs": [
         "0",
@@ -775,7 +775,7 @@
     {
       "no": "608",
       "name": "",
-      "company": "公交集团",
+      "company": "公交集团·第三营运公司",
       "shard": "jt/b57.json",
       "osrmDirs": [
         "0",
@@ -785,7 +785,7 @@
     {
       "no": "612",
       "name": "",
-      "company": "公交集团",
+      "company": "公交集团·第一营运公司",
       "shard": "jt/b46.json",
       "osrmDirs": [
         "0",
@@ -795,7 +795,7 @@
     {
       "no": "627",
       "name": "",
-      "company": "公交集团",
+      "company": "公交集团·第一营运公司",
       "shard": "jt/b34.json",
       "osrmDirs": [
         "0",
@@ -805,7 +805,7 @@
     {
       "no": "638",
       "name": "",
-      "company": "公交集团",
+      "company": "公交集团·第五营运公司",
       "shard": "jt/b02.json",
       "osrmDirs": [
         "0",
@@ -815,7 +815,7 @@
     {
       "no": "673",
       "name": "",
-      "company": "公交集团",
+      "company": "公交集团·第一营运公司",
       "shard": "jt/b11.json",
       "osrmDirs": [
         "0"
@@ -824,7 +824,7 @@
     {
       "no": "686",
       "name": "",
-      "company": "公交集团",
+      "company": "公交集团·第六营运公司",
       "shard": "jt/b15.json",
       "osrmDirs": [
         "0"
@@ -833,7 +833,7 @@
     {
       "no": "688",
       "name": "",
-      "company": "公交集团",
+      "company": "公交集团·第四营运公司",
       "shard": "jt/b01.json",
       "osrmDirs": [
         "0",
@@ -843,7 +843,7 @@
     {
       "no": "717",
       "name": "",
-      "company": "公交集团",
+      "company": "公交集团·第一营运公司",
       "shard": "jt/b54.json",
       "osrmDirs": [
         "0",
@@ -853,7 +853,7 @@
     {
       "no": "729",
       "name": "",
-      "company": "公交集团",
+      "company": "公交集团·第一营运公司",
       "shard": "jt/b47.json",
       "osrmDirs": [
         "0",
@@ -863,7 +863,7 @@
     {
       "no": "734",
       "name": "",
-      "company": "公交集团",
+      "company": "公交集团·第六营运公司",
       "shard": "jt/b49.json",
       "osrmDirs": [
         "0",
@@ -873,7 +873,7 @@
     {
       "no": "751",
       "name": "",
-      "company": "公交集团",
+      "company": "公交集团·第五营运公司",
       "shard": "jt/b24.json",
       "osrmDirs": [
         "0",
@@ -883,7 +883,7 @@
     {
       "no": "796",
       "name": "",
-      "company": "公交集团",
+      "company": "公交集团·第二营运公司",
       "shard": "jt/b49.json",
       "osrmDirs": [
         "0",
@@ -931,7 +931,7 @@
     {
       "no": "电2",
       "name": "",
-      "company": "公交集团",
+      "company": "公交集团·第七营运公司",
       "shard": "jt/b06.json",
       "osrmDirs": [
         "0",
@@ -959,7 +959,7 @@
     {
       "no": "D109",
       "name": "",
-      "company": "公交集团",
+      "company": "公交集团·第一营运公司",
       "shard": "jt/b33.json",
       "osrmDirs": [
         "0"
@@ -968,7 +968,7 @@
     {
       "no": "D111",
       "name": "",
-      "company": "公交集团",
+      "company": "公交集团·第一营运公司",
       "shard": "jt/b44.json",
       "osrmDirs": [
         "0"
@@ -977,7 +977,7 @@
     {
       "no": "D112",
       "name": "",
-      "company": "公交集团",
+      "company": "公交集团·第一营运公司",
       "shard": "jt/b37.json",
       "osrmDirs": [
         "0"
@@ -995,7 +995,7 @@
     {
       "no": "D123",
       "name": "",
-      "company": "公交集团",
+      "company": "公交集团·第一营运公司",
       "shard": "jt/b61.json",
       "osrmDirs": [
         "0"
@@ -1004,7 +1004,7 @@
     {
       "no": "D126",
       "name": "",
-      "company": "公交集团",
+      "company": "公交集团·第一营运公司",
       "shard": "jt/b30.json",
       "osrmDirs": [
         "0"
@@ -1013,7 +1013,7 @@
     {
       "no": "D127",
       "name": "",
-      "company": "公交集团",
+      "company": "公交集团·第一营运公司",
       "shard": "jt/b49.json",
       "osrmDirs": [
         "0"
@@ -1022,7 +1022,7 @@
     {
       "no": "D136",
       "name": "",
-      "company": "公交集团",
+      "company": "公交集团·第一营运公司",
       "shard": "jt/b27.json",
       "osrmDirs": [
         "0"
@@ -1031,7 +1031,7 @@
     {
       "no": "D137",
       "name": "",
-      "company": "公交集团",
+      "company": "公交集团·第一营运公司",
       "shard": "jt/b08.json",
       "osrmDirs": [
         "0"
@@ -1040,7 +1040,7 @@
     {
       "no": "D138",
       "name": "",
-      "company": "公交集团",
+      "company": "公交集团·第一营运公司",
       "shard": "jt/b53.json",
       "osrmDirs": [
         "0"
@@ -1085,7 +1085,7 @@
     {
       "no": "D208",
       "name": "",
-      "company": "公交集团",
+      "company": "公交集团·第二营运公司",
       "shard": "jt/b19.json",
       "osrmDirs": [
         "0"
@@ -1094,7 +1094,7 @@
     {
       "no": "D210",
       "name": "",
-      "company": "公交集团",
+      "company": "公交集团·第二营运公司",
       "shard": "jt/b34.json",
       "osrmDirs": [
         "0"
@@ -1121,7 +1121,7 @@
     {
       "no": "D213",
       "name": "",
-      "company": "公交集团",
+      "company": "公交集团·第二营运公司",
       "shard": "jt/b15.json",
       "osrmDirs": [
         "0"
@@ -1139,7 +1139,7 @@
     {
       "no": "D230",
       "name": "",
-      "company": "公交集团",
+      "company": "公交集团·第二营运公司",
       "shard": "jt/b16.json",
       "osrmDirs": [
         "0"
@@ -1148,7 +1148,7 @@
     {
       "no": "D231",
       "name": "",
-      "company": "公交集团",
+      "company": "公交集团·第二营运公司",
       "shard": "jt/b35.json",
       "osrmDirs": [
         "0"
@@ -1166,7 +1166,7 @@
     {
       "no": "D233",
       "name": "",
-      "company": "公交集团",
+      "company": "公交集团·第二营运公司",
       "shard": "jt/b09.json",
       "osrmDirs": [
         "0"
@@ -1184,7 +1184,7 @@
     {
       "no": "D235",
       "name": "",
-      "company": "公交集团",
+      "company": "公交集团·第二营运公司",
       "shard": "jt/b47.json",
       "osrmDirs": [
         "0"
@@ -1193,7 +1193,7 @@
     {
       "no": "D236",
       "name": "",
-      "company": "公交集团",
+      "company": "公交集团·第二营运公司",
       "shard": "jt/b02.json",
       "osrmDirs": [
         "0"
@@ -1202,7 +1202,7 @@
     {
       "no": "D237",
       "name": "",
-      "company": "公交集团",
+      "company": "公交集团·第二营运公司",
       "shard": "jt/b21.json",
       "osrmDirs": [
         "0"
@@ -1229,7 +1229,7 @@
     {
       "no": "D240",
       "name": "",
-      "company": "公交集团",
+      "company": "公交集团·第二营运公司",
       "shard": "jt/b47.json",
       "osrmDirs": [
         "0"
@@ -1238,7 +1238,7 @@
     {
       "no": "D241",
       "name": "",
-      "company": "公交集团",
+      "company": "公交集团·第二营运公司",
       "shard": "jt/b28.json",
       "osrmDirs": [
         "0"
@@ -1265,7 +1265,7 @@
     {
       "no": "D245",
       "name": "",
-      "company": "公交集团",
+      "company": "公交集团·第二营运公司",
       "shard": "jt/b16.json",
       "osrmDirs": [
         "0"
@@ -1274,7 +1274,7 @@
     {
       "no": "D246",
       "name": "",
-      "company": "公交集团",
+      "company": "公交集团·第二营运公司",
       "shard": "jt/b09.json",
       "osrmDirs": [
         "0"
@@ -1283,7 +1283,7 @@
     {
       "no": "D247",
       "name": "",
-      "company": "公交集团",
+      "company": "公交集团·第二营运公司",
       "shard": "jt/b54.json",
       "osrmDirs": [
         "0"
@@ -1292,7 +1292,7 @@
     {
       "no": "D248",
       "name": "",
-      "company": "公交集团",
+      "company": "公交集团·第二营运公司",
       "shard": "jt/b07.json",
       "osrmDirs": [
         "0"
@@ -1301,7 +1301,7 @@
     {
       "no": "D249",
       "name": "",
-      "company": "公交集团",
+      "company": "公交集团·第二营运公司",
       "shard": "jt/b52.json",
       "osrmDirs": [
         "0"
@@ -1310,7 +1310,7 @@
     {
       "no": "D250",
       "name": "",
-      "company": "公交集团",
+      "company": "公交集团·第二营运公司",
       "shard": "jt/b38.json",
       "osrmDirs": [
         "0"
@@ -1319,7 +1319,7 @@
     {
       "no": "D251",
       "name": "",
-      "company": "公交集团",
+      "company": "公交集团·第二营运公司",
       "shard": "jt/b57.json",
       "osrmDirs": [
         "0"
@@ -1328,7 +1328,7 @@
     {
       "no": "D300",
       "name": "",
-      "company": "公交集团",
+      "company": "公交集团·第七营运公司",
       "shard": "jt/b00.json",
       "osrmDirs": [
         "0"
@@ -1364,7 +1364,7 @@
     {
       "no": "D307",
       "name": "",
-      "company": "公交集团",
+      "company": "公交集团·第三营运公司",
       "shard": "jt/b05.json",
       "osrmDirs": [
         "0"
@@ -1373,7 +1373,7 @@
     {
       "no": "D308",
       "name": "",
-      "company": "公交集团",
+      "company": "公交集团·第三营运公司",
       "shard": "jt/b24.json",
       "osrmDirs": [
         "0"
@@ -1382,7 +1382,7 @@
     {
       "no": "D309",
       "name": "",
-      "company": "公交集团",
+      "company": "公交集团·第三营运公司",
       "shard": "jt/b43.json",
       "osrmDirs": [
         "0"
@@ -1391,7 +1391,7 @@
     {
       "no": "D310",
       "name": "",
-      "company": "公交集团",
+      "company": "公交集团·第三营运公司",
       "shard": "jt/b09.json",
       "osrmDirs": [
         "0"
@@ -1418,7 +1418,7 @@
     {
       "no": "D338",
       "name": "",
-      "company": "公交集团",
+      "company": "公交集团·第三营运公司",
       "shard": "jt/b03.json",
       "osrmDirs": [
         "0"
@@ -1427,7 +1427,7 @@
     {
       "no": "D339",
       "name": "",
-      "company": "公交集团",
+      "company": "公交集团·第三营运公司",
       "shard": "jt/b48.json",
       "osrmDirs": [
         "0"
@@ -1436,7 +1436,7 @@
     {
       "no": "D340",
       "name": "",
-      "company": "公交集团",
+      "company": "公交集团·第三营运公司",
       "shard": "jt/b36.json",
       "osrmDirs": [
         "0"
@@ -1481,7 +1481,7 @@
     {
       "no": "D405",
       "name": "",
-      "company": "公交集团",
+      "company": "公交集团·第四营运公司",
       "shard": "jt/b14.json",
       "osrmDirs": [
         "0"
@@ -1499,7 +1499,7 @@
     {
       "no": "D408",
       "name": "",
-      "company": "公交集团",
+      "company": "公交集团·第四营运公司",
       "shard": "jt/b21.json",
       "osrmDirs": [
         "0"
@@ -1526,7 +1526,7 @@
     {
       "no": "D414",
       "name": "",
-      "company": "公交集团",
+      "company": "公交集团·第四营运公司",
       "shard": "jt/b24.json",
       "osrmDirs": [
         "0"
@@ -1562,7 +1562,7 @@
     {
       "no": "D419",
       "name": "",
-      "company": "公交集团",
+      "company": "公交集团·第四营运公司",
       "shard": "jt/b31.json",
       "osrmDirs": [
         "0"
@@ -1625,7 +1625,7 @@
     {
       "no": "D427",
       "name": "",
-      "company": "公交集团",
+      "company": "公交集团·第四营运公司",
       "shard": "jt/b38.json",
       "osrmDirs": [
         "0"
@@ -1670,7 +1670,7 @@
     {
       "no": "D477",
       "name": "",
-      "company": "公交集团",
+      "company": "公交集团·第四营运公司",
       "shard": "jt/b51.json",
       "osrmDirs": [
         "0"
@@ -1697,7 +1697,7 @@
     {
       "no": "D502",
       "name": "",
-      "company": "公交集团",
+      "company": "公交集团·第五营运公司",
       "shard": "jt/b28.json",
       "osrmDirs": [
         "0"
@@ -1706,7 +1706,7 @@
     {
       "no": "D503",
       "name": "",
-      "company": "公交集团",
+      "company": "公交集团·第五营运公司",
       "shard": "jt/b47.json",
       "osrmDirs": [
         "0"
@@ -1724,7 +1724,7 @@
     {
       "no": "D514",
       "name": "",
-      "company": "公交集团",
+      "company": "公交集团·第五营运公司",
       "shard": "jt/b23.json",
       "osrmDirs": [
         "0"
@@ -1733,7 +1733,7 @@
     {
       "no": "D517",
       "name": "",
-      "company": "公交集团",
+      "company": "公交集团·第五营运公司",
       "shard": "jt/b42.json",
       "osrmDirs": [
         "0"
@@ -1742,7 +1742,7 @@
     {
       "no": "D520",
       "name": "",
-      "company": "公交集团",
+      "company": "公交集团·第五营运公司",
       "shard": "jt/b48.json",
       "osrmDirs": [
         "0"
@@ -1751,7 +1751,7 @@
     {
       "no": "D524",
       "name": "",
-      "company": "公交集团",
+      "company": "公交集团·第五营运公司",
       "shard": "jt/b60.json",
       "osrmDirs": [
         "0"
@@ -1760,7 +1760,7 @@
     {
       "no": "D526",
       "name": "",
-      "company": "公交集团",
+      "company": "公交集团·第五营运公司",
       "shard": "jt/b34.json",
       "osrmDirs": [
         "0"
@@ -1769,7 +1769,7 @@
     {
       "no": "D528",
       "name": "",
-      "company": "公交集团",
+      "company": "公交集团·第五营运公司",
       "shard": "jt/b08.json",
       "osrmDirs": [
         "0"
@@ -1778,7 +1778,7 @@
     {
       "no": "D533",
       "name": "",
-      "company": "公交集团",
+      "company": "公交集团·第五营运公司",
       "shard": "jt/b00.json",
       "osrmDirs": [
         "0"
@@ -1787,7 +1787,7 @@
     {
       "no": "D535",
       "name": "",
-      "company": "公交集团",
+      "company": "公交集团·第五营运公司",
       "shard": "jt/b50.json",
       "osrmDirs": [
         "0"
@@ -1796,7 +1796,7 @@
     {
       "no": "D543",
       "name": "",
-      "company": "公交集团",
+      "company": "公交集团·第五营运公司",
       "shard": "jt/b51.json",
       "osrmDirs": [
         "0"
@@ -1805,7 +1805,7 @@
     {
       "no": "D547",
       "name": "",
-      "company": "公交集团",
+      "company": "公交集团·第五营运公司",
       "shard": "jt/b63.json",
       "osrmDirs": [
         "0"
@@ -1814,7 +1814,7 @@
     {
       "no": "D549",
       "name": "",
-      "company": "公交集团",
+      "company": "公交集团·第五营运公司",
       "shard": "jt/b49.json",
       "osrmDirs": [
         "0"
@@ -1823,7 +1823,7 @@
     {
       "no": "D556",
       "name": "",
-      "company": "公交集团",
+      "company": "公交集团·第五营运公司",
       "shard": "jt/b41.json",
       "osrmDirs": [
         "0"
@@ -1832,7 +1832,7 @@
     {
       "no": "D591",
       "name": "",
-      "company": "公交集团",
+      "company": "公交集团·第五营运公司",
       "shard": "jt/b00.json",
       "osrmDirs": [
         "0"
@@ -1841,7 +1841,7 @@
     {
       "no": "D598",
       "name": "",
-      "company": "公交集团",
+      "company": "公交集团·第五营运公司",
       "shard": "jt/b43.json",
       "osrmDirs": [
         "0"
@@ -1850,7 +1850,7 @@
     {
       "no": "D600",
       "name": "",
-      "company": "公交集团",
+      "company": "公交集团·第六营运公司",
       "shard": "jt/b23.json",
       "osrmDirs": [
         "0"
@@ -1859,7 +1859,7 @@
     {
       "no": "D632",
       "name": "",
-      "company": "公交集团",
+      "company": "公交集团·第六营运公司",
       "shard": "jt/b34.json",
       "osrmDirs": [
         "0"
@@ -1868,7 +1868,7 @@
     {
       "no": "D635",
       "name": "",
-      "company": "公交集团",
+      "company": "公交集团·第六营运公司",
       "shard": "jt/b03.json",
       "osrmDirs": [
         "0"
@@ -1877,7 +1877,7 @@
     {
       "no": "D638",
       "name": "",
-      "company": "公交集团",
+      "company": "公交集团·第六营运公司",
       "shard": "jt/b20.json",
       "osrmDirs": [
         "0"
@@ -1895,7 +1895,7 @@
     {
       "no": "D643",
       "name": "",
-      "company": "公交集团",
+      "company": "公交集团·第六营运公司",
       "shard": "jt/b06.json",
       "osrmDirs": [
         "0"
@@ -1904,7 +1904,7 @@
     {
       "no": "D644",
       "name": "",
-      "company": "公交集团",
+      "company": "公交集团·第六营运公司",
       "shard": "jt/b63.json",
       "osrmDirs": [
         "0"
@@ -1931,7 +1931,7 @@
     {
       "no": "D648",
       "name": "",
-      "company": "公交集团",
+      "company": "公交集团·第六营运公司",
       "shard": "jt/b11.json",
       "osrmDirs": [
         "0"
@@ -1940,7 +1940,7 @@
     {
       "no": "D650",
       "name": "",
-      "company": "公交集团",
+      "company": "公交集团·第六营运公司",
       "shard": "jt/b10.json",
       "osrmDirs": [
         "0"
@@ -1958,7 +1958,7 @@
     {
       "no": "D652",
       "name": "",
-      "company": "公交集团",
+      "company": "公交集团·第六营运公司",
       "shard": "jt/b36.json",
       "osrmDirs": [
         "0"
@@ -2039,7 +2039,7 @@
     {
       "no": "D666",
       "name": "",
-      "company": "公交集团",
+      "company": "公交集团·第六营运公司",
       "shard": "jt/b39.json",
       "osrmDirs": [
         "0"
@@ -2048,7 +2048,7 @@
     {
       "no": "D667",
       "name": "",
-      "company": "公交集团",
+      "company": "公交集团·第六营运公司",
       "shard": "jt/b20.json",
       "osrmDirs": [
         "0"
@@ -2102,7 +2102,7 @@
     {
       "no": "D688",
       "name": "",
-      "company": "公交集团",
+      "company": "公交集团·第六营运公司",
       "shard": "jt/b07.json",
       "osrmDirs": [
         "0"
@@ -2111,7 +2111,7 @@
     {
       "no": "D689",
       "name": "",
-      "company": "公交集团",
+      "company": "公交集团·第六营运公司",
       "shard": "jt/b52.json",
       "osrmDirs": [
         "0"
@@ -2120,7 +2120,7 @@
     {
       "no": "D690",
       "name": "",
-      "company": "公交集团",
+      "company": "公交集团·第六营运公司",
       "shard": "jt/b38.json",
       "osrmDirs": [
         "0"
@@ -2129,7 +2129,7 @@
     {
       "no": "D691",
       "name": "",
-      "company": "公交集团",
+      "company": "公交集团·第六营运公司",
       "shard": "jt/b57.json",
       "osrmDirs": [
         "0"
@@ -2147,7 +2147,7 @@
     {
       "no": "D693",
       "name": "",
-      "company": "公交集团",
+      "company": "公交集团·第六营运公司",
       "shard": "jt/b19.json",
       "osrmDirs": [
         "0"
@@ -2156,7 +2156,7 @@
     {
       "no": "D694",
       "name": "",
-      "company": "公交集团",
+      "company": "公交集团·第六营运公司",
       "shard": "jt/b50.json",
       "osrmDirs": [
         "0"
@@ -2183,7 +2183,7 @@
     {
       "no": "D700",
       "name": "",
-      "company": "公交集团",
+      "company": "公交集团·第七营运公司",
       "shard": "jt/b44.json",
       "osrmDirs": [
         "0"
@@ -2192,7 +2192,7 @@
     {
       "no": "D701",
       "name": "",
-      "company": "公交集团",
+      "company": "公交集团·第七营运公司",
       "shard": "jt/b63.json",
       "osrmDirs": [
         "0"
@@ -2201,7 +2201,7 @@
     {
       "no": "D702",
       "name": "",
-      "company": "公交集团",
+      "company": "公交集团·第七营运公司",
       "shard": "jt/b18.json",
       "osrmDirs": [
         "0"
@@ -2210,7 +2210,7 @@
     {
       "no": "D703",
       "name": "",
-      "company": "公交集团",
+      "company": "公交集团·第七营运公司",
       "shard": "jt/b37.json",
       "osrmDirs": [
         "0"
@@ -2219,7 +2219,7 @@
     {
       "no": "D704",
       "name": "",
-      "company": "公交集团",
+      "company": "公交集团·第七营运公司",
       "shard": "jt/b32.json",
       "osrmDirs": [
         "0"
@@ -2228,7 +2228,7 @@
     {
       "no": "D706",
       "name": "",
-      "company": "公交集团",
+      "company": "公交集团·第七营运公司",
       "shard": "jt/b06.json",
       "osrmDirs": [
         "0"
@@ -2237,7 +2237,7 @@
     {
       "no": "D707",
       "name": "",
-      "company": "公交集团",
+      "company": "公交集团·第七营运公司",
       "shard": "jt/b25.json",
       "osrmDirs": [
         "0"
@@ -2255,7 +2255,7 @@
     {
       "no": "D710",
       "name": "",
-      "company": "公交集团",
+      "company": "公交集团·第七营运公司",
       "shard": "jt/b53.json",
       "osrmDirs": [
         "0"
@@ -2264,7 +2264,7 @@
     {
       "no": "D714",
       "name": "",
-      "company": "公交集团",
+      "company": "公交集团·第七营运公司",
       "shard": "jt/b41.json",
       "osrmDirs": [
         "0"
@@ -2273,7 +2273,7 @@
     {
       "no": "D719",
       "name": "",
-      "company": "公交集团",
+      "company": "公交集团·第七营运公司",
       "shard": "jt/b58.json",
       "osrmDirs": [
         "0"
@@ -2282,7 +2282,7 @@
     {
       "no": "D720",
       "name": "",
-      "company": "公交集团",
+      "company": "公交集团·第七营运公司",
       "shard": "jt/b62.json",
       "osrmDirs": [
         "0"
@@ -2291,7 +2291,7 @@
     {
       "no": "D721",
       "name": "",
-      "company": "公交集团",
+      "company": "公交集团·第七营运公司",
       "shard": "jt/b17.json",
       "osrmDirs": [
         "0"
@@ -2300,7 +2300,7 @@
     {
       "no": "D722",
       "name": "",
-      "company": "公交集团",
+      "company": "公交集团·第七营运公司",
       "shard": "jt/b24.json",
       "osrmDirs": [
         "0"
@@ -2309,7 +2309,7 @@
     {
       "no": "D723",
       "name": "",
-      "company": "公交集团",
+      "company": "公交集团·第七营运公司",
       "shard": "jt/b43.json",
       "osrmDirs": [
         "0"
@@ -2318,7 +2318,7 @@
     {
       "no": "D724",
       "name": "",
-      "company": "公交集团",
+      "company": "公交集团·第七营运公司",
       "shard": "jt/b10.json",
       "osrmDirs": [
         "0"
@@ -2327,7 +2327,7 @@
     {
       "no": "D725",
       "name": "",
-      "company": "公交集团",
+      "company": "公交集团·第七营运公司",
       "shard": "jt/b29.json",
       "osrmDirs": [
         "0"
@@ -2336,7 +2336,7 @@
     {
       "no": "D727",
       "name": "",
-      "company": "公交集团",
+      "company": "公交集团·第七营运公司",
       "shard": "jt/b55.json",
       "osrmDirs": [
         "0"
@@ -2345,7 +2345,7 @@
     {
       "no": "D728",
       "name": "",
-      "company": "公交集团",
+      "company": "公交集团·第七营运公司",
       "shard": "jt/b38.json",
       "osrmDirs": [
         "0"
@@ -2363,7 +2363,7 @@
     {
       "no": "D730",
       "name": "",
-      "company": "公交集团",
+      "company": "公交集团·第七营运公司",
       "shard": "jt/b07.json",
       "osrmDirs": [
         "0"
@@ -2372,7 +2372,7 @@
     {
       "no": "D732",
       "name": "",
-      "company": "公交集团",
+      "company": "公交集团·第七营运公司",
       "shard": "jt/b45.json",
       "osrmDirs": [
         "0"
@@ -2381,7 +2381,7 @@
     {
       "no": "D739",
       "name": "",
-      "company": "公交集团",
+      "company": "公交集团·第七营运公司",
       "shard": "jt/b28.json",
       "osrmDirs": [
         "0"
@@ -2390,7 +2390,7 @@
     {
       "no": "D742",
       "name": "",
-      "company": "公交集团",
+      "company": "公交集团·第七营运公司",
       "shard": "jt/b14.json",
       "osrmDirs": [
         "0"
@@ -2399,7 +2399,7 @@
     {
       "no": "D744",
       "name": "",
-      "company": "公交集团",
+      "company": "公交集团·第七营运公司",
       "shard": "jt/b52.json",
       "osrmDirs": [
         "0"
@@ -2417,7 +2417,7 @@
     {
       "no": "D750",
       "name": "",
-      "company": "公交集团",
+      "company": "公交集团·第七营运公司",
       "shard": "jt/b49.json",
       "osrmDirs": [
         "0"
@@ -2444,7 +2444,7 @@
     {
       "no": "D761",
       "name": "",
-      "company": "公交集团",
+      "company": "公交集团·第七营运公司",
       "shard": "jt/b13.json",
       "osrmDirs": [
         "0"
@@ -2480,7 +2480,7 @@
     {
       "no": "D789",
       "name": "",
-      "company": "公交集团",
+      "company": "公交集团·第七营运公司",
       "shard": "jt/b31.json",
       "osrmDirs": [
         "0"
@@ -2516,7 +2516,7 @@
     {
       "no": "D1123",
       "name": "",
-      "company": "公交集团",
+      "company": "公交集团·第一营运公司",
       "shard": "jt/b34.json",
       "osrmDirs": [
         "0"
@@ -2525,7 +2525,7 @@
     {
       "no": "D1212",
       "name": "",
-      "company": "公交集团",
+      "company": "公交集团·第一营运公司",
       "shard": "jt/b63.json",
       "osrmDirs": [
         "0"
@@ -2534,7 +2534,7 @@
     {
       "no": "D1221",
       "name": "",
-      "company": "公交集团",
+      "company": "公交集团·第一营运公司",
       "shard": "jt/b01.json",
       "osrmDirs": [
         "0"
@@ -2543,7 +2543,7 @@
     {
       "no": "D1222",
       "name": "",
-      "company": "公交集团",
+      "company": "公交集团·第一营运公司",
       "shard": "jt/b08.json",
       "osrmDirs": [
         "0"
@@ -2552,7 +2552,7 @@
     {
       "no": "D1223",
       "name": "",
-      "company": "公交集团",
+      "company": "公交集团·第一营运公司",
       "shard": "jt/b27.json",
       "osrmDirs": [
         "0"
@@ -2570,7 +2570,7 @@
     {
       "no": "D1230",
       "name": "",
-      "company": "公交集团",
+      "company": "公交集团·第一营运公司",
       "shard": "jt/b55.json",
       "osrmDirs": [
         "0"
@@ -2579,7 +2579,7 @@
     {
       "no": "D1292",
       "name": "",
-      "company": "公交集团",
+      "company": "公交集团·第一营运公司",
       "shard": "jt/b55.json",
       "osrmDirs": [
         "0"
@@ -2588,7 +2588,7 @@
     {
       "no": "D1301",
       "name": "",
-      "company": "公交集团",
+      "company": "公交集团·第一营运公司",
       "shard": "jt/b52.json",
       "osrmDirs": [
         "0"
@@ -2615,7 +2615,7 @@
     {
       "no": "D1304",
       "name": "",
-      "company": "公交集团",
+      "company": "公交集团·第一营运公司",
       "shard": "jt/b59.json",
       "osrmDirs": [
         "0"
@@ -2624,7 +2624,7 @@
     {
       "no": "D1305",
       "name": "",
-      "company": "公交集团",
+      "company": "公交集团·第一营运公司",
       "shard": "jt/b40.json",
       "osrmDirs": [
         "0"
@@ -2651,7 +2651,7 @@
     {
       "no": "D1750",
       "name": "",
-      "company": "公交集团",
+      "company": "公交集团·第一营运公司",
       "shard": "jt/b22.json",
       "osrmDirs": [
         "0"
@@ -2669,7 +2669,7 @@
     {
       "no": "D2517",
       "name": "",
-      "company": "公交集团",
+      "company": "公交集团·第二营运公司",
       "shard": "jt/b10.json",
       "osrmDirs": [
         "0"
@@ -2714,7 +2714,7 @@
     {
       "no": "D5194",
       "name": "",
-      "company": "公交集团",
+      "company": "公交集团·第五营运公司",
       "shard": "jt/b60.json",
       "osrmDirs": [
         "0",
@@ -2734,7 +2734,7 @@
     {
       "no": "D5811",
       "name": "",
-      "company": "公交集团",
+      "company": "公交集团·第五营运公司",
       "shard": "jt/b36.json",
       "osrmDirs": [
         "1"
@@ -2743,7 +2743,7 @@
     {
       "no": "D5813",
       "name": "",
-      "company": "公交集团",
+      "company": "公交集团·第五营运公司",
       "shard": "jt/b10.json",
       "osrmDirs": [
         "1"
@@ -2772,7 +2772,7 @@
     {
       "no": "D6522",
       "name": "",
-      "company": "公交集团",
+      "company": "公交集团·第六营运公司",
       "shard": "jt/b34.json",
       "osrmDirs": [
         "1"
@@ -2781,7 +2781,7 @@
     {
       "no": "D6524",
       "name": "",
-      "company": "公交集团",
+      "company": "公交集团·第六营运公司",
       "shard": "jt/b48.json",
       "osrmDirs": [
         "0",
@@ -2791,7 +2791,7 @@
     {
       "no": "D6532",
       "name": "",
-      "company": "公交集团",
+      "company": "公交集团·第六营运公司",
       "shard": "jt/b31.json",
       "osrmDirs": [
         "0",
@@ -2801,7 +2801,7 @@
     {
       "no": "D6535",
       "name": "",
-      "company": "公交集团",
+      "company": "公交集团·第六营运公司",
       "shard": "jt/b38.json",
       "osrmDirs": [
         "0"
@@ -2810,7 +2810,7 @@
     {
       "no": "D6536",
       "name": "",
-      "company": "公交集团",
+      "company": "公交集团·第六营运公司",
       "shard": "jt/b19.json",
       "osrmDirs": [
         "0"
@@ -3242,7 +3242,7 @@
     {
       "no": "K583",
       "name": "",
-      "company": "公交集团",
+      "company": "公交集团·第五营运公司",
       "shard": "jt/b52.json",
       "osrmDirs": [
         "0"
@@ -3260,7 +3260,7 @@
     {
       "no": "K610",
       "name": "",
-      "company": "公交集团",
+      "company": "公交集团·第六营运公司",
       "shard": "jt/b61.json",
       "osrmDirs": [
         "0"
@@ -3359,7 +3359,7 @@
     {
       "no": "YX10",
       "name": "",
-      "company": "公交集团",
+      "company": "公交集团·第七营运公司",
       "shard": "jt/b45.json",
       "osrmDirs": [
         "0",
@@ -3379,7 +3379,7 @@
     {
       "no": "YX518",
       "name": "",
-      "company": "公交集团",
+      "company": "公交集团·第五营运公司",
       "shard": "jt/b10.json",
       "osrmDirs": [
         "0",
@@ -3389,7 +3389,7 @@
     {
       "no": "YX610",
       "name": "",
-      "company": "公交集团",
+      "company": "公交集团·第六营运公司",
       "shard": "jt/b15.json",
       "osrmDirs": [
         "0",
@@ -3399,7 +3399,7 @@
     {
       "no": "YX703",
       "name": "",
-      "company": "公交集团",
+      "company": "公交集团·第二营运公司",
       "shard": "jt/b56.json",
       "osrmDirs": [
         "0",

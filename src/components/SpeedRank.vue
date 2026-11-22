@@ -1,11 +1,13 @@
 <template>
-  <!-- 车速榜浮窗：全市态右上角。不带遮罩，开窗时地图仍可拖拽缩放 -->
-  <view class="rank-card" :class="{ folded: folded }">
-    <!-- 标题整行可点折叠，折叠态本机记忆；关闭按钮单独 stop 避免误触 -->
+  <!-- 车速榜浮窗：全市态右上角。不带遮罩，开窗时地图仍可拖拽缩放；
+       拖动过位置后由 pos 决定 left/top（父组件持久化），未拖动时走 CSS 默认定位 -->
+  <view class="rank-card" :class="{ folded: folded, stacked: stacked }" :style="cardStyle">
+    <!-- 标题整行可点折叠，折叠态本机记忆；grip 单独拖动、关闭按钮单独 stop 避免误触 -->
     <view class="rank-head" :title="folded ? '展开车速榜' : '折叠车速榜'" @click="toggleFold">
+      <text class="rk-grip" title="按住拖动窗口" @click.stop>⣿</text>
       <view class="rank-title-wrap">
         <text class="rank-title">🏁 车速榜</text>
-        <text class="rank-sub">{{ stampText }} · 全局 {{ total }} 辆</text>
+        <text class="rank-sub">{{ mode === 'line' ? lineStampText + ' · 线路 ' + (lineNo || '—') : stampText + ' · 全局 ' + total + ' 辆' }}</text>
       </view>
       <view class="rank-head-ops" @click.stop>
         <!-- 复制榜单：档位（文字 / Excel / 图片）与全站共享，左半按当前档位复制 -->
@@ -16,6 +18,25 @@
     </view>
 
     <view v-show="!folded" class="rank-body">
+      <!-- 榜单维度：单车榜 / 线路榜（整条线路营运车速）-->
+      <view class="rank-modes">
+        <view class="rank-mode" :class="{ on: mode === 'bus' }" @click="onMode('bus')">单车榜</view>
+        <view class="rank-mode" :class="{ on: mode === 'line' }" @click="onMode('line')">线路榜</view>
+      </view>
+      <!-- 线路榜：输入线路号 → 列出该线路在运车辆的车速（高→低）-->
+      <view class="rk-line-query" v-if="mode === 'line'">
+        <input
+          class="rk-line-input"
+          v-model="lineNo"
+          type="text"
+          placeholder="输入线路号，如 337"
+          confirm-type="search"
+          @input="onLineTyping"
+          @confirm="onLineInput"
+        />
+        <text class="rk-line-go" :class="{ busy: lineFetching }" @click="onLineInput">{{ lineFetching ? '查询中' : '查询' }}</text>
+      </view>
+
       <!-- 档位：10 / 20 / 50 名自由切换 -->
       <view class="rank-limits">
         <view
@@ -27,8 +48,20 @@
         >前 {{ n }} 名</view>
       </view>
 
-      <!-- 空态：还没拉过全市快照 -->
-      <view class="rank-empty" v-if="!hasData">
+      <!-- 空态：线路榜未输号 / 查询中 / 该线路无在运车 / 还没拉过全市快照 -->
+      <view class="rank-empty" v-if="mode === 'line' && !lineNo.trim()">
+        <text class="rank-empty-big">🔢</text>
+        <text class="rank-empty-txt">输入线路号，查看该线路车辆的营运车速（高→低）</text>
+      </view>
+      <view class="rank-empty" v-else-if="mode === 'line' && lineFetching">
+        <text class="rank-empty-big">⏳</text>
+        <text class="rank-empty-txt">正在查询 {{ lineNo }} 路的在运车辆…</text>
+      </view>
+      <view class="rank-empty" v-else-if="lineNo.trim() && !hasData && !busy">
+        <text class="rank-empty-big">🚌</text>
+        <text class="rank-empty-txt">{{ lineNo }} 路当前无在运车辆（{{ lineStampText }}）</text>
+      </view>
+      <view class="rank-empty" v-else-if="!hasData">
         <text class="rank-empty-big">🚌</text>
         <text class="rank-empty-txt">{{ busy ? '全网扫描中，稍候即可看到榜单…' : '还没有全市车辆快照，点控制卡的「↻ 重扫」拉取' }}</text>
       </view>
@@ -45,7 +78,7 @@
           <view class="rk-rank">
             <text class="rk-no">{{ r.rank }}</text>
           </view>
-          <!-- 主体两行：① 线路 / 方向 / 自编号（车主标识）② 走向 · 公司 · 时刻（次要信息合并） -->
+          <!-- 主体两行：① 线路 / 方向 / 自编号 ② 走向 · 公司 · 时刻（次要信息合并） -->
           <view class="rk-main">
             <view class="rk-line1">
               <text class="rk-line">{{ r.no }}</text>
@@ -61,7 +94,7 @@
               <text class="rk-time">{{ r.time }}</text>
             </view>
           </view>
-          <!-- 速度：榜单主指标，右侧大数字；快慢用左侧细色条表达，数字统一高亮避免满屏红字像报警 -->
+          <!-- 速度：榜单主指标，右侧大数字 -->
           <view class="rk-speed-wrap">
             <text class="rk-band" :style="{ background: bandColor(r.band) }"></text>
             <text class="rk-speed">{{ r.speed }}</text>
@@ -70,7 +103,7 @@
           </view>
         </view>
         <view class="rank-foot">
-          <text>按当前快照车速从高到低排序 · 点行看详情并定位</text>
+          <text>{{ mode === 'line' ? lineNo + ' 路在运车辆车速从高到低 · 共 ' + lineTotal + ' 辆 · 点行定位' : '按当前快照车速从高到低排序 · 点行看详情并定位' }}</text>
           <text v-if="driftCount" class="rank-foot-warn">⚠ {{ driftCount }} 辆疑似 GPS 漂移（&gt;{{ driftSpeed }} km/h），保留仅供参考</text>
         </view>
       </view>
@@ -79,8 +112,9 @@
 </template>
 
 <script>
-import { RANK_LIMITS, DEFAULT_RANK_LIMIT, DRIFT_SPEED, rankBySpeed } from '../utils/speedRank.js'
-import { SPEED_BANDS } from '../utils/cityBus.js'
+import { RANK_LIMITS, DEFAULT_RANK_LIMIT, DRIFT_SPEED, rankBySpeed, rankByLine } from '../utils/speedRank.js'
+import { bindFloatDrag } from '../utils/panelPos.js'
+import { SPEED_BANDS, fetchLineVehicles } from '../utils/cityBus.js'
 import { formatBusNo, onBusNumberReady } from '../utils/busNumber.js'
 import { loadLineAsset, assetDir } from '../utils/lineAsset.js'
 import { distance } from '../utils/geo.js'
@@ -89,6 +123,8 @@ import CopyPill from './CopyPill.vue'
 
 const RANK_LIMIT_KEY = 'whbis:rank-limit'
 const RANK_FOLD_KEY = 'whbis:rank-folded'
+const RANK_MODE_KEY = 'whbis:rank-mode' // 'bus' 单车榜 / 'line' 线路榜
+const RANK_LINE_KEY = 'whbis:rank-line-no' // 线路榜的线路号输入，二次打开恢复
 
 export default {
   name: 'SpeedRank',
@@ -99,25 +135,52 @@ export default {
     // 快照元信息 { at, count, ... }
     meta: { type: Object, default: null },
     busy: { type: Boolean, default: false },
+    // 与自编号查车面板同时打开时压缩到上半区，避免两块浮窗重叠
+    stacked: { type: Boolean, default: false },
+    // 拖动后的位置 {x,y}（父组件持久化）；未拖动时为 null，走 CSS 默认定位
+    pos: { type: Object, default: null },
   },
   data() {
     return {
       limits: RANK_LIMITS,
       limit: DEFAULT_RANK_LIMIT,
+      mode: 'bus', // 'bus'=单车榜 / 'line'=线路榜（按线路号查在运车辆车速）
+      lineNo: '', // 线路榜查询的线路号（本机记忆）
       folded: false,
       driftSpeed: DRIFT_SPEED,
       mapVersion: 0,
+      _unbindDrag: null,
+      // 线路榜「查询」的单线实时结果：{ lineNo, at, buses }。只对当前输入线路发请求（1~2 个），
+      // 不碰全市快照；输入线路号变化时自动失效，回退到快照过滤。
+      lineFetched: null,
+      lineFetching: false,
       // 所处站点缓存：{ [线路号|方向]: [{stopName, latitude, longitude}] }
       // 与自编号查车同源（静态线路资产），榜单变化时异步预取，复制时同步取最近站
       stopCache: {},
     }
   },
   computed: {
+    cardStyle() {
+      if (!this.pos) return null
+      return { left: this.pos.x + 'px', top: this.pos.y + 'px', right: 'auto' }
+    },
+    // 线路榜优先用「查询」按钮拉到的该线路实时结果；否则回退全市快照本地过滤
+    lineSourceBuses() {
+      const f = this.lineFetched
+      if (!f) return this.buses
+      // 只在查询到的线路号与当前输入一致时采用，避免换号后仍显示旧线路车
+      const norm = (v) => String(v == null ? '' : v).trim().replace(/路$/, '').toUpperCase()
+      const same = norm(this.lineNo) === norm(f.lineNo)
+      return same ? f.buses : this.buses
+    },
     result() {
-      return rankBySpeed(this.buses, this.limit)
+      return this.mode === 'line'
+        ? rankByLine(this.lineSourceBuses, this.lineNo, this.limit)
+        : rankBySpeed(this.buses, this.limit)
     },
     rows() { return this.result.rows },
     total() { return this.result.total },
+    lineTotal() { return this.result.lineTotal || 0 },
     hasData() { return this.result.hasData },
     driftCount() { return this.result.driftCount },
     // 明确标注「快照时刻」，不伪装成逐秒实时
@@ -127,6 +190,16 @@ export default {
       const hh = (n) => String(n).padStart(2, '0')
       return `${hh(at.getHours())}:${hh(at.getMinutes())}:${hh(at.getSeconds())} 快照`
     },
+    // 线路榜单线查询时刻：点过「查询」用该线路的实时拉取时刻，否则沿用全市快照
+    lineStampText() {
+      const f = this.lineFetched
+      if (f && f.at) {
+        const at = new Date(f.at)
+        const hh = (n) => String(n).padStart(2, '0')
+        return `${hh(at.getHours())}:${hh(at.getMinutes())}:${hh(at.getSeconds())} 单线查询`
+      }
+      return this.stampText
+    },
   },
   created() {
     // 档位与折叠态本机记忆，下次开窗沿用
@@ -134,6 +207,10 @@ export default {
       const n = Number(uni.getStorageSync(RANK_LIMIT_KEY))
       if (RANK_LIMITS.includes(n)) this.limit = n
       this.folded = uni.getStorageSync(RANK_FOLD_KEY) === true
+      const m = uni.getStorageSync(RANK_MODE_KEY)
+      if (m === 'bus' || m === 'line') this.mode = m
+      const ln = uni.getStorageSync(RANK_LINE_KEY)
+      if (ln != null) this.lineNo = String(ln)
     } catch (e) { /* 存储不可用仅本次生效 */ }
   },
   mounted() {
@@ -141,6 +218,19 @@ export default {
     this.$emit('fold', !!this.folded)
     // 完整编号映射加载完成后刷新显示
     onBusNumberReady(() => { this.mapVersion++ })
+    // 标题栏 grip 拖动：位置交给父组件持久化
+    this.$nextTick(() => {
+      const root = this.$el
+      const grip = root && root.querySelector('.rk-grip')
+      if (grip && root) {
+        this._unbindDrag = bindFloatDrag(grip, root, (pos, phase) => {
+          this.$emit('move', pos, phase)
+        })
+      }
+    })
+  },
+  beforeUnmount() {
+    if (this._unbindDrag) { this._unbindDrag(); this._unbindDrag = null }
   },
   watch: {
     // 榜单行变化时异步预取涉及线路的站点明细（复制到来的瞬间必须同步，不能等请求）
@@ -162,6 +252,35 @@ export default {
       if (!RANK_LIMITS.includes(n) || n === this.limit) return
       this.limit = n
       try { uni.setStorageSync(RANK_LIMIT_KEY, n) } catch (e) { /* 忽略 */ }
+    },
+    onMode(m) {
+      if ((m !== 'bus' && m !== 'line') || m === this.mode) return
+      this.mode = m
+      try { uni.setStorageSync(RANK_MODE_KEY, m) } catch (e) { /* 忽略 */ }
+    },
+    // 输入中：只记本机、让旧的查询结果失效（换号后回退到快照过滤），不每敲一键就发请求
+    onLineTyping() {
+      try { uni.setStorageSync(RANK_LINE_KEY, this.lineNo) } catch (e) { /* 忽略 */ }
+      if (this.lineFetched) this.lineFetched = null
+    },
+    // 线路榜「查询」：只针对当前输入的线路重发请求（该线路各方向，1~2 个），
+    // 不触发全市扫描；重复点击就重新拉这一条线。输入为空则清空结果。
+    async onLineInput() {
+      try { uni.setStorageSync(RANK_LINE_KEY, this.lineNo) } catch (e) { /* 忽略 */ }
+      const no = String(this.lineNo || '').trim()
+      if (!no) { this.lineFetched = null; return }
+      if (this.lineFetching) return
+      this.lineFetching = true
+      try {
+        const res = await fetchLineVehicles(no)
+        // 请求期间用户可能又改了线路号：只接收与当前输入一致的结果
+        const cur = String(this.lineNo || '').trim()
+        if (res && (cur === no || cur === res.lineNo)) this.lineFetched = { lineNo: no, at: res.at, buses: res.buses }
+      } catch (e) {
+        // 单线查询失败：保留上一次结果，不打扰用户（下次点查询可重试）
+      } finally {
+        this.lineFetching = false
+      }
     },
     bandColor(band) {
       const b = SPEED_BANDS[band]
@@ -231,6 +350,7 @@ export default {
         return
       }
       const dirName = (d) => (d === 0 ? '上行' : d === 1 ? '下行' : '—')
+      const isLine = this.mode === 'line'
       const rows = this.rows.map((r) => [
         String(r.rank),
         r.no,
@@ -245,12 +365,12 @@ export default {
         r.drift ? '疑似漂移' : '',
       ])
       copyTable({
-        title: `车速榜 前 ${this.limit} 名 · ${this.stampText} · 全局 ${this.total} 辆`,
+        title: `${isLine ? this.lineNo + ' 路车速榜' : '车速榜'} 前 ${this.limit} 名 · ${this.stampText} · ${isLine ? '该线路 ' + this.lineTotal + ' 辆在运' : '全局 ' + this.total + ' 辆'}`,
         columns: ['名次', '线路', '方向', '自编号', '车速(km/h)', '走向', '营运公司', '所处站点', '到站状态', 'GPS时刻', '备注'],
         rows,
-        toast: `已复制车速榜前 ${this.limit} 名`,
-        imageToast: `已复制车速榜前 ${this.limit} 名为图片`,
-        excelToast: `已复制车速榜前 ${this.limit} 名为 Excel 表格`,
+        toast: `已复制${isLine ? this.lineNo + ' 路' : ''}车速榜前 ${this.limit} 名`,
+        imageToast: `已复制${isLine ? this.lineNo + ' 路' : ''}车速榜前 ${this.limit} 名为图片`,
+        excelToast: `已复制${isLine ? this.lineNo + ' 路' : ''}车速榜前 ${this.limit} 名为 Excel 表格`,
       })
     },
   },
@@ -283,6 +403,13 @@ export default {
 .rank-card.folded {
   max-height: none;
 }
+/* 与自编号查车同时打开：车速榜压到上半区（约 34vh），查车面板接在其下方 */
+.rank-card.stacked {
+  max-height: 34vh;
+}
+.rank-card.stacked.folded {
+  max-height: none;
+}
 .rank-head {
   flex: 0 0 auto;
   display: flex;
@@ -298,6 +425,17 @@ export default {
   border-bottom: none;
 }
 .rank-head:hover .rank-title { color: #fff; }
+/* 拖动 grip：只此手柄可拖窗口，避免误触标题折叠 / 复制 / 关闭 */
+.rk-grip {
+  flex: 0 0 auto;
+  font-size: 26rpx;
+  line-height: 1;
+  color: rgba(255, 255, 255, 0.38);
+  cursor: grab;
+  user-select: none;
+  padding: 4rpx 6rpx;
+}
+.rk-grip:active { cursor: grabbing; color: var(--ac-hi); }
 .rank-title-wrap {
   display: flex;
   flex-direction: column;
@@ -348,11 +486,68 @@ export default {
   flex-direction: column;
 }
 /* 档位胶囊 */
+/* 榜单维度切换（单车榜 / 线路榜）：与档位同一视觉语言，紧贴其上 */
+.rank-modes {
+  flex: 0 0 auto;
+  display: flex;
+  gap: 10rpx;
+  padding: 16rpx 24rpx 0;
+}
+.rank-mode {
+  flex: 1;
+  text-align: center;
+  padding: 10rpx 0;
+  border-radius: 12rpx;
+  font-size: 21rpx;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.6);
+  background: rgba(255, 255, 255, 0.05);
+  border: 2rpx solid transparent;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+.rank-mode.on {
+  color: #fff;
+  background: rgba(var(--ac-rgb), 0.22);
+  border-color: rgba(var(--ac-rgb), 0.55);
+}
+/* 线路号查询行 */
+.rk-line-query {
+  flex: 0 0 auto;
+  display: flex;
+  gap: 12rpx;
+  padding: 14rpx 24rpx 0;
+}
+.rk-line-input {
+  flex: 1;
+  min-width: 0;
+  height: 60rpx;
+  padding: 0 18rpx;
+  border-radius: 12rpx;
+  background: rgba(255, 255, 255, 0.06);
+  border: 2rpx solid rgba(var(--ac-rgb), 0.35);
+  color: #fff;
+  font-size: 24rpx;
+}
+.rk-line-go {
+  flex: 0 0 auto;
+  padding: 0 26rpx;
+  height: 60rpx;
+  line-height: 60rpx;
+  border-radius: 12rpx;
+  font-size: 22rpx;
+  font-weight: 700;
+  color: #fff;
+  background: rgba(var(--ac-rgb), 0.32);
+  border: 2rpx solid rgba(var(--ac-rgb), 0.55);
+  cursor: pointer;
+}
+.rk-line-go.busy { opacity: 0.55; pointer-events: none; }
 .rank-limits {
   flex: 0 0 auto;
   display: flex;
   gap: 10rpx;
-  padding: 16rpx 24rpx 12rpx;
+  padding: 12rpx 24rpx 12rpx;
 }
 .rank-limit {
   flex: 1;
@@ -474,6 +669,21 @@ export default {
   color: #fcd34d;
   padding-left: 8rpx;
   border-left: 2rpx solid rgba(255, 255, 255, 0.1);
+}
+/* 线路榜：在运车辆数 + 平均车速 */
+.rk-count {
+  flex: 0 0 auto;
+  font-size: 18rpx;
+  font-weight: 700;
+  color: #67e8f9;
+  padding-left: 8rpx;
+  border-left: 2rpx solid rgba(255, 255, 255, 0.1);
+}
+.rk-avg {
+  flex: 0 0 auto;
+  font-size: 18rpx;
+  color: rgba(255, 255, 255, 0.55);
+  white-space: nowrap;
 }
 /* 次行：走向（弹性省略）· 公司简称 · 时刻，整行单行。完整走向放 title */
 .rk-line2 {
