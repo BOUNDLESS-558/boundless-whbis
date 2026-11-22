@@ -44,6 +44,7 @@
 - **全市卡顿优化**：拖拽 / 滚轮 / 双指的高频重绘用 `requestAnimationFrame` 合并（每帧最多一次全量投影），`renderCityNet` 上万点 SVG 拼接用 `Math.round(v*10)/10` 替代 `toFixed(1)`，卸载时取消待执行帧
 - **高德 KEY 改为双输入框 + 生效修复**：设置面板把「Key」和「安全密钥」拆成两个独立输入框（各自显隐眼睛），`settings.js` 的 `getAmapKeyPair()`/`setAmapKeyPair()` 成对读写、存储仍用 `key,secret` 兼容旧格式；修复换 KEY 不生效（旧 `window.AMap` 未清导致新 KEY 被吞，现按 `window.__whbisAmapKey` 判定并重新注入）；LineSearch 平台不匹配（Web服务 Key 用在 JS API 报 `USERKEY_PLAT_NOMATCH`）不再静默，弹明确提示；面板文案注明必须「Web端(JS API)」类型 Key
 - **线路榜单线查询失败不再误显示「无在运车辆」**：点「查询」时若该线路各方向 `/detailData` 全部失败且一辆车都没拿到（上游超时/断连），判定为请求失败而非真没车——**保留上次成功结果**、弹「单线查询失败，保留上次结果，请重试」，不把好数据替换成空；只有请求真成功返回 0 辆才显示无车；首次就没成功过时回退全市快照过滤。避免「第一次快照有车、点查询反而没车」的误判
+- **AGENTS.md 重构更新**：按当前代码状态重写——修正过时描述（页面只剩 `login`/`map`、`DIR_STYLE` 在 `LineMap.vue`、`lineCode`≠线路号、OSRM 旧缓存键已废弃、BYOK 未整体移除而是用于自绘模式官方轨迹）、新增「交付约定」（改完自动同步 README + 提交推送三分支 + merge CI 采集分叉）、高德 KEY 双输入框与类型坑、全市两窗常驻/位置记忆、线路榜单线查询与失败回退、查无此线、卡顿优化、Actions 站点来源日志与 646 修复经验；避免后续按旧条目改出新问题
 
 ### 2026-11-20
 
