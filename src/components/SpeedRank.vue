@@ -275,9 +275,16 @@ export default {
         const res = await fetchLineVehicles(no)
         // 请求期间用户可能又改了线路号：只接收与当前输入一致的结果
         const cur = String(this.lineNo || '').trim()
-        if (res && (cur === no || cur === res.lineNo)) this.lineFetched = { lineNo: no, at: res.at, buses: res.buses }
+        if (!res || (cur !== no && cur !== res.lineNo)) return
+        // 全部方向都失败且一辆车都没拿到：是请求失败，不是「这条线没车」。
+        // 绝不把上一次的好数据替换成空，否则用户看到「无在运车辆」以为没车了。
+        if (res.failed > 0 && !res.buses.length) {
+          uni.showToast({ title: '单线查询失败，保留上次结果，请重试', icon: 'none' })
+          return
+        }
+        this.lineFetched = { lineNo: no, at: res.at, buses: res.buses }
       } catch (e) {
-        // 单线查询失败：保留上一次结果，不打扰用户（下次点查询可重试）
+        uni.showToast({ title: '单线查询失败，保留上次结果，请重试', icon: 'none' })
       } finally {
         this.lineFetching = false
       }
