@@ -1,7 +1,7 @@
 {
   "city": "420100",
   "cityName": "武汉",
-  "updated": "2026-11-22T12:51:34.974Z",
+  "updated": "2026-11-22T16:57:23.441Z",
   "source": "customized.wuhanbus.com /line 枚举探测",
   "probe": {
     "from": 1,
@@ -11,15 +11,11 @@
     "scanned": 3,
     "hit": 0,
     "append": {
-      "at": "2026-11-22T12:51:34.974Z",
-      "loops": [
-        "内环",
-        "外环"
-      ],
+      "at": "2026-11-22T16:57:23.441Z",
       "from": 1,
       "to": 999,
-      "scanned": 2997,
-      "hit": 541
+      "scanned": 0,
+      "hit": 0
     }
   },
   "count": 1288,

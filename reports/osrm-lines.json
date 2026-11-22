@@ -1,5 +1,5 @@
 {
-  "updatedAt": "2026-11-22T13:04:56.954Z",
+  "updatedAt": "2026-11-22T17:11:27.868Z",
   "rule": "source=osrm 表示该方向走向由 OSRM 驾车路网近似生成，非高德公交 API 官方轨迹（API 未收录时的兜底）。",
   "total": 366,
   "lines": [
