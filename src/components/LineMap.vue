@@ -194,8 +194,8 @@
       </template>
     </view>
 
-    <!-- 鼠标悬停车辆图标的浮标：只显示自编号数字本身，鼠标离开即消失（不常驻遮挡）；
-         触屏无 hover，单击车图标直接看详情浮窗 -->
+    <!-- 鼠标悬停车辆图标的浮标：内容与编号标签模式联动（mode1=仅自编号，mode2=自编号·线路号+方向第二行），
+         鼠标离开即消失（不常驻遮挡）；触屏无 hover，单击车图标直接看详情浮窗 -->
     <view class="bus-hover" v-if="hoverTip" :style="{ left: hoverTip.x + 'px', top: hoverTip.y + 'px' }">
       <text class="bh-no">{{ hoverTip.no || '…' }}</text>
       <text class="bh-line" v-if="hoverTip.line">{{ hoverTip.line }}</text>
@@ -4327,6 +4327,11 @@ export default {
       // 拖地图时不弹浮标（否则平移路上会一路闪）
       if (this._drag && this._drag.moved) return
       if (this.cityOn) {
+        // 编号标签关（mode 0）时不弹悬停浮标
+        if (!this.cityTagMode) {
+          if (this.hoverTip) this.hoverTip = null
+          return
+        }
         // 全市态命中池换成快照里的车点；点位密，半径收到 14px，免得鼠标一滑就跳到邻车
         const pool = this.cityShown
         if (!pool.length) {
@@ -4350,12 +4355,14 @@ export default {
         const lift = this.useMap ? 30 : 20
         const page = (typeof document !== 'undefined' && document.querySelector('.lmap-page')) || host
         const pr = page.getBoundingClientRect()
+        const org = this.fmtNo(hit.bus.orgId || '')
+        const dirTxt = hit.bus.dir === 0 ? '上行' : '下行'
+        // 悬停内容与编号标签模式联动：mode1=仅自编号，mode2=自编号 · 线路号（方向在第二行）
         const tip = {
           x: Math.round(hit.p.x + r.left - pr.left),
           y: Math.round(hit.p.y + r.top - pr.top - lift),
-          no: this.fmtNo(hit.bus.orgId || ''),
-          // 全市态光有自编号不知道是哪路，补一行线路与方向
-          line: `${hit.bus.no} ${hit.bus.dir === 0 ? '上行' : '下行'}`,
+          no: this.cityTagMode === 2 ? `${org} · ${hit.bus.no || ''}` : org,
+          line: this.cityTagMode === 2 ? dirTxt : null,
         }
         const old = this.hoverTip
         if (old && old.no === tip.no && old.line === tip.line && Math.abs(old.x - tip.x) < 1 && Math.abs(old.y - tip.y) < 1) return
@@ -4382,16 +4389,25 @@ export default {
         return
       }
       // 浮标落在图标上方：原生 marker 图标底边对着坐标点，自绘圆点以坐标点为圆心
+      // 编号标签关（mode 0）时不弹悬停浮标
+      if (!this.cityTagMode) {
+        if (this.hoverTip) this.hoverTip = null
+        return
+      }
       const lift = this.useMap ? 42 : 20
       const page = (typeof document !== 'undefined' && document.querySelector('.lmap-page')) || host
       const pr = page.getBoundingClientRect()
+      const org = this.fmtNo(hit.bus.orgId || '')
+      const dirTxt = hit.bus.dir === 0 ? '上行' : '下行'
+      // 悬停内容与编号标签模式联动：mode1=仅自编号，mode2=自编号 · 线路号（方向在第二行）
       const tip = {
         x: Math.round(hit.p.x + r.left - pr.left),
         y: Math.round(hit.p.y + r.top - pr.top - lift),
-        no: this.fmtNo(hit.bus.orgId || ''),
+        no: this.cityTagMode === 2 ? `${org} · ${hit.bus.no || ''}` : org,
+        line: this.cityTagMode === 2 ? dirTxt : null,
       }
       const old = this.hoverTip
-      if (old && old.no === tip.no && Math.abs(old.x - tip.x) < 1 && Math.abs(old.y - tip.y) < 1) return
+      if (old && old.no === tip.no && old.line === tip.line && Math.abs(old.x - tip.x) < 1 && Math.abs(old.y - tip.y) < 1) return
       this.hoverTip = tip
     },
     // 定位后的扩散波（只自绘图有；原生地图靠缩放级别自明）
@@ -4775,7 +4791,7 @@ export default {
 .bus-label.edge-r {
   transform: translate(-100%, -200%);
 }
-/* 鼠标悬停车辆图标的浮标：只显示自编号数字，离开即消失（不常驻、不拦截鼠标） */
+/* 鼠标悬停车辆图标的浮标：内容与编号标签模式联动，离开即消失（不常驻、不拦截鼠标） */
 .bus-hover {
   position: absolute;
   z-index: 26;
