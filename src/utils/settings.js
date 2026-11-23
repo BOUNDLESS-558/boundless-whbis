@@ -1086,11 +1086,11 @@ export const FONT_OPTS = [
   },
   {
     key: 'amatic', label: 'Amatic SC', note: '细瘦手写英文 · 标题', family: "'Amatic SC'",
-    css: [FS5 + 'amatic-sc@7.0.0/400.css', FS5 + 'amatic-sc@7.0.0/700.css'],
+    css: [FS5 + 'amatic-sc@5.3.0/400.css', FS5 + 'amatic-sc@5.3.0/700.css'],
   },
   {
     key: 'caveat', label: 'Caveat', note: '美式手写英文 · 自然', family: "'Caveat'",
-    css: [FS5 + 'caveat@7.0.0/400.css', FS5 + 'caveat@7.0.0/700.css'],
+    css: [FS5 + 'caveat@5.3.0/400.css', FS5 + 'caveat@5.3.0/700.css'],
   },
   {
     key: 'pacifico', label: 'Pacifico', note: '流畅英文手写 · 经典', family: "'Pacifico'",
@@ -1115,11 +1115,11 @@ export const FONT_OPTS = [
   },
   {
     key: 'roboto-slab', label: 'Roboto Slab', note: '稳重衬线英文 · 标题', family: "'Roboto Slab'",
-    css: [FS5 + 'roboto-slab@7.0.0/400.css', FS5 + 'roboto-slab@7.0.0/700.css'],
+    css: [FS5 + 'roboto-slab@5.3.0/400.css', FS5 + 'roboto-slab@5.3.0/700.css'],
   },
   {
     key: 'playfair', label: 'Playfair Display', note: '时尚衬线英文 · 优雅', family: "'Playfair Display'",
-    css: [FS5 + 'playfair-display@7.0.0/400.css', FS5 + 'playfair-display@7.0.0/700.css'],
+    css: [FS5 + 'playfair-display@5.3.0/400.css', FS5 + 'playfair-display@5.3.0/700.css'],
   },
   {
     key: 'lobster', label: 'Lobster', note: '美式复古英文 · 醒目', family: "'Lobster'",
@@ -1140,7 +1140,7 @@ export const FONT_OPTS = [
   // 续增 12 档：几何无衬线 / 现代衬线 / 英文手写艺术 / 装饰粗体 / 斜体衬线
   {
     key: 'rubik', label: 'Rubik', note: '几何无衬线英文 · 现代清爽', family: "'Rubik'",
-    css: [FS5 + 'rubik@7.0.0/400.css', FS5 + 'rubik@7.0.0/500.css', FS5 + 'rubik@7.0.0/700.css'],
+    css: [FS5 + 'rubik@5.3.0/400.css', FS5 + 'rubik@5.3.0/500.css', FS5 + 'rubik@5.3.0/700.css'],
   },
   {
     key: 'merriweather', label: 'Merriweather', note: '厚重衬线英文 · 长文舒适', family: "'Merriweather'",
@@ -1148,7 +1148,7 @@ export const FONT_OPTS = [
   },
   {
     key: 'montserrat', label: 'Montserrat', note: '都市无衬线英文 · 百搭', family: "'Montserrat'",
-    css: [FS5 + 'montserrat@7.0.0/400.css', FS5 + 'montserrat@7.0.0/500.css', FS5 + 'montserrat@7.0.0/700.css'],
+    css: [FS5 + 'montserrat@5.3.0/400.css', FS5 + 'montserrat@5.3.0/500.css', FS5 + 'montserrat@5.3.0/700.css'],
   },
   {
     key: 'lato', label: 'Lato', note: '稳重无衬线英文 · 专业感', family: "'Lato'",
@@ -1160,11 +1160,11 @@ export const FONT_OPTS = [
   },
   {
     key: 'raleway', label: 'Raleway', note: '优雅纤细英文 · 时尚', family: "'Raleway'",
-    css: [FS5 + 'raleway@7.0.0/300.css', FS5 + 'raleway@7.0.0/400.css', FS5 + 'raleway@7.0.0/700.css'],
+    css: [FS5 + 'raleway@5.3.0/300.css', FS5 + 'raleway@5.3.0/400.css', FS5 + 'raleway@5.3.0/700.css'],
   },
   {
     key: 'oswald', label: 'Oswald', note: '压缩无衬线英文 · 新闻标题', family: "'Oswald'",
-    css: [FS5 + 'oswald@7.0.0/400.css', FS5 + 'oswald@7.0.0/700.css'],
+    css: [FS5 + 'oswald@5.3.0/400.css', FS5 + 'oswald@5.3.0/700.css'],
   },
   {
     key: 'dancing-script', label: 'Dancing Script', note: '流畅英文草书 · 浪漫', family: "'Dancing Script'",
@@ -1193,15 +1193,15 @@ export const FONT_OPTS = [
   // ── 饱满圆融新增 22 档 ──────────────────────────
   {
     key: 'nunito', label: 'Nunito', note: '几何圆体 · 柔和饱满', family: "'Nunito'",
-    css: [FS5 + 'nunito@7.0.0/400.css', FS5 + 'nunito@7.0.0/700.css'],
+    css: [FS5 + 'nunito@5.3.0/400.css', FS5 + 'nunito@5.3.0/700.css'],
   },
   {
     key: 'nunito-sans', label: 'Nunito Sans', note: '圆润无衬线 · 现代清爽', family: "'Nunito Sans'",
-    css: [FS5 + 'nunito-sans@7.0.0/400.css', FS5 + 'nunito-sans@7.0.0/700.css'],
+    css: [FS5 + 'nunito-sans@5.3.0/400.css', FS5 + 'nunito-sans@5.3.0/700.css'],
   },
   {
     key: 'quicksand', label: 'Quicksand', note: '圆润无衬线 · 柔和友好', family: "'Quicksand'",
-    css: [FS5 + 'quicksand@7.0.0/400.css', FS5 + 'quicksand@7.0.0/700.css'],
+    css: [FS5 + 'quicksand@5.3.0/400.css', FS5 + 'quicksand@5.3.0/700.css'],
   },
   {
     key: 'varela-round', label: 'Varela Round', note: '极简圆体 · 干净利落', family: "'Varela Round'",
@@ -1209,15 +1209,15 @@ export const FONT_OPTS = [
   },
   {
     key: 'comfortaa', label: 'Comfortaa', note: '几何圆体 · 温暖舒适', family: "'Comfortaa'",
-    css: [FS5 + 'comfortaa@7.0.0/400.css', FS5 + 'comfortaa@7.0.0/700.css'],
+    css: [FS5 + 'comfortaa@5.3.0/400.css', FS5 + 'comfortaa@5.3.0/700.css'],
   },
   {
     key: 'baloo-2', label: 'Baloo 2', note: '圆润粗体 · 标题感强', family: "'Baloo 2'",
-    css: [FS5 + 'baloo-2@7.0.0/400.css', FS5 + 'baloo-2@7.0.0/700.css'],
+    css: [FS5 + 'baloo-2@5.3.0/400.css', FS5 + 'baloo-2@5.3.0/700.css'],
   },
   {
     key: 'fredoka-one', label: 'Fredoka One', note: '圆润粗体 · 活泼醒目', family: "'Fredoka One'",
-    css: [FS5 + 'fredoka-one@7.0.0/400.css'],
+    css: [FS5 + 'fredoka-one@5.3.0/400.css'],
   },
   {
     key: 'bubblegum-sans', label: 'Bubblegum Sans', note: '圆润软体 · 亲切可爱', family: "'Bubblegum Sans'",
@@ -1229,43 +1229,43 @@ export const FONT_OPTS = [
   },
   {
     key: 'chakra-petch', label: 'Chakra Petch', note: '几何圆角 · 科技感', family: "'Chakra Petch'",
-    css: [FS5 + 'chakra-petch@7.0.0/400.css', FS5 + 'chakra-petch@7.0.0/700.css'],
+    css: [FS5 + 'chakra-petch@5.3.0/400.css', FS5 + 'chakra-petch@5.3.0/700.css'],
   },
   {
     key: 'hind', label: 'Hind', note: '圆润无衬线 · 现代平衡', family: "'Hind'",
-    css: [FS5 + 'hind@7.0.0/400.css', FS5 + 'hind@7.0.0/700.css'],
+    css: [FS5 + 'hind@5.3.0/400.css', FS5 + 'hind@5.3.0/700.css'],
   },
   {
     key: 'mada', label: 'Mada', note: '几何圆体 · 简洁有力', family: "'Mada'",
-    css: [FS5 + 'mada@7.0.0/400.css', FS5 + 'mada@7.0.0/700.css'],
+    css: [FS5 + 'mada@5.3.0/400.css', FS5 + 'mada@5.3.0/700.css'],
   },
   {
     key: 'tajawal', label: 'Tajawal', note: '几何圆体 · 优雅端庄', family: "'Tajawal'",
-    css: [FS5 + 'tajawal@7.0.0/400.css', FS5 + 'tajawal@7.0.0/700.css'],
+    css: [FS5 + 'tajawal@5.3.0/400.css', FS5 + 'tajawal@5.3.0/700.css'],
   },
   {
     key: 'almarai', label: 'Almarai', note: '圆润无衬线 · 温和舒适', family: "'Almarai'",
-    css: [FS5 + 'almarai@7.0.0/400.css', FS5 + 'almarai@7.0.0/700.css'],
+    css: [FS5 + 'almarai@5.3.0/400.css', FS5 + 'almarai@5.3.0/700.css'],
   },
   {
     key: 'boogaloo', label: 'Boogaloo', note: '圆润手写 · 轻松有趣', family: "'Boogaloo'",
-    css: [FS5 + 'boogaloo@4.0.0/400.css'],
+    css: [FS5 + 'boogaloo@5.3.0/400.css'],
   },
   {
     key: 'bungee', label: 'Bungee', note: '圆润粗体 · 厚重有力', family: "'Bungee'",
-    css: [FS5 + 'bungee@4.0.0/400.css'],
+    css: [FS5 + 'bungee@5.3.0/400.css'],
   },
   {
     key: 'passion-one', label: 'Passion One', note: '圆润粗体 · 醒目有力', family: "'Passion One'",
-    css: [FS5 + 'passion-one@7.0.0/400.css', FS5 + 'passion-one@7.0.0/700.css'],
+    css: [FS5 + 'passion-one@5.3.0/400.css', FS5 + 'passion-one@5.3.0/700.css'],
   },
   {
     key: 'cabin-sketch', label: 'Cabin Sketch', note: '圆润草图 · 有个性', family: "'Cabin Sketch'",
-    css: [FS5 + 'cabin-sketch@7.0.0/400.css', FS5 + 'cabin-sketch@7.0.0/700.css'],
+    css: [FS5 + 'cabin-sketch@5.3.0/400.css', FS5 + 'cabin-sketch@5.3.0/700.css'],
   },
   {
     key: 'patrick-hand', label: 'Patrick Hand', note: '圆润手写 · 柔和易读', family: "'Patrick Hand'",
-    css: [FS5 + 'patrick-hand@7.0.0/400.css'],
+    css: [FS5 + 'patrick-hand@5.3.0/400.css'],
   },
   {
     key: 'jua', label: 'Jua', note: '韩文圆体 · 饱满柔和', family: "'Jua'",
@@ -1273,7 +1273,7 @@ export const FONT_OPTS = [
   },
   {
     key: 'single-day', label: 'Single Day', note: '韩文圆体 · 简洁饱满', family: "'Single Day'",
-    css: [FS5 + 'single-day@4.0.0/400.css'],
+    css: [FS5 + 'single-day@5.3.1/400.css'],
   },
   {
     key: 'do-hyeon', label: 'Do Hyeon', note: '韩文圆体 · 现代有力', family: "'Do Hyeon'",
