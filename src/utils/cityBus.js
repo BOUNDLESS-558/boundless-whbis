@@ -163,8 +163,10 @@ function safeJson(s) {
 
 // 线网站序里相邻两站的距离上限（米）：超过就判为上游坐标错乱（实测有 287 路一段 79km
 // 跳到广东、D650 等定制线 50km 跨城），这种段若照画就是横穿地图的「飞线」。
-// 处置：断开成分段子路径，各自独立成线，而不是把两点硬连起来。
-const NET_JUMP_MAX_M = 2500
+// ⚠ 阈值不能太低：武汉郊区线 / 快线相邻站 2.5~8km 属正常（全库这类有 584 段），
+//   2.5km 会把大量正常线路切碎、出现「有站点却没线连」。实测 8km 是平衡点：
+//   仍拦住全部 >20km 跨城飞线，却只影响 44 段、32 个畸形方向。
+const NET_JUMP_MAX_M = 8000
 
 /** 把生成器的存储形态（lines[].dirs[].p 展平坐标串）揉成渲染友好的索引 */
 function normalizeNet(body) {
@@ -204,8 +206,9 @@ function normalizeNet(body) {
       let start = 0
       const nPts = p.length / 2
       let hadJump = false
-      // 只有 2 个站且相距 >2.5km 的定制线（D111 等）本质是坏数据：画出来就是一条跨城飞线，直接不画
-      if (nPts === 2 && gapMeters(p[0], p[1], p[2], p[3]) > NET_JUMP_MAX_M) continue
+      // 只有 2 个站且相距 >阈值的定制线（D111 等）：不画实线飞线，但标记 suspect 供渲染侧
+      // 画一条极淡虚线作为「这里有条线但坐标可疑」的提示，避免用户看到孤立站点却完全没有连线。
+      const suspect2pt = nPts === 2 && gapMeters(p[0], p[1], p[2], p[3]) > NET_JUMP_MAX_M
       for (let i = 2; i < p.length; i += 2) {
         if (gapMeters(p[i - 2], p[i - 1], p[i], p[i + 1]) > NET_JUMP_MAX_M) {
           hadJump = true
@@ -216,9 +219,10 @@ function normalizeNet(body) {
         }
       }
       if (nPts - 1 - start >= 1) ranges.push([start, nPts - 1])
-      // 有跳变但凑不出任何 ≥2 点的连续段（如 D1221 每两点都跨城）→ 整条丢弃，绝不用全长兜底
-      if (hadJump && !ranges.length) continue
-      dd.parts = ranges.length ? ranges : [[0, nPts - 1]]
+      // 有跳变但凑不出任何 ≥2 点的连续段（如 D1221 每两点都跨城）→ 标 suspect，不画实线飞线
+      if (hadJump && !ranges.length) { dd.suspect = true; dd.parts = [[0, nPts - 1]] }
+      else if (suspect2pt) { dd.suspect = true; dd.parts = [[0, nPts - 1]] }
+      else dd.parts = ranges.length ? ranges : [[0, nPts - 1]]
       // 剔除跳变产生的孤立坏点后重算包围盒：否则单个跨城错点把 bb 撑到全省，
       // 让这条线永远「在视野内」白占预算，也可能把全览缩放拽飞。
       if (ranges.length > 1) {

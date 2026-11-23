@@ -110,6 +110,7 @@
           :stroke="r.color"
           :stroke-width="r.w"
           :opacity="r.op"
+          :stroke-dasharray="r.dash || 'none'"
           stroke-linecap="round"
           stroke-linejoin="round"
         />
@@ -1486,7 +1487,7 @@ export default {
           for (let i = from; i <= to; i += step) pts.push({ latitude: d.p[i * 2 + 1], longitude: d.p[i * 2] })
           if ((to - from) % step !== 0) pts.push({ latitude: d.p[to * 2 + 1], longitude: d.p[to * 2] })
           if (pts.length < 2) continue
-          out.push({ points: pts, color: st.inner, width: this.cityFilterNo ? 5 : 2, arrowLine: false })
+          out.push({ points: pts, color: st.inner, width: this.cityFilterNo ? 5 : 2, arrowLine: false, dottedLine: !!d.suspect })
         }
       }
       return out
@@ -2643,14 +2644,20 @@ export default {
         }
       }
       // ② 主干 / 逐条层：lite 用中等粗细+较高透明度，full/filtered 用旧口径（w4）
-      // 远景未筛选：只保留淡色纹理层，不再逐条画（否则 1000+ 条 w4 直接糊屏，且白白多画一遍）
-      const drawIndividual = filtered || !fuse
+      // lite 模式任何缩放都画主干（上限 90 条），否则远景只剩淡纹理→看起来「有站没线连」；
+      // full 模式远景仍只保留淡纹理（1000+ 条 w4 会糊屏且白画一遍）。
+      const drawIndividual = filtered || !fuse || this.cityNetMode === 'lite'
       if (drawIndividual) {
         const lineW = this.cityNetMode === 'lite' && !filtered ? 2.6 : 4
         const lineOp = this.cityNetMode === 'lite' && !filtered ? 0.85 : 1
         for (const d of detailDirs) {
           if (d.n < 2) continue
-          paths.push({ key: d.code + '-' + d.dir, d: pathOf(d), color: DIR_STYLE[d.dir].svgStroke, w: lineW, op: lineOp })
+          if (d.suspect) {
+            // 坐标可疑（2 点跨城 / 全跳变）：极淡虚线提示「这条线存在但坐标不可信」，不画成实飞线
+            paths.push({ key: d.code + '-' + d.dir, d: pathOf(d), color: DIR_STYLE[d.dir].svgStroke, w: 1.2, op: 0.3, dash: '3 4' })
+          } else {
+            paths.push({ key: d.code + '-' + d.dir, d: pathOf(d), color: DIR_STYLE[d.dir].svgStroke, w: lineW, op: lineOp })
+          }
         }
       }
       this.cityNetPaths = paths
