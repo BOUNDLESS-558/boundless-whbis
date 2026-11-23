@@ -61,6 +61,10 @@ export const ACCENT_PRESETS = [
   { key: 'sky', hex: '#0ea5e9', label: '湛蓝' },
   { key: 'lime', hex: '#84cc16', label: '荧光绿' },
   { key: 'rose', hex: '#fb7185', label: '玫瑰粉' },
+  // 暖色 + 中性补充：琥珀、珊瑚红（比正红更柔和）、石板灰（深色背景上的稳重大气）
+  { key: 'amber', hex: '#f59e0b', label: '琥珀' },
+  { key: 'coral', hex: '#f97092', label: '珊瑚红' },
+  { key: 'slate', hex: '#64748b', label: '石板灰' },
 ]
 
 /** 规范成 #rrggbb 小写；非法输入返回 null */
@@ -472,6 +476,14 @@ export const FONT_OPTS = [
   {
     key: 'dingtalk', label: '钉钉进步体', note: '标题感 · 现代', family: "'DingTalk JinBuTi'",
     css: [CNFS + 'cn-fontsource-ding-talk-jin-bu-ti-regular@1.0.3/font.css'],
+  },
+  {
+    key: 'noto-sans-hinted', label: '思源柔黑', note: '柔润黑体 · 舒适易读', family: "'Noto Sans SC Hinted'",
+    css: [FS5 + 'noto-sans-sc-hinted@5.2.0/400.css', FS5 + 'noto-sans-sc-hinted@5.2.0/700.css'],
+  },
+  {
+    key: 'lobster-two', label: '洛斯特体', note: '复古手写标题 · 醒目', family: "'Lobster Two'",
+    css: [FS5 + 'lobster-two@5.1.0/400.css'],
   },
 ]
 
