@@ -907,18 +907,35 @@ export default {
         input.type = 'color'
         input.value = this.accent
         input.style.cssText = 'position:fixed;left:-9999px;top:0;width:0;height:0;opacity:0'
+        let _changed = false   // change 是否已经触发（防止 blur 与 change 双重触发）
+        let _timer = null
         input.addEventListener('input', () => {
           previewAccent(input.value) // 拖动实时预览（不落库）
         })
         input.addEventListener('change', () => {
+          _changed = true
+          clearTimeout(_timer)
           this.accent = setAccent(input.value)
           if (input.parentNode) input.parentNode.removeChild(input)
           this._acInput = null
         })
         input.addEventListener('cancel', () => {
+          clearTimeout(_timer)
           previewAccent(this.accent) // 取消：回退到已存颜色
           if (input.parentNode) input.parentNode.removeChild(input)
           this._acInput = null
+        })
+        // 兜底：部分浏览器在用户点选后、未显式 confirm/cancel 时只触发 blur 不触发 change。
+        // 用短暂延迟区分「focus 丢失但还未选择」与「用户已选完松开」，未改则应用当前值落库。
+        input.addEventListener('blur', () => {
+          if (_changed) return
+          _timer = setTimeout(() => {
+            if (!_changed) {
+              this.accent = setAccent(input.value)
+            }
+            if (input.parentNode) input.parentNode.removeChild(input)
+            this._acInput = null
+          }, 80)
         })
         document.body.appendChild(input)
         this._acInput = input
