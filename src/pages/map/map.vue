@@ -604,6 +604,27 @@ export default {
         { key: 'gray', label: '灰色' },
         { key: 'dark', label: '深暗' },
         { key: 'pastel', label: '淡彩' },
+        { key: 'neon', label: '霓虹' },
+        { key: 'earth', label: '大地' },
+        { key: 'berry', label: '浆果' },
+        { key: 'forest', label: '深林' },
+        { key: 'sky', label: '天空' },
+        { key: 'coral', label: '珊瑚' },
+        { key: 'cream', label: '奶油' },
+        { key: 'lavender', label: '薰衣' },
+        { key: 'mint', label: '薄荷' },
+        { key: 'gold', label: '金色' },
+        { key: 'rose', label: '玫瑰' },
+        { key: 'crimson', label: '深红' },
+        { key: 'olive', label: '橄榄' },
+        { key: 'navy', label: '海军' },
+        { key: 'steel', label: '钢铁' },
+        { key: 'warm-gray', label: '暖灰' },
+        { key: 'yellow', label: '亮黄' },
+        { key: 'orange', label: '橙铜' },
+        { key: 'teal', label: '青蓝' },
+        { key: 'plum', label: '梅紫' },
+        { key: 'brown', label: '棕褐' },
       ]
     },
     fontCatOptions() {
@@ -617,6 +638,7 @@ export default {
         { key: 'sans-en', label: '无衬线英文' },
         { key: 'mono', label: '等宽' },
         { key: 'display', label: '标题' },
+        { key: 'rounded', label: '圆融' },
       ]
     },
     filteredAccentPresets() {
@@ -630,6 +652,27 @@ export default {
         gray: ['slate', 'zinc-light', 'warm-gray', 'cool-gray', 'smoke', 'charcoal', 'silver-gray', 'khaki', 'taupe', 'sand'],
         dark: ['charcoal', 'smoke', 'truffle', 'chocolate', 'warm-brown', 'brick-red', 'crimson', 'wine-red', 'deep-magenta', 'navy-blue', 'midnight', 'indigo-deep', 'teal-dark', 'cyan-deep'],
         pastel: ['pale-pink', 'lavender', 'soft-lavender', 'seafoam', 'peach', 'warm-yellow', 'ivory', 'blush', 'salmon', 'mauve', 'thistle', 'periwinkle', 'celadon', 'powder-blue', 'aquamarine', 'misty-rose', 'lavender-blush'],
+        neon: ['neon-pink', 'neon-green', 'neon-cyan', 'neon-orange', 'neon-purple', 'neon-yellow', 'neon-red', 'neon-blue', 'neon-magenta', 'neon-lime', 'neon-turquoise', 'neon-salmon', 'neon-gold', 'neon-teal', 'neon-indigo'],
+        earth: ['deep-brown', 'deep-tan', 'deep-umber', 'deep-copper', 'deep-burgundy', 'deep-maroon', 'deep-olive', 'deep-teal', 'deep-navy', 'deep-charcoal', 'deep-slate', 'deep-plum', 'deep-rust', 'deep-sienna', 'deep-espresso', 'terracotta', 'burnt-sienna', 'raw-sienna', 'sandy-brown', 'peru', 'chocolate-deep', 'cocoa', 'chestnut', 'auburn', 'russet'],
+        berry: ['wine', 'grape', 'plum-deep', 'mulberry', 'blackberry', 'elderberry', 'acai', 'cranberry', 'raspberry', 'blackcurrant'],
+        forest: ['forest-deep', 'pine-deep', 'moss', 'fern', 'jungle', 'palm', 'willow', 'holly', 'ivy', 'cedar'],
+        sky: ['sky-light', 'sky-mid', 'sky-deep', 'cyan-bright', 'cyan-deep2', 'aqua', 'turquoise-light', 'teal-light', 'cerulean-light', 'sapphire', 'dodger', 'cornflower-deep', 'medium-blue', 'royal-light', 'indigo-light', 'coral-light', 'coral-deep', 'salmon-light', 'apricot', 'melon', 'tangerine', 'persimmon', 'papaya', 'guava', 'watermelon', 'cream', 'ivory-light', 'beige', 'linen', 'antique', 'navajo', 'blanched', 'wheat', 'cornsilk', 'lemon-chiffon', 'lavender-light', 'lavender-deep', 'orchid-light', 'orchid-deep', 'violet-light', 'violet-deep', 'iris', 'wisteria-deep', 'amethyst', 'grape-light', 'lavender-blush2', 'mauve-light', 'thistle-light', 'plum-light', 'magenta-light'],
+        coral: ['coral-light', 'coral-deep', 'salmon-light', 'apricot', 'melon', 'tangerine', 'persimmon', 'papaya', 'guava', 'watermelon', 'coral-light2', 'salmon-deep', 'peach-deep', 'apricot-deep', 'tangerine-deep', 'persimmon-deep', 'papaya-deep', 'guava-deep', 'watermelon-deep', 'cranberry-deep'],
+        cream: ['cream', 'ivory-light', 'beige', 'linen', 'antique', 'navajo', 'blanched', 'wheat', 'cornsilk', 'lemon-chiffon'],
+        lavender: ['lavender-light', 'lavender-deep', 'orchid-light', 'orchid-deep', 'violet-light', 'violet-deep', 'iris', 'wisteria-deep', 'amethyst', 'grape-light', 'lavender-blush2', 'mauve-light', 'thistle-light', 'plum-light', 'magenta-light', 'plum-deep', 'violet-deep2', 'indigo-deep3', 'purple-deep', 'magenta-deep', 'rosewood', 'wine-deep', 'berry-deep', 'orchid-deep2', 'lavender-deep2'],
+        mint: ['mint-light', 'mint-dark', 'seafoam-light', 'tea-green', 'pistachio', 'kiwi', 'honeydew', 'light-green', 'pale-green', 'spring-green', 'mint-deep', 'mint-deep2', 'jade-deep', 'mint-deep2', 'jade-deep2', 'seafoam-deep', 'seafoam-deep2', 'teal-aqua', 'aqua-deep', 'turquoise-deep', 'cyan-deep3', 'teal-dark3', 'aqua-light', 'aqua-light2'],
+        gold: ['gold-light', 'gold-deep', 'amber-light2', 'amber-deep', 'honey', 'saffron', 'mustard-light', 'marigold-light', 'topaz', 'citrine', 'gold-light2', 'golden-yellow', 'sunflower', 'canary', 'banana', 'maize', 'amber-light3', 'marigold-light2', 'yellow-green', 'chartreuse'],
+        rose: ['rose-light', 'rose-deep', 'pink-light', 'pink-deep', 'fuchsia', 'hot-pink', 'deep-pink', 'blush-light', 'salmon-light2', 'coral-light2', 'rose-light2', 'rose-deep2', 'pink-light2', 'pink-deep2', 'fuchsia2', 'hot-pink2', 'deep-pink2', 'blush-light2', 'salmon-light3', 'coral-light3'],
+        crimson: ['crimson-light', 'scarlet', 'cherry', 'ruby', 'garnet', 'cardinal', 'vermillion', 'cinnabar', 'tomato-deep', 'red-orange'],
+        olive: ['olive-dark', 'olive-drab', 'forest-green', 'hunter-green', 'emerald-dark', 'jade', 'teal-dark2', 'cyan-dark', 'sea-green-deep', 'medium-sea', 'olive-drab2', 'forest-green2', 'hunter-green2', 'emerald-dark2', 'jade2', 'teal-dark4', 'cyan-dark3', 'sea-green-deep2', 'medium-sea2', 'lime-green'],
+        navy: ['navy-deep', 'midnight-blue', 'sapphire-deep', 'indigo-deep2', 'royal-blue-deep', 'cobalt-deep', 'steel-blue-deep', 'slate-blue-deep', 'dark-slate', 'deep-indigo', 'navy-deep2', 'midnight-blue2', 'sapphire-deep2', 'indigo-deep4', 'royal-blue-deep2', 'cobalt-deep2', 'steel-blue-deep2', 'slate-blue-deep2', 'dark-slate2', 'deep-indigo2'],
+        steel: ['iron', 'titanium', 'chrome', 'brushed', 'gunmetal', 'obsidian', 'onyx', 'granite', 'concrete', 'stone', 'iron2', 'titanium2', 'chrome2', 'brushed2', 'gunmetal2', 'obsidian2', 'onyx2', 'granite2', 'concrete2', 'stone2'],
+        warmgray: ['taupe-light', 'taupe-deep', 'warm-gray-light', 'warm-gray-deep', 'beige-dark', 'sand-light', 'sand-deep', 'khaki-dark', 'espresso-light', 'mocha', 'taupe-light2', 'taupe-deep2', 'warm-gray-light2', 'warm-gray-deep2', 'beige-dark2', 'sand-light2', 'sand-deep2', 'khaki-dark2', 'espresso-light2', 'mocha2'],
+        yellow: ['lemon', 'golden-yellow', 'sunflower', 'canary', 'banana', 'maize', 'amber-light2', 'marigold-light', 'yellow-green', 'chartreuse', 'lemon2', 'golden-yellow2', 'sunflower2', 'canary2', 'banana2', 'maize2', 'amber-light3', 'marigold-light2', 'yellow-green2', 'chartreuse2'],
+        orange: ['copper', 'bronze', 'brass', 'rust-light', 'rust-mid', 'cinnamon', 'caramel', 'burnt-orange', 'amber-orange', 'tangerine-deep', 'copper2', 'bronze2', 'brass2', 'rust-light2', 'rust-mid2', 'cinnamon2', 'caramel2', 'burnt-orange2', 'amber-orange2', 'tangerine-deep3'],
+        teal: ['teal-aqua', 'aqua-deep', 'turquoise-deep', 'cyan-deep3', 'seafoam-deep', 'mint-deep', 'jade-deep', 'cyan-dark2', 'teal-dark3', 'aqua-light', 'teal-aqua2', 'aqua-deep2', 'turquoise-deep2', 'cyan-deep4', 'seafoam-deep2', 'mint-deep2', 'jade-deep2', 'cyan-dark4', 'teal-dark5', 'aqua-light2'],
+        plum: ['plum-deep2', 'violet-deep2', 'indigo-deep3', 'purple-deep', 'magenta-deep', 'rosewood', 'wine-deep', 'berry-deep', 'orchid-deep2', 'lavender-deep2', 'plum-deep3', 'violet-deep3', 'indigo-deep5', 'purple-deep2', 'magenta-deep2', 'rosewood2', 'wine-deep2', 'berry-deep2', 'orchid-deep3', 'lavender-deep3'],
+        brown: ['brown', 'saddle', 'sienna', 'chocolate-brown', 'peru-brown', 'burlywood', 'tan', 'roan', 'coffe', 'espresso', 'sandstone', 'clay', 'ochre', 'umber2', 'raw-umber', 'desert', 'dune', 'driftwood', 'weathered', 'dust'],
       }
       const keys = map[this.accentCat] || []
       return this.accentPresets.filter((p) => keys.includes(p.key))
@@ -645,6 +688,7 @@ export default {
         'sans-en': ['rubik', 'montserrat', 'lato', 'bebas-neue', 'raleway', 'oswald', 'pt-sans', 'fira-code', 'doto-mono'],
         mono: ['fira-code', 'doto-mono', 'special-elite'],
         display: ['pacifico', 'amatic', 'caveat', 'great-vibes', 'bebas-neue', 'lobster', 'permanent-marker'],
+        rounded: ['nunito', 'nunito-sans', 'quicksand', 'varela-round', 'comfortaa', 'baloo-2', 'fredoka-one', 'bubblegum-sans', 'chewy', 'chakra-petch', 'hind', 'mada', 'tajawal', 'almarai', 'boogaloo', 'bungee', 'passion-one', 'cabin-sketch', 'patrick-hand', 'jua', 'single-day', 'do-hyeon'],
       }
       const keys = map[this.fontCat] || []
       return this.fontOpts.filter((o) => keys.includes(o.key))
