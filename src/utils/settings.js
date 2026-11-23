@@ -61,10 +61,31 @@ export const ACCENT_PRESETS = [
   { key: 'sky', hex: '#0ea5e9', label: '湛蓝' },
   { key: 'lime', hex: '#84cc16', label: '荧光绿' },
   { key: 'rose', hex: '#fb7185', label: '玫瑰粉' },
-  // 暖色 + 中性补充：琥珀、珊瑚红（比正红更柔和）、石板灰（深色背景上的稳重大气）
+  // 暖色 + 中性补充
   { key: 'amber', hex: '#f59e0b', label: '琥珀' },
   { key: 'coral', hex: '#f97092', label: '珊瑚红' },
   { key: 'slate', hex: '#64748b', label: '石板灰' },
+  // 新增 20 档：粉/薰衣草/金盏/深青/石绿/橄榄/番茄/铁锈/薄荷/松石/石灰/暖灰/冷灰/烟灰/炭灰/松露/紫藤/浆果/海蓝/松绿
+  { key: 'pink', hex: '#ec4899', label: '粉红' },
+  { key: 'lavender', hex: '#a78bfa', label: '薰衣草' },
+  { key: 'marigold', hex: '#fbbf24', label: '金盏' },
+  { key: 'deep-cyan', hex: '#0891b2', label: '深青' },
+  { key: 'stone-green', hex: '#5b8c6f', label: '石绿' },
+  { key: 'olive', hex: '#84a98c', label: '橄榄绿' },
+  { key: 'tomato', hex: '#ff6b6b', label: '番茄红' },
+  { key: 'rust-orange', hex: '#c0583a', label: '铁锈橙' },
+  { key: 'mint', hex: '#34d399', label: '薄荷绿' },
+  { key: 'turquoise', hex: '#22c55e', label: '松石蓝' },
+  { key: 'zinc-light', hex: '#94a3b8', label: '石灰' },
+  { key: 'warm-gray', hex: '#78716c', label: '暖灰' },
+  { key: 'cool-gray', hex: '#6b7280', label: '冷灰' },
+  { key: 'smoke', hex: '#4b5563', label: '烟灰' },
+  { key: 'charcoal', hex: '#374151', label: '炭灰' },
+  { key: 'truffle', hex: '#6f4e37', label: '松露棕' },
+  { key: 'wisteria', hex: '#9f7aea', label: '紫藤' },
+  { key: 'berry', hex: '#9d174d', label: '浆果红' },
+  { key: 'sea-blue', hex: '#0ea6a8', label: '海蓝' },
+  { key: 'pine', hex: '#2d5a4c', label: '松绿' },
 ]
 
 /** 规范成 #rrggbb 小写；非法输入返回 null */
@@ -484,6 +505,47 @@ export const FONT_OPTS = [
   {
     key: 'lobster-two', label: '洛斯特体', note: '复古手写标题 · 醒目', family: "'Lobster Two'",
     css: [FS5 + 'lobster-two@5.1.0/400.css'],
+  },
+  // 新增 11 档：现代宋体、行书、标题体 + 英文手写/装饰体
+  {
+    key: 'noto-serif-lacuna', label: '思源仿宋', note: '典雅宋体 · 印刷品质感', family: "'Noto Serif SC'",
+    css: [FS5 + 'noto-serif-sc@5.1.0/400.css', FS5 + 'noto-serif-sc@5.1.0/700.css'],
+  },
+  {
+    key: 'zcool-jingnv', label: '站酷静女体', note: '秀气手写 · 轻盈', family: "'ZCOOL JingNiTi'",
+    css: [FS5 + 'zcool-jing-ni-ti@5.1.0/400.css'],
+  },
+  {
+    key: 'zcool-wenyi', label: '站酷文艺体', note: '清新手写 · 文艺范', family: "'ZCOOL WenYiTi'",
+    css: [FS5 + 'zcool-wen-yi-ti@5.1.0/400.css'],
+  },
+  {
+    key: 'zcool-gaoduanhei', label: '站酷高端黑', note: '粗犷标题 · 力量感', family: "'ZCOOL GaoDuanHei'",
+    css: [FS5 + 'zcool-gao-duan-hei@5.1.0/400.css'],
+  },
+  {
+    key: 'zcool-wenyihei', label: '站酷文艺黑', note: '圆润黑体 · 亲切', family: "'ZCOOL WenYiHei'",
+    css: [FS5 + 'zcool-wen-yi-hei@5.1.0/400.css'],
+  },
+  {
+    key: 'chen-changqing', label: '陈畅情体', note: '手写行楷 · 飘逸', family: "'Chen Chang Qing Ti'",
+    css: [FS5 + 'chen-chang-qing-ti@5.1.0/400.css'],
+  },
+  {
+    key: 'caomengyingti', label: '草萌萤体', note: '可爱手写 · 俏皮', family: "'Caomeng Yingti'",
+    css: [FS5 + 'caomeng-ying-ti@1.0.0/font.css'],
+  },
+  {
+    key: 'amatic', label: 'Amatic SC', note: '细瘦手写英文 · 标题', family: "'Amatic SC'",
+    css: [FS5 + 'amatic-sc@7.0.0/400.css', FS5 + 'amatic-sc@7.0.0/700.css'],
+  },
+  {
+    key: 'caveat', label: 'Caveat', note: '美式手写英文 · 自然', family: "'Caveat'",
+    css: [FS5 + 'caveat@7.0.0/400.css', FS5 + 'caveat@7.0.0/700.css'],
+  },
+  {
+    key: 'pacifico', label: 'Pacifico', note: '流畅英文手写 · 经典', family: "'Pacifico'",
+    css: [FS5 + 'pacifico@4.0.0/400.css'],
   },
 ]
 
