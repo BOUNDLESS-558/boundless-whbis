@@ -261,22 +261,6 @@
         </view>
       </view>
 
-      <!-- 快捷设置行：线路态下展示，一键直达【字体】【主题色】【刷新间隔】设置分区 -->
-      <view class="ctrl-settings" v-if="!cityOn && lineNo">
-        <view class="ctrl-set-btn" @click="openSettingsSection('font')" title="界面字体">
-          <text class="css-ico">Aa</text>
-          <text class="css-lab">字体</text>
-        </view>
-        <view class="ctrl-set-btn" :style="{ '--sc': accent }" @click="openSettingsSection('accent')" title="主题色">
-          <view class="css-swatch"></view>
-          <text class="css-lab">主题色</text>
-        </view>
-        <view class="ctrl-set-btn" @click="openSettingsSection('refresh')" title="刷新间隔">
-          <text class="css-ico">↻</text>
-          <text class="css-lab">刷新</text>
-        </view>
-      </view>
-
       <!-- ④ 走向提示：线路态计算中/失败时挂在方向行下方。
            视图工具（缩放/全览/站名/底图）已统一移到地图右下角浮动条，不再占控制卡 -->
       <template v-if="!cityOn">
@@ -354,46 +338,55 @@
       @move="onRankMove"
     />
 
-    <!-- 视图工具：缩放 / 全览 / 站名 / 底图，两种模式通用。从控制卡移到地图右下角浮动条，
-         让控制卡专注承载信息与数据操作（原方案把 10 个按钮堆成两排，杂乱且易溢出） -->
-    <view class="view-tools-float">
-      <view class="vt-btn" @click="zoomBy(0.6)" title="放大">＋</view>
-      <view class="vt-btn" @click="zoomBy(-0.6)" title="缩小">－</view>
-      <view class="vt-sep"></view>
-      <view class="vt-btn wide" @click="resetView" :title="cityOn ? '全览全市在运车辆' : '全览整条线路'">全览</view>
-      <view class="vt-btn wide" :class="{ on: showStopLabels }" @click="toggleLabels" title="显示/隐藏站名">站名</view>
-      <view class="vt-btn wide" v-if="!useMap" :class="{ on: showBaseMap }" @click="toggleBaseMap" title="显示/隐藏底图">底图</view>
-    </view>
-
-    <!-- 底部快捷操作栏：常驻贴底，常用操作一步到位，不用滚回控制卡 -->
+    <!-- 底部快捷操作栏：常驻贴底，所有高频操作合一，不再分两处。
+         地图模式 = 刷新 + 视图工具 + 三向切换（共 9 个）；全市模式 = 再加上车速榜 + 查车（共 11 个） -->
     <view class="bottom-bar" v-if="lineNo || cityOn">
+      <!-- 通用：刷新 -->
       <view class="bb-item" @click="refreshNow" :title="loading ? '刷新中…' : '立即刷新'">
         <text class="bb-ico" :class="{ spin: loading }">↻</text>
         <text class="bb-label">刷新</text>
       </view>
-      <view class="bb-item" @click="resetView" :title="cityOn ? '全览全市' : '全览线路'">
+      <!-- 视图工具：缩放 / 全览 / 站名 / 底图 -->
+      <view class="bb-sep"></view>
+      <view class="bb-item" @click="zoomBy(0.6)" title="放大">
+        <text class="bb-ico">＋</text>
+      </view>
+      <view class="bb-item" @click="zoomBy(-0.6)" title="缩小">
+        <text class="bb-ico">－</text>
+      </view>
+      <view class="bb-item" :class="{ on: cityOn ? false : true }" @click="resetView" :title="cityOn ? '全览全市在运车辆' : '全览整条线路'">
         <text class="bb-ico">⊞</text>
         <text class="bb-label">全览</text>
       </view>
-      <view class="bb-divider"></view>
-      <view class="bb-item" :class="{ on: dirFilter === 0 }" @click="setDirView(0)" title="上行">
+      <view class="bb-item" :class="{ on: showStopLabels }" @click="toggleLabels" title="显示/隐藏站名">
+        <text class="bb-ico">📍</text>
+        <text class="bb-label">站名</text>
+      </view>
+      <view class="bb-item" v-if="!useMap" :class="{ on: showBaseMap }" @click="toggleBaseMap" title="显示/隐藏底图">
+        <text class="bb-ico">🗺</text>
+        <text class="bb-label">底图</text>
+      </view>
+      <!-- 方向分组 -->
+      <view class="bb-sep"></view>
+      <view class="bb-item" :class="{ on: dirFilter === 0 }" @click="setDirView(0)" title="仅显示上行车辆">
         <text class="bb-ico up">↑</text>
         <text class="bb-label">上行</text>
       </view>
-      <view class="bb-item" :class="{ on: dirFilter === 1 }" @click="setDirView(1)" title="下行">
+      <view class="bb-item" :class="{ on: dirFilter === 1 }" @click="setDirView(1)" title="仅显示下行车辆">
         <text class="bb-ico down">↓</text>
         <text class="bb-label">下行</text>
       </view>
-      <view class="bb-item" :class="{ on: dirFilter === 2 }" @click="setDirView(2)" title="全部">
+      <view class="bb-item" :class="{ on: dirFilter === 2 }" @click="setDirView(2)" title="上下行同时显示">
         <text class="bb-ico all">⇄</text>
         <text class="bb-label">全部</text>
       </view>
-      <view class="bb-divider"></view>
-      <view class="bb-item" :class="{ on: rankOpen }" @click="toggleRank" title="车速榜">
+      <!-- 仅全市模式：车速榜 + 查车 -->
+      <view class="bb-sep" v-if="cityOn"></view>
+      <view class="bb-item" v-if="cityOn" :class="{ on: rankOpen }" @click="toggleRank" title="全局快照车速榜">
         <text class="bb-ico">🏁</text>
         <text class="bb-label">车速榜</text>
       </view>
-      <view class="bb-item" :class="{ on: orgSearchOpen }" @click="toggleOrgSearch" title="自编号查车">
+      <view class="bb-item" v-if="cityOn" :class="{ on: orgSearchOpen }" @click="toggleOrgSearch" title="按自编号查车">
         <text class="bb-ico">🔍</text>
         <text class="bb-label">查车</text>
       </view>
@@ -1704,8 +1697,6 @@ export default {
     // 刷新间隔下拉：展开权交给全站仲裁器，点复制 / 搜索联想等其它菜单时自动收起
     toggleRefreshMenu() { if (this._dd) this._dd.toggle() },
     closeRefreshMenu() { if (this._dd) this._dd.close() },
-    // 快捷按钮：打开设置面板并直达指定分区（font / accent / refresh）
-    openSettingsSection(key) { this.$emit('open-settings-section', key) },
     // 组件/页面卸载时统一清理（解绑手势、悬停、详情窗拖动、定位定时器、自动刷新）
     cleanup() {
       if (this._dd) this._dd.dispose()
@@ -5544,52 +5535,6 @@ export default {
   font-size: 26rpx;
   padding: 40rpx 0;
 }
-/* 控制卡快捷设置行：线路态下在方向选择区下方，三枚迷你按钮直达【字体】【主题色】【刷新间隔】分区 */
-.ctrl-settings {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 10rpx;
-  padding: 10rpx 8rpx 4rpx;
-}
-.ctrl-set-btn {
-  display: inline-flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  height: 64rpx;
-  min-width: 96rpx;
-  padding: 4rpx 14rpx;
-  border-radius: 14rpx;
-  background: rgba(255, 255, 255, 0.06);
-  border: 2rpx solid rgba(255, 255, 255, 0.1);
-  cursor: pointer;
-  transition: background 0.16s, border-color 0.16s;
-}
-.ctrl-set-btn:hover {
-  background: rgba(255, 255, 255, 0.12);
-  border-color: rgba(255, 255, 255, 0.22);
-}
-.css-ico {
-  font-size: 26rpx;
-  line-height: 1;
-  margin-bottom: 2rpx;
-  color: rgba(255, 255, 255, 0.72);
-}
-.css-swatch {
-  width: 20rpx;
-  height: 20rpx;
-  border-radius: 50%;
-  background: var(--sc, #6366f1);
-  margin-bottom: 2rpx;
-  border: 2rpx solid rgba(255, 255, 255, 0.25);
-}
-.css-lab {
-  font-size: 18rpx;
-  color: rgba(255, 255, 255, 0.55);
-  white-space: nowrap;
-  letter-spacing: 0.04em;
-}
 /* 走向尚未贴路（计算中/失败）的提示，避免把站间直连当成真实走向 */
 .view-alert {
   align-self: flex-start;
@@ -6276,7 +6221,7 @@ export default {
   background: linear-gradient(90deg, var(--ac), var(--ac-2));
   transition: width 0.25s ease-out;
 }
-/* 全市数据操作行：只留扫描 / 跟随 / 编号标签 / 查车 / 车速榜，视图工具已移到右下浮动条。
+/* 全市数据操作行：只留扫描 / 跟随 / 编号标签 / 查车 / 车速榜，视图工具已并入底部栏。
    与上方信息区之间一条极淡分隔线 */
 .ctrl-city-row {
   display: flex;
@@ -6287,49 +6232,7 @@ export default {
   padding: 12rpx 4rpx 2rpx;
   border-top: 2rpx solid rgba(255, 255, 255, 0.07);
 }
-/* 视图工具浮动条：贴地图右下角，两种模式共用，控制卡不再堆按钮 */
-.view-tools-float {
-  position: absolute;
-  right: 24rpx;
-  bottom: 24rpx;
-  z-index: 12;
-  display: flex;
-  align-items: center;
-  gap: 6rpx;
-  padding: 8rpx;
-  border-radius: 18rpx;
-  background: rgba(11, 16, 32, 0.78);
-  backdrop-filter: blur(20px) saturate(160%);
-  -webkit-backdrop-filter: blur(20px) saturate(160%);
-  border: 2rpx solid rgba(255, 255, 255, 0.12);
-  box-shadow: 0 12rpx 32rpx rgba(0, 0, 0, 0.38);
-}
-.vt-btn {
-  min-width: 56rpx;
-  height: 56rpx;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 0 12rpx;
-  box-sizing: border-box;
-  border-radius: 12rpx;
-  font-size: 26rpx;
-  color: rgba(255, 255, 255, 0.8);
-  background: rgba(255, 255, 255, 0.06);
-  cursor: pointer;
-  transition: background 0.16s, color 0.16s;
-}
-.vt-btn.wide { font-size: 21rpx; white-space: nowrap; }
-.vt-btn:hover { background: rgba(255, 255, 255, 0.14); color: #fff; }
-.vt-btn.on { color: var(--ac-text); background: rgba(var(--ac-rgb), 0.28); }
-.vt-sep {
-  flex: 0 0 auto;
-  width: 2rpx;
-  height: 28rpx;
-  margin: 0 2rpx;
-  background: rgba(255, 255, 255, 0.14);
-}
-/* 底部快捷操作栏：常驻贴底，常用功能一步到位 */
+/* 底部快捷操作栏：常驻贴底，所有高频操作合一（9~11 个按钮，紧凑排布） */
 .bottom-bar {
   position: absolute;
   left: 50%;
@@ -6339,33 +6242,35 @@ export default {
   display: flex;
   align-items: center;
   gap: 0;
-  padding: 10rpx 8rpx;
-  border-radius: 36rpx;
+  padding: 8rpx 6rpx;
+  border-radius: 32rpx;
   background: rgba(11, 16, 32, 0.78);
   backdrop-filter: blur(20px) saturate(160%);
   -webkit-backdrop-filter: blur(20px) saturate(160%);
   border: 2rpx solid rgba(255, 255, 255, 0.12);
   box-shadow: 0 12rpx 32rpx rgba(0, 0, 0, 0.38);
+  overflow-x: auto;
 }
 .bb-item {
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  min-width: 88rpx;
-  height: 72rpx;
-  padding: 4rpx 12rpx;
-  border-radius: 20rpx;
+  min-width: 60rpx;
+  height: 56rpx;
+  padding: 2rpx 8rpx;
+  border-radius: 16rpx;
   cursor: pointer;
   transition: background 0.16s, color 0.16s;
+  flex-shrink: 0;
 }
 .bb-item:hover { background: rgba(255, 255, 255, 0.1); }
 .bb-item.on { background: rgba(var(--ac-rgb), 0.28); }
 .bb-item.on .bb-label { color: var(--ac-text); }
 .bb-ico {
-  font-size: 30rpx;
+  font-size: 26rpx;
   line-height: 1;
-  margin-bottom: 2rpx;
+  margin-bottom: 1rpx;
   color: rgba(255, 255, 255, 0.72);
 }
 .bb-ico.up   { color: #22D3EE; }
@@ -6373,18 +6278,19 @@ export default {
 .bb-ico.all  { color: #A78BFA; }
 .bb-ico.spin { animation: rp-spin 0.9s linear infinite; }
 .bb-label {
-  font-size: 18rpx;
+  font-size: 16rpx;
   color: rgba(255, 255, 255, 0.58);
   white-space: nowrap;
   letter-spacing: 0.04em;
 }
-.bb-divider {
+.bb-sep {
   flex: 0 0 2rpx;
   width: 2rpx;
-  height: 36rpx;
+  height: 32rpx;
   margin: 0 4rpx;
-  background: rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.14);
   border-radius: 1rpx;
+  flex-shrink: 0;
 }
 /* 数据操作键尺寸 */
 .cc-btn {
