@@ -86,6 +86,17 @@ export const ACCENT_PRESETS = [
   { key: 'berry', hex: '#9d174d', label: '浆果红' },
   { key: 'sea-blue', hex: '#0ea6a8', label: '海蓝' },
   { key: 'pine', hex: '#2d5a4c', label: '松绿' },
+  // 续增 10 档：深蓝/靛青/暖棕/深洋红/海沫/灰绿/酒红/暖金/薰衣草紫/墨绿补充
+  { key: 'midnight', hex: '#1e3a5f', label: '深夜蓝' },
+  { key: 'indigo-deep', hex: '#4338ca', label: '深靛蓝' },
+  { key: 'warm-brown', hex: '#78350f', label: '暖棕' },
+  { key: 'deep-magenta', hex: '#be185d', label: '深洋红' },
+  { key: 'seafoam', hex: '#a7f3d0', label: '海沫绿' },
+  { key: 'muted-green', hex: '#6b8e6b', label: '灰绿' },
+  { key: 'wine-red', hex: '#7f1d1d', label: '酒红' },
+  { key: 'honey-gold', hex: '#d97706', label: '蜜金' },
+  { key: 'soft-lavender', hex: '#c4b5fd', label: '柔薰衣' },
+  { key: 'forest', hex: '#14532d', label: '森林绿' },
 ]
 
 /** 规范成 #rrggbb 小写；非法输入返回 null */
@@ -546,6 +557,47 @@ export const FONT_OPTS = [
   {
     key: 'pacifico', label: 'Pacifico', note: '流畅英文手写 · 经典', family: "'Pacifico'",
     css: [FS5 + 'pacifico@4.0.0/400.css'],
+  },
+  // 续增 10 档：圆体 / 英文无衬线 / 等宽 / 英文草书 / 中文圆润
+  {
+    key: 'zcool-round', label: '站酷快乐黑', note: '圆润可爱 · 亲切标题', family: "'ZCOOL KuaiLe Hei'",
+    css: [FS5 + 'zcool-kuaile-hei@1.0.0/400.css'],
+  },
+  {
+    key: 'noto-sans-rounded', label: '思源圆体', note: '柔和圆体 · 友好', family: "'Noto Sans SC Rounded'",
+    css: [FS5 + 'noto-sans-sc-rounded@1.0.0/400.css', FS5 + 'noto-sans-sc-rounded@1.0.0/700.css'],
+  },
+  {
+    key: 'fira-code', label: 'Fira Code', note: '等宽编程 · 连字友好', family: "'Fira Code'",
+    css: [FS5 + 'fira-code@7.3.0/400.css', FS5 + 'fira-code@7.3.0/500.css', FS5 + 'fira-code@7.3.0/700.css'],
+  },
+  {
+    key: 'doto-mono', label: 'Doto Mono', note: '几何等宽 · 科技感', family: "'Doto Mono'",
+    css: [FS5 + 'doto-mono@1.0.0/400.css', FS5 + 'doto-mono@1.0.0/700.css'],
+  },
+  {
+    key: 'roboto-slab', label: 'Roboto Slab', note: '稳重衬线英文 · 标题', family: "'Roboto Slab'",
+    css: [FS5 + 'roboto-slab@7.0.0/400.css', FS5 + 'roboto-slab@7.0.0/700.css'],
+  },
+  {
+    key: 'playfair', label: 'Playfair Display', note: '时尚衬线英文 · 优雅', family: "'Playfair Display'",
+    css: [FS5 + 'playfair-display@7.0.0/400.css', FS5 + 'playfair-display@7.0.0/700.css'],
+  },
+  {
+    key: 'lobster', label: 'Lobster', note: '美式复古英文 · 醒目', family: "'Lobster'",
+    css: [FS5 + 'lobster@4.0.0/400.css'],
+  },
+  {
+    key: 'great-vibes', label: 'Great Vibes', note: '华丽英文花体 · 浪漫', family: "'Great Vibes'",
+    css: [FS5 + 'great-vibes@4.0.0/400.css'],
+  },
+  {
+    key: 'ma-shan-zheng-cursive', label: '马善政行楷', note: '毛笔行楷 · 飘逸灵动', family: "'Ma Shan Zheng'",
+    css: [FS5 + 'ma-shan-zheng@5.1.0/400.css'],
+  },
+  {
+    key: 'noto-serif-cafeteria', label: '思源宋体·餐巾', note: '典雅宋体 · 文艺杂志风', family: "'Noto Serif JP'",
+    css: [FS5 + 'noto-serif-jp@5.1.0/400.css', FS5 + 'noto-serif-jp@5.1.0/700.css'],
   },
 ]
 
