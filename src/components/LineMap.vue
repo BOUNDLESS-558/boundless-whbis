@@ -1644,10 +1644,12 @@ export default {
       this._onWinResize = null
       // 解绑查车浮窗拖动，避免切页后残留 document 监听
       if (this._unbindOrgDrag) { this._unbindOrgDrag(); this._unbindOrgDrag = null }
-      // 取消待执行的重绘帧，避免卸载后仍跑一次全市全量投影
-      if (this._raf) {
-        if (typeof window !== 'undefined' && window.cancelAnimationFrame) window.cancelAnimationFrame(this._raf)
-        this._raf = null
+      // 取消待执行的重绘 / 量测帧，避免卸载后仍跑一次全市全量投影或 layout
+      for (const k of ['_raf', '_measureRaf']) {
+        if (this[k]) {
+          if (typeof window !== 'undefined' && window.cancelAnimationFrame) window.cancelAnimationFrame(this[k])
+          this[k] = null
+        }
       }
       this.unbindGestures()
       this.unbindHover()
@@ -2032,6 +2034,7 @@ export default {
     renderTiles() {
       if (!this.showBaseMap) {
         if (this.tiles.length) this.tiles = []
+        this._tileSig = '' // 关底图时清签名，再开启时一定重新赋值
         return
       }
       const { w, h } = this.canvas
@@ -2068,7 +2071,14 @@ export default {
           })
         }
       }
-      this.tiles = out.slice(0, 120)
+      const next = out.slice(0, 120)
+      // 微小平移/缩放时瓦片像素坐标（已 round）常常不变。若内容签名与上一帧相同，
+      // 保留旧数组引用，避免 Vue 每帧 diff / 重建全部 <image> 节点（流畅度主因之一）。
+      const sig = next.map((t) => `${t.key}@${t.left},${t.top},${t.size}`).join('|')
+      if (sig !== this._tileSig) {
+        this._tileSig = sig
+        this.tiles = next
+      }
     },
     // 高德官方公交线路真实轨迹：LineSearch 按线路名搜索，用各方向首站坐标就近匹配，返回 {0: pts, 1: pts}（GCJ-02）
     fetchOfficialLines(AMap) {
@@ -2975,9 +2985,9 @@ export default {
       // 宽度固定（CSS 里定死，避免拖窄把文字挤扁），只开放「调高度」并记忆：
       // 底部手柄改高，控制卡用 height（自身滚动），两张卡用 maxHeight（保留内部列表滚动）。
       const specs = [
-        { sel: '.ctrl', opts: { key: 'ctrl', axis: 'y', edge: 'bottom', heightProp: 'height', clip: false, minH: upx(240), maxH: vh - 48, onResize: () => this.measureUi() } },
-        { sel: '.panel', opts: { key: 'panel', axis: 'y', edge: 'bottom', heightProp: 'maxHeight', minH: 120, maxH: vh - 48, onResize: () => this.measureUi() } },
-        { sel: '.plan-side', opts: { key: 'plan', axis: 'y', edge: 'bottom', heightProp: 'maxHeight', minH: 120, maxH: vh - 48, onResize: () => this.measureUi() } },
+        { sel: '.ctrl', opts: { key: 'ctrl', axis: 'y', edge: 'bottom', heightProp: 'height', clip: false, minH: upx(240), maxH: vh - 48, onResize: () => this.scheduleMeasure() } },
+        { sel: '.panel', opts: { key: 'panel', axis: 'y', edge: 'bottom', heightProp: 'maxHeight', minH: 120, maxH: vh - 48, onResize: () => this.scheduleMeasure() } },
+        { sel: '.plan-side', opts: { key: 'plan', axis: 'y', edge: 'bottom', heightProp: 'maxHeight', minH: 120, maxH: vh - 48, onResize: () => this.scheduleMeasure() } },
       ]
       specs.forEach((sp) => {
         const el = document.querySelector(sp.sel)
@@ -3009,6 +3019,18 @@ export default {
       })
     },
     // 量取控制卡 / 右侧栏（车辆面板 + 时刻表面板）/ 图例实际占位（此项目样式用 rpx，不能用固定 px 推算）
+    // 面板拖动 / 多 watcher 同帧触发时会连续多次 measureUi，每次都是 6 个 boundingClientRect
+    // （强制 layout）。合并到每帧一次：拖动跟手由 panelResize 自己写 style，量测延后一帧无感。
+    scheduleMeasure() {
+      if (this._measureRaf) return
+      const raf = (typeof window !== 'undefined' && window.requestAnimationFrame)
+        ? (cb) => window.requestAnimationFrame(cb)
+        : (cb) => setTimeout(cb, 16)
+      this._measureRaf = raf(() => {
+        this._measureRaf = null
+        this.measureUi()
+      })
+    },
     measureUi() {
       const q = uni.createSelectorQuery().in(this)
       q.select('.ctrl').boundingClientRect()

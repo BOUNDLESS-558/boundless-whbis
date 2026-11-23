@@ -46,8 +46,10 @@ function startBuild() {
 
   let n = 0
   const step = () => {
+    // 半开区间 [n, end)：用 <= 会让每个分片边界的编号重复算一次（多算 25 次 MD5 且
+    // 下一片从 end 重来），改成 < 才是每号恰好一次；终止仍用 end >= DICT_MAX。
     const end = Math.min(n + CHUNK_SIZE, DICT_MAX)
-    for (let i = n; i <= end; i++) {
+    for (let i = n; i < end; i++) {
       const s = String(i)
       const h = md5(s)
       if (dict[h] === undefined) dict[h] = s
