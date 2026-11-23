@@ -255,9 +255,22 @@
             <text class="acct-sec-chev" :class="{ folded: !acctSec.accent }">▾</text>
           </view>
           <view v-show="acctSec.accent" class="acct-sec-body">
-            <view class="ac-row">
+            <!-- 主题色分类标签 -->
+            <scroll-view class="ac-cat-scroll" scroll-x>
+              <view class="ac-cat-row">
+                <view
+                  v-for="c in accentCatOptions"
+                  :key="c.key"
+                  class="ac-cat-chip"
+                  :class="{ on: accentCat === c.key }"
+                  @click="accentCat = c.key"
+                >{{ c.label }}</view>
+              </view>
+            </scroll-view>
+            <!-- 主题色网格 -->
+            <view class="ac-grid">
               <view
-                v-for="p in accentPresets"
+                v-for="p in filteredAccentPresets"
                 :key="p.hex"
                 class="ac-dot"
                 :class="{ on: accent === p.hex }"
@@ -279,9 +292,22 @@
             <text class="acct-sec-chev" :class="{ folded: !acctSec.font }">▾</text>
           </view>
           <view v-show="acctSec.font" class="acct-sec-body">
+            <!-- 字体分类标签 -->
+            <scroll-view class="ac-cat-scroll" scroll-x>
+              <view class="ac-cat-row">
+                <view
+                  v-for="c in fontCatOptions"
+                  :key="c.key"
+                  class="ac-cat-chip"
+                  :class="{ on: fontCat === c.key }"
+                  @click="fontCat = c.key"
+                >{{ c.label }}</view>
+              </view>
+            </scroll-view>
+            <!-- 字体网格 -->
             <view class="font-grid">
               <view
-                v-for="o in fontOpts"
+                v-for="o in filteredFontOpts"
                 :key="o.key"
                 class="font-chip"
                 :class="{ on: uiFont === o.key }"
@@ -510,6 +536,9 @@ export default {
       // 界面字体：当前生效档 + 档位列表（preview = 选项卡预览用的 family 串）
       uiFont: 'system',
       fontOpts: FONT_OPTS.map((o) => ({ ...o, preview: o.family ? o.family + ', sans-serif' : 'inherit' })),
+      // 主题色 & 字体分类筛选
+      accentCat: 'all',
+      fontCat: 'all',
       // 极简站牌模式：只保留线路头 + 候车信息 + 站点序列，隐藏多余控件
       minStopsMode: false,
       // 设置分区展开态（本机记忆，见 ACCT_SECTIONS_DEFAULT）
@@ -562,6 +591,63 @@ export default {
     // 默认头像：用户名 / 账号名的首字母色块
     avatarLetter() {
       return (this.dispName || this.account || '·').trim().charAt(0).toUpperCase()
+    },
+    // ── 主题色 / 字体分类筛选 ──────────────────────────────
+    accentCatOptions() {
+      return [
+        { key: 'all', label: '全部' },
+        { key: 'core', label: '核心' },
+        { key: 'warm', label: '暖色' },
+        { key: 'green', label: '绿色' },
+        { key: 'blue', label: '蓝色' },
+        { key: 'red', label: '红色' },
+        { key: 'gray', label: '灰色' },
+        { key: 'dark', label: '深暗' },
+        { key: 'pastel', label: '淡彩' },
+      ]
+    },
+    fontCatOptions() {
+      return [
+        { key: 'all', label: '全部' },
+        { key: 'system', label: '系统' },
+        { key: 'cursive', label: '手写' },
+        { key: 'serif-cn', label: '宋体' },
+        { key: 'sans-cn', label: '黑体' },
+        { key: 'serif-en', label: '衬线英文' },
+        { key: 'sans-en', label: '无衬线英文' },
+        { key: 'mono', label: '等宽' },
+        { key: 'display', label: '标题' },
+      ]
+    },
+    filteredAccentPresets() {
+      if (this.accentCat === 'all') return this.accentPresets
+      const map = {
+        core: ['indigo', 'purple', 'magenta', 'green', 'orange', 'blue', 'red', 'teal', 'violet', 'sky', 'lime', 'rose'],
+        warm: ['amber', 'coral', 'pink', 'marigold', 'peach', 'warm-yellow', 'tomato', 'rust-orange', 'warm-apricot', 'honey-gold', 'salmon', 'brick-red', 'crimson', 'warm-brown', 'sienna'],
+        green: ['green', 'teal', 'mint', 'turquoise', 'seafoam', 'stone-green', 'olive', 'muted-green', 'sea-green', 'forest', 'emerald', 'sage', 'celadon', 'pine', 'emerald'],
+        blue: ['blue', 'sky', 'deep-cyan', 'cobalt', 'navy-blue', 'midnight', 'indigo-deep', 'cerulean', 'azure', 'powder-blue', 'light-sky', 'cornflower', 'royal-blue', 'slate-blue', 'steel-blue', 'cadet-blue'],
+        red: ['rose', 'berry', 'wisteria', 'orchid', 'plum', 'mauve', 'thistle', 'dark-orchid', 'lavender', 'soft-lavender', 'lavender-blush', 'misty-rose', 'blush', 'periwinkle'],
+        gray: ['slate', 'zinc-light', 'warm-gray', 'cool-gray', 'smoke', 'charcoal', 'silver-gray', 'khaki', 'taupe', 'sand'],
+        dark: ['charcoal', 'smoke', 'truffle', 'chocolate', 'warm-brown', 'brick-red', 'crimson', 'wine-red', 'deep-magenta', 'navy-blue', 'midnight', 'indigo-deep', 'teal-dark', 'cyan-deep'],
+        pastel: ['pale-pink', 'lavender', 'soft-lavender', 'seafoam', 'peach', 'warm-yellow', 'ivory', 'blush', 'salmon', 'mauve', 'thistle', 'periwinkle', 'celadon', 'powder-blue', 'aquamarine', 'misty-rose', 'lavender-blush'],
+      }
+      const keys = map[this.accentCat] || []
+      return this.accentPresets.filter((p) => keys.includes(p.key))
+    },
+    filteredFontOpts() {
+      if (this.fontCat === 'all') return this.fontOpts
+      const map = {
+        system: ['system'],
+        cursive: ['wenkai', 'wenkai-screen', 'wenkai-lite', 'mashan', 'longcang', 'zhimang', 'liujian', 'caomengyingti', 'chen-changqing', 'ma-shan-zheng-cursive', 'dancing-script', 'indie-flower', 'permanent-marker', 'special-elite', 'great-vibes', 'lobster', 'lobster-two'],
+        'serif-cn': ['noto-serif', 'noto-serif-lacuna', 'noto-serif-cafeteria', 'xiaowei'],
+        'sans-cn': ['noto-sans', 'noto-sans-hinted', 'noto-sans-rounded', 'misans', 'harmony', 'neo-xihei', 'zcool-round', 'dingtalk', 'zcool-jingnv', 'zcool-wenyi', 'zcool-gaoduanhei', 'zcool-wenyihei', 'qingke', 'kuaile', 'smiley'],
+        'serif-en': ['roboto-slab', 'playfair', 'pt-serif'],
+        'sans-en': ['rubik', 'montserrat', 'lato', 'bebas-neue', 'raleway', 'oswald', 'pt-sans', 'fira-code', 'doto-mono'],
+        mono: ['fira-code', 'doto-mono', 'special-elite'],
+        display: ['pacifico', 'amatic', 'caveat', 'great-vibes', 'bebas-neue', 'lobster', 'permanent-marker'],
+      }
+      const keys = map[this.fontCat] || []
+      return this.fontOpts.filter((o) => keys.includes(o.key))
     },
     // 折叠态下每个分区显示的「当前值」摘要，收起后仍能一眼看到设置结果
     acctSecSummary() {
@@ -1689,16 +1775,42 @@ export default {
   line-height: 1.6;
   color: rgba(255, 196, 128, 0.72);
 }
-/* 主题色行：预设色点 + 调色盘（彩虹锥形渐变标识） */
-.ac-row {
+/* 分类标签横向滚动行 */
+.ac-cat-scroll {
+  width: 100%;
+  margin-bottom: 12rpx;
+}
+.ac-cat-row {
   display: flex;
-  align-items: center;
-  gap: 14rpx;
+  gap: 10rpx;
+  padding-bottom: 4rpx;
+}
+.ac-cat-chip {
+  flex-shrink: 0;
+  padding: 6rpx 20rpx;
+  border-radius: 20rpx;
+  font-size: 22rpx;
+  color: rgba(255, 255, 255, 0.55);
+  background: rgba(255, 255, 255, 0.06);
+  border: 2rpx solid transparent;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+.ac-cat-chip.on {
+  color: #fff;
+  background: rgba(var(--ac-rgb), 0.18);
+  border-color: rgba(var(--ac-rgb), 0.5);
+}
+
+/* 主题色网格：响应式多列 */
+.ac-grid {
+  display: flex;
   flex-wrap: wrap;
+  gap: 10rpx;
 }
 .ac-dot {
-  width: 52rpx;
-  height: 52rpx;
+  width: 48rpx;
+  height: 48rpx;
   border-radius: 50%;
   border: 3rpx solid rgba(255, 255, 255, 0.22);
   box-sizing: border-box;
@@ -1706,7 +1818,7 @@ export default {
   transition: transform 0.15s ease, box-shadow 0.15s ease;
 }
 .ac-dot:hover {
-  transform: scale(1.1);
+  transform: scale(1.15);
 }
 .ac-dot.on {
   border-color: #ffffff;
