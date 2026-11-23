@@ -1,5 +1,5 @@
 {
-  "updatedAt": "2026-11-22T23:39:20.694Z",
+  "updatedAt": "2026-11-23T00:09:49.829Z",
   "rule": "每条线路按方向标注站点来源：source=amap（高德官方站点）或 source=osrm（高德未收录、OSRM 兜底）。每次采集逐方向重新探测上游 /line 站点签名；高德官方站点命中即复用。",
   "total": 366,
   "lines": [
@@ -1219,7 +1219,7 @@
     {
       "no": "D239",
       "name": "",
-      "company": "公交集团",
+      "company": "公交集团·第二营运公司",
       "shard": "jt/b59.json",
       "osrmDirs": [
         "0"
