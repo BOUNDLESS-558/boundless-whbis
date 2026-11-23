@@ -270,7 +270,7 @@
             <!-- 主题色网格 -->
             <view class="ac-grid">
               <view
-                v-for="p in filteredAccentPresets"
+                v-for="p in paginatedAccentPresets"
                 :key="p.hex"
                 class="ac-dot"
                 :class="{ on: accent === p.hex }"
@@ -278,6 +278,12 @@
                 :title="p.label"
                 @click="onAccent(p.hex)"
               ></view>
+            </view>
+            <!-- 主题色分页 -->
+            <view class="ac-pager" v-if="accentPageCount > 1">
+              <view class="ac-pager-btn" :class="{ disabled: accentPage === 0 }" @click="accentPage--">‹ 上一页</view>
+              <text class="ac-pager-info">{{ accentPage + 1 }} / {{ accentPageCount }}</text>
+              <view class="ac-pager-btn" :class="{ disabled: accentPage >= accentPageCount - 1 }" @click="accentPage++">下一页 ›</view>
             </view>
             <view class="acct-tip">主题色作用于查询按钮 / 页签 / 选中态等强调元素，自定义后本机记忆，改完即时生效</view>
           </view>
@@ -307,7 +313,7 @@
             <!-- 字体网格 -->
             <view class="font-grid">
               <view
-                v-for="o in filteredFontOpts"
+                v-for="o in paginatedFontOpts"
                 :key="o.key"
                 class="font-chip"
                 :class="{ on: uiFont === o.key }"
@@ -316,6 +322,12 @@
                 <text class="font-chip-name" :style="{ fontFamily: o.preview }">{{ o.label }}</text>
                 <text class="font-chip-note">{{ o.note }}</text>
               </view>
+            </view>
+            <!-- 字体分页 -->
+            <view class="ac-pager" v-if="fontPageCount > 1">
+              <view class="ac-pager-btn" :class="{ disabled: fontPage === 0 }" @click="fontPage--">‹ 上一页</view>
+              <text class="ac-pager-info">{{ fontPage + 1 }} / {{ fontPageCount }}</text>
+              <view class="ac-pager-btn" :class="{ disabled: fontPage >= fontPageCount - 1 }" @click="fontPage++">下一页 ›</view>
             </view>
             <view class="acct-tip">开源可商用字体，按需分片加载；改完全站即时生效、本机记忆，加载失败自动回退系统字体</view>
           </view>
@@ -539,6 +551,9 @@ export default {
       // 主题色 & 字体分类筛选
       accentCat: 'all',
       fontCat: 'all',
+      // 分页
+      accentPage: 0,
+      fontPage: 0,
       // 极简站牌模式：只保留线路头 + 候车信息 + 站点序列，隐藏多余控件
       minStopsMode: false,
       // 设置分区展开态（本机记忆，见 ACCT_SECTIONS_DEFAULT）
@@ -693,6 +708,22 @@ export default {
       const keys = map[this.fontCat] || []
       return this.fontOpts.filter((o) => keys.includes(o.key))
     },
+    paginatedAccentPresets() {
+      const size = 36
+      const start = this.accentPage * size
+      return this.filteredAccentPresets.slice(start, start + size)
+    },
+    paginatedFontOpts() {
+      const size = 20
+      const start = this.fontPage * size
+      return this.filteredFontOpts.slice(start, start + size)
+    },
+    accentPageCount() {
+      return Math.ceil(this.filteredAccentPresets.length / 36) || 1
+    },
+    fontPageCount() {
+      return Math.ceil(this.filteredFontOpts.length / 20) || 1
+    },
     // 折叠态下每个分区显示的「当前值」摘要，收起后仍能一眼看到设置结果
     acctSecSummary() {
       const font = this.fontOpts.find((o) => o.key === this.uiFont)
@@ -769,6 +800,14 @@ export default {
       this._offRefresh = null
     }
     this.fire(['cleanup', 'stopAutoRefresh'])
+  },
+  watch: {
+    accentCat() {
+      this.accentPage = 0
+    },
+    fontCat() {
+      this.fontPage = 0
+    },
   },
   methods: {
     // 分区展开态：本机记忆（只认已知的 key，脏数据自动回退默认值）
@@ -1354,6 +1393,38 @@ export default {
   font-size: 21rpx;
   line-height: 1.6;
   color: rgba(255, 255, 255, 0.38);
+}
+/* 分页控件：上下页按钮 + 页码指示 */
+.ac-pager {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 16rpx;
+  margin-top: 14rpx;
+  padding: 8rpx 0;
+}
+.ac-pager-btn {
+  padding: 6rpx 24rpx;
+  border-radius: 16rpx;
+  font-size: 22rpx;
+  color: rgba(255, 255, 255, 0.7);
+  background: rgba(255, 255, 255, 0.06);
+  border: 1rpx solid rgba(255, 255, 255, 0.1);
+  transition: all 0.15s ease;
+}
+.ac-pager-btn:active {
+  background: rgba(255, 255, 255, 0.12);
+  color: #fff;
+}
+.ac-pager-btn.disabled {
+  opacity: 0.3;
+  pointer-events: none;
+}
+.ac-pager-info {
+  font-size: 22rpx;
+  color: rgba(255, 255, 255, 0.5);
+  min-width: 60rpx;
+  text-align: center;
 }
 .acct-logout {
   margin-top: 24rpx;
