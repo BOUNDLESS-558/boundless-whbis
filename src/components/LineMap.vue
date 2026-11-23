@@ -301,13 +301,11 @@
           <view class="cc-bar" v-if="cityBusy"><view class="cc-bar-in" :style="{ width: cityProgress + '%' }"></view></view>
         </view>
         <view class="ctrl-city-row">
-          <view class="cc-btn" v-if="!cityBusy" :title="'重新拉取全网（约 ' + cityCost + ' 个请求）'" @click="runCity(true)">↻ 重扫</view>
-          <view class="cc-btn" v-else title="中止本轮拉取（保留已扫到的部分结果）" @click="cancelCity">✕ 中止</view>
+          <!-- 重扫 / 中止 已并入底部栏「重扫」按钮，此处不重复 -->
           <view class="cc-btn" :class="{ on: cityFollow > 0 }" :title="cityFollowTitle" @click="cycleCityFollow">{{ cityFollowLabel }}</view>
           <view class="cc-btn" :class="{ on: cityShowOrgId }" title="近景给每辆车标出编号标签" @click="toggleCityTags">编号标签</view>
           <view class="cc-btn" :class="{ on: cityNetMode !== 'off' }" :title="'线网显示：' + cityNetModeLabel + '（点击切换 精简/全部/关闭）'" @click="cycleCityNetMode">{{ cityNetModeLabel }}</view>
-          <view class="cc-btn ghost" :class="{ on: orgSearchOpen }" title="按自编号尾号（后三位/后四位）跨所有公司查车并定位，本地匹配不发请求" @click="toggleOrgSearch">🔍 查车</view>
-          <view class="cc-btn ghost" :class="{ on: rankOpen }" title="按车速从高到低列出全局在运车辆（纯本地排序，不发请求）" @click="toggleRank">🏁 车速榜</view>
+          <!-- 查车 / 车速榜 已并入底部栏，此处不重复 -->
         </view>
       </block>
     </view>
@@ -339,12 +337,12 @@
     />
 
     <!-- 底部快捷操作栏：常驻贴底，所有高频操作合一，不再分两处。
-         线路态 = 刷新 + 视图工具 + 三向切换（共 9 个）；全市态 = 刷新 + 视图工具 + 车速榜 / 自编号查车（共 8 个，不显示方向分组） -->
+         线路态 = 重扫 + 视图工具 + 三向切换（共 9 个）；全市态 = 重扫 + 视图工具 + 车速榜 / 自编号查车（共 8 个，不显示方向分组） -->
     <view class="bottom-bar" v-if="lineNo || cityOn">
-      <!-- 通用：刷新 -->
-      <view class="bb-item" @click="refreshNow" :title="loading ? '刷新中…' : '立即刷新'">
-        <text class="bb-ico" :class="{ spin: loading }">↻</text>
-        <text class="bb-label">刷新</text>
+      <!-- 通用：重扫（线路态=刷新线路，全市态=重扫全网） -->
+      <view class="bb-item" @click="bottomRescan" :title="cityOn ? (cityBusy ? '中止本轮拉取' : '重新拉取全网在运车辆') : (loading ? '刷新中…' : '立即刷新线路')">
+        <text class="bb-ico" :class="{ spin: cityBusy || loading }">↻</text>
+        <text class="bb-label">重扫</text>
       </view>
       <!-- 视图工具：缩放 / 全览 / 站名 / 底图 -->
       <view class="bb-sep"></view>
@@ -2393,6 +2391,15 @@ export default {
       this.planRouteViaOsrm()
       if (key) this.planRouteViaAmapKey()
       else this.renderSchematic()
+    },
+    // 底部栏「重扫」：线路态 = 刷新线路，全市态 = 重扫全网（复用 ctrl-city-row 的 runCity / cancelCity）
+    bottomRescan() {
+      if (this.cityOn) {
+        if (this.cityBusy) this.cancelCity()
+        else this.runCity(true)
+      } else {
+        this.refreshNow()
+      }
     },
     // 单击 ↻：立即拉一次（自动刷新模式下也用于手动补一次）
     refreshNow() {
@@ -6223,7 +6230,7 @@ export default {
   background: linear-gradient(90deg, var(--ac), var(--ac-2));
   transition: width 0.25s ease-out;
 }
-/* 全市数据操作行：只留扫描 / 跟随 / 编号标签 / 查车 / 车速榜，视图工具已并入底部栏。
+/* 全市数据操作行：只留跟随 / 编号标签 / 线网模式（重扫/查车/车速榜已并入底部栏）。
    与上方信息区之间一条极淡分隔线 */
 .ctrl-city-row {
   display: flex;
