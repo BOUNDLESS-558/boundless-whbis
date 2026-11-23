@@ -453,6 +453,7 @@ import {
   getAccent,
   setAccent,
   previewAccent,
+  applyAccent,
   getRefreshSec,
   setRefreshSec as saveRefreshSec,
   onRefreshSecChange,
@@ -619,7 +620,8 @@ export default {
     },
     // 内联调色盘：渲染辅助计算属性
     cpHueColor() {
-      return this.pickerToHex(this.pickerH, 1, 1)
+      // 纯色相：HSL 下 100% 饱和 + 50% 亮度才是纯色（100% 亮度 = 白，调色盘会全白）
+      return this._hslToHex(this.pickerH, 100, 50)
     },
     cpCursorStyle() {
       // 十字光标位置：cx = s*width, cy = (1-v)*height；黑圈外置白环
@@ -871,6 +873,7 @@ export default {
       this.syncIdentity()
       this.skin = getSkin()
       this.accent = getAccent()
+      applyAccent(this.accent) // F5/重启后重新挂载 CSS 变量族，否则主题色不生效
       this.refreshDefault = getRefreshSec()
       const amapPair = getAmapKeyPair()
       this.amapKey = amapPair.key
