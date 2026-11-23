@@ -304,6 +304,7 @@
           <view class="cc-btn" v-else title="中止本轮拉取（保留已扫到的部分结果）" @click="cancelCity">✕ 中止</view>
           <view class="cc-btn" :class="{ on: cityFollow > 0 }" :title="cityFollowTitle" @click="cycleCityFollow">{{ cityFollowLabel }}</view>
           <view class="cc-btn" :class="{ on: cityShowOrgId }" title="近景给每辆车标出编号标签" @click="toggleCityTags">编号标签</view>
+          <view class="cc-btn" :class="{ on: cityNetMode !== 'off' }" :title="'线网显示：' + cityNetModeLabel + '（点击切换 精简/全部/关闭）'" @click="cycleCityNetMode">{{ cityNetModeLabel }}</view>
           <view class="cc-btn ghost" :class="{ on: orgSearchOpen }" title="按自编号尾号（后三位/后四位）跨所有公司查车并定位，本地匹配不发请求" @click="toggleOrgSearch">🔍 查车</view>
           <view class="cc-btn ghost" :class="{ on: rankOpen }" title="按车速从高到低列出全局在运车辆（纯本地排序，不发请求）" @click="toggleRank">🏁 车速榜</view>
         </view>
@@ -719,6 +720,11 @@ const CITY_CLUSTER_ID = 60000
 // 远景（整个武汉市）1187 个方向逐条画会生成 1100+ 个 <path>，每次拖帧都要重建一遍 vnode；
 // 低于该缩放时按方向色合并成两条巨型 path（全市尺度下网络靠密度表达，单条颜色本来也看不清）
 const CITY_NET_FUSE_ZOOM = 12.6
+// 线网显示模式：off 关闭 / lite 精简（只画主干+当前视野重点，默认）/ full 全部逐条
+const CITY_NET_MODE_KEY = 'whbis:city-net-mode'
+const CITY_NET_MODES = ['lite', 'full', 'off']
+// 精简模式逐条绘制上限（只突出站点多的主干，其余交给淡色背景纹理）
+const CITY_NET_LITE_PATHS = 90
 // 近景逐条绘制时的方向数上限（视口裁剪后本就剩不了几条，再多彩虹也会糊成一团）
 const CITY_NET_MAX_PATHS = 260
 // 单次渲染的投影点预算：超了就按整条线等距抽稀（远景本就看不出弯折）
@@ -1081,6 +1087,8 @@ export default {
       cityDots: [],
       // 全市线网走向路径（自绘模式）：[{ key, d, color, w, op }]
       cityNetPaths: [],
+      // 线网显示模式：lite（默认，只突出主干）/ full（全部逐条）/ off（关闭线网）
+      cityNetMode: 'lite',
       // 全市自编号标签（自绘模式，走 HTML 标签层）：[{ key, x, y, text, color, sel }]
       cityTags: [],
       // 线网统计（只放文案要用的字段；几何本体挂 this._net，5w 个数字进 data 会拖慢每帧）
@@ -1331,6 +1339,9 @@ export default {
       if (!this.cityFollow) return '自动跟随：关（每次手动重扫）'
       return `每 ${this.cityFollow} 分钟重扫一次全网：约 ${Math.round((this.cityCost * 24 * 60) / this.cityFollow / 1000)}k 次请求/天，慎用`
     },
+    cityNetModeLabel() {
+      return this.cityNetMode === 'lite' ? '线网·精简' : this.cityNetMode === 'full' ? '线网·全部' : '线网·关闭'
+    },
     // 线网底图的状态文案（原生模式下要明说「视野内只绘这么多条」，否则用户会以为全市只这些线）
     cityNetNote() {
       if (this.cityNetBusy) return '线网底图加载中…'
@@ -1452,10 +1463,15 @@ export default {
       void this.cityNetTick
       void this.cityDirty
       const net = this._net
-      if (!net) return []
+      if (!net || this.cityNetMode === 'off') return []
       const vp = this._cityViewport()
       const rect = this._cityRect(vp.w, vp.h)
-      const dirs = this.pickCityDirs(rect, CITY_NET_MAX_NATIVE)
+      // lite 模式只绘站数最多的主干（原生覆盖物成本高，比自绘更该收敛）
+      const cap = this.cityNetMode === 'lite' && !this.cityFilterNo ? Math.min(CITY_NET_LITE_PATHS, CITY_NET_MAX_NATIVE) : CITY_NET_MAX_NATIVE
+      let dirs = this.pickCityDirs(rect, cap)
+      if (this.cityNetMode === 'lite' && !this.cityFilterNo && dirs.length > 2) {
+        dirs = [...dirs].sort((a, b) => b.n - a.n).slice(0, cap)
+      }
       const out = []
       for (const d of dirs) {
         if (d.n < 2) continue
@@ -2455,7 +2471,19 @@ export default {
         if (CITY_FOLLOW_OPTS.includes(v)) this.cityFollow = v
         const t = uni.getStorageSync('whbis:city-tags')
         if (t !== '' && t != null) this.cityShowOrgId = Number(t) !== 0
+        const nm = uni.getStorageSync(CITY_NET_MODE_KEY)
+        if (CITY_NET_MODES.includes(nm)) this.cityNetMode = nm
       } catch (e) { /* 存储不可用保持默认 */ }
+    },
+    // 线网显示模式循环：精简（默认，只突出主干）→ 全部（逐条）→ 关闭 → 精简
+    cycleCityNetMode() {
+      const i = CITY_NET_MODES.indexOf(this.cityNetMode)
+      this.cityNetMode = CITY_NET_MODES[(i + 1) % CITY_NET_MODES.length]
+      try { uni.setStorageSync(CITY_NET_MODE_KEY, this.cityNetMode) } catch (e) { /* 忽略 */ }
+      // 原生模式重建折线覆盖物；自绘模式重画线网
+      if (this.useMap) this.mapKey++
+      else this.renderCityNet(zoomScale(this.cam.zoom), this.canvas.w, this.canvas.h)
+      uni.showToast({ title: this.cityNetModeLabel, icon: 'none' })
     },
     // 载入全市线网底图。几何本体挂 this._net 而不是 data：五万多个数字进 Vue 深代理
     // 会拖慢每一帧，而且它加载完就不再变，变的只是相机。
@@ -2536,34 +2564,49 @@ export default {
       hit.sort((a, b) => b.n - a.n)
       return hit.slice(0, cap)
     },
-    // 全市线网走向（自绘模式）：远景按方向色合并成两条巨路径，近景逐条；
-    // 命中线路号筛选时永远逐条加重，否则单条走向会被网络纹理漫掉。
+    // 全市线网走向（自绘模式）。三种模式：
+    //   off   —— 只画车点，不画线网（车流分布看得最清楚）
+    //   lite  —— 默认：淡色全网纹理打底 + 只突出站点多的主干线（上限 90 条），层次分明不再糊成一团
+    //   full  —— 旧行为：视野内每条线逐条加重（最多 260 条），线路多时会密，供需要逐条辨认时用
+    // 命中线路号筛选时一律逐条加重该线，避免单条走向被背景纹理漫掉。
     renderCityNet(s, w, h) {
       const net = this._net
-      if (!net) {
+      if (!net || this.cityNetMode === 'off') {
         this.cityNetPaths = []
         return
       }
       const rect = this._cityRect(w, h)
+      const q = String(this.cityFilterNo || '').trim()
+      const filtered = !!q
       const fuse = this.cam.zoom < CITY_NET_FUSE_ZOOM
-      const detail = !!String(this.cityFilterNo || '').trim() || !fuse
-      const dirs = this.pickCityDirs(rect, fuse && !detail ? net.dirCount : CITY_NET_MAX_PATHS)
+      // lite：视野内主干优先（按站数），full：上限放宽到 260
+      const modeCap = filtered ? CITY_NET_MAX_PATHS : (this.cityNetMode === 'lite' ? CITY_NET_LITE_PATHS : CITY_NET_MAX_PATHS)
+      const allDirs = this.pickCityDirs(rect, Math.max(modeCap, fuse ? net.dirCount : 0))
+      // 精简模式：分「背景纹理」与「主干突出」两层。
+      //   背景 = 未被选中的线，合并成两条极淡巨路径（保留网络形状，不抢视线）；
+      //   主干 = 站数最多的前 modeCap 条，逐条正常描边。
+      let detailDirs = allDirs
+      let bgDirs = []
+      if (this.cityNetMode === 'lite' && !filtered && allDirs.length > modeCap) {
+        const byN = [...allDirs].sort((a, b) => b.n - a.n)
+        detailDirs = byN.slice(0, modeCap)
+        const picked = new Set(detailDirs)
+        bgDirs = allDirs.filter((d) => !picked.has(d))
+      }
+      // 点预算按真正逐条绘制的线计算（背景层单独拼、也吃总量，一并计入）
       let total = 0
-      for (const d of dirs) total += d.n
-      // 点预算：整张网络的投影点数封顶，超出就按整条线等距抽稀
+      for (const d of detailDirs) total += d.n
+      for (const d of bgDirs) total += d.n
       const step = total > CITY_NET_MAX_PTS ? Math.ceil(total / CITY_NET_MAX_PTS) : 1
       const cu = this.cam.u
       const cv = this.cam.v
       const cx = this.projCenter.x
       const cy = this.projCenter.y
-      const buf = [[], []]
-      const per = []
       // 热点：上千条线 × 上万点逐帧拼 SVG path。Math.round 数值拼接比 toFixed(1) 的字符串
       // 格式化更快（两者都是 0.1px 精度），是拖动卡顿的主因之一。
       const r1 = (v) => Math.round(v * 10) / 10
-      for (const d of dirs) {
+      const pathOf = (d) => {
         const n = d.n
-        if (n < 2) continue
         const seg = []
         for (let i = 0; i < n; i += step) {
           const x = r1((d.mu[i] - cu) * s + cx)
@@ -2575,14 +2618,29 @@ export default {
           const y = r1((d.mv[n - 1] - cv) * s + cy)
           seg.push('L' + x + ' ' + y)
         }
-        if (detail) per.push({ key: d.code + '-' + d.dir, d: seg.join(''), color: DIR_STYLE[d.dir].svgStroke, w: 4, op: 1 })
-        else buf[d.dir].push(seg.join(''))
+        return seg.join('')
       }
-      const paths = per
-      // 合并层的参数：远景细淡（1000 多条叠在一起靠密度说话），近景逐条才会加重
-      for (const dir of [1, 0]) {
-        if (!buf[dir].length) continue
-        paths.unshift({ key: 'fuse' + dir, d: buf[dir].join(''), color: DIR_STYLE[dir].svgStroke, w: 1.3, op: 0.6 })
+      const paths = []
+      // ① 背景纹理层（淡、细、先画）：远景合并全部、近景只合并非主干；完全不抢视线
+      const bgPool = bgDirs.length ? bgDirs : (fuse && !filtered ? allDirs : [])
+      if (bgPool.length) {
+        const buf = [[], []]
+        for (const d of bgPool) buf[d.dir].push(pathOf(d))
+        for (const dir of [1, 0]) {
+          if (!buf[dir].length) continue
+          paths.push({ key: 'fuse' + dir, d: buf[dir].join(''), color: DIR_STYLE[dir].svgStroke, w: 1.2, op: 0.22 })
+        }
+      }
+      // ② 主干 / 逐条层：lite 用中等粗细+较高透明度，full/filtered 用旧口径（w4）
+      // 远景未筛选：只保留淡色纹理层，不再逐条画（否则 1000+ 条 w4 直接糊屏，且白白多画一遍）
+      const drawIndividual = filtered || !fuse
+      if (drawIndividual) {
+        const lineW = this.cityNetMode === 'lite' && !filtered ? 2.6 : 4
+        const lineOp = this.cityNetMode === 'lite' && !filtered ? 0.85 : 1
+        for (const d of detailDirs) {
+          if (d.n < 2) continue
+          paths.push({ key: d.code + '-' + d.dir, d: pathOf(d), color: DIR_STYLE[d.dir].svgStroke, w: lineW, op: lineOp })
+        }
       }
       this.cityNetPaths = paths
     },
