@@ -6272,7 +6272,15 @@ export default {
   height: auto;
   min-height: 160rpx;
 }
-.os-body { padding: 20rpx 24rpx 24rpx; }
+/* 面板本体已有 max-height:58vh + flex 列：这里必须 flex:1 + min-height:0，
+   否则结果列表撑破面板上限，数据多时溢出屏幕（与车速榜 .rank-body 同口径）。 */
+.os-body {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  padding: 20rpx 24rpx 24rpx;
+}
 .os-input-row {
   display: flex;
   gap: 12rpx;
@@ -6335,8 +6343,17 @@ export default {
   color: #fcd34d;
   background: rgba(252, 211, 77, 0.1);
 }
-/* 结果列表：固定高度滚动，多结果不会把浮窗撑出屏幕 */
-.os-list { height: 520rpx; }
+/* 结果列表：占满面板剩余高度并内部滚动（与车速榜 .rank-list 同口径），
+   不再固定 520rpx——面板自己有 max-height:58vh，列表跟着收缩 scrolling。 */
+.os-list {
+  flex: 1 1 auto;
+  min-height: 0;
+  height: auto;
+  overflow-y: auto;
+  overflow-x: hidden;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
+}
 .os-row {
   padding: 14rpx 16rpx;
   margin-bottom: 8rpx;
