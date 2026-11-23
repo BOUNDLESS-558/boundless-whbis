@@ -284,7 +284,6 @@
                     @mousedown.stop="onAreaDown($event)"
                     @touchstart.prevent="onAreaDown($event)">
                   <view class="cp-cursor" :style="cpCursorStyle"></view>
-                </view>
               </view>
               <view class="cp-hue-bar" ref="cpHueRef"
                     @mousedown.stop="onHueDown($event)"
