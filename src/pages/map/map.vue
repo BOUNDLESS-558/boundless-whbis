@@ -247,33 +247,6 @@
             </view>
           </view>
 
-          <!-- 界面组件库：原生 / Bootstrap / Element Plus（H5 only） -->
-          <view class="acct-sec-head" @click="toggleAcctSection('ui')">
-            <text class="acct-sec-title">界面组件</text>
-            <text class="acct-sec-sum" v-if="!acctSec.ui">{{ acctSecSummary.ui }}</text>
-            <text class="acct-sec-chev" :class="{ folded: !acctSec.ui }">▾</text>
-          </view>
-          <view v-show="acctSec.ui" class="acct-sec-body">
-            <view class="acct-seg">
-              <view
-                class="acct-seg-item"
-                v-for="o in uiModeOpts"
-                :key="o.key"
-                :class="{ on: uiMode === o.key }"
-                @click="onUiMode(o.key)"
-              >{{ o.label }}</view>
-            </view>
-            <view class="acct-tip" v-if="uiMode === 'native'">
-              当前自定义 UI 设计，无需加载额外组件库，性能最优
-            </view>
-            <view class="acct-tip" v-else-if="uiMode === 'bootstrap'">
-              加载 Bootstrap 5 组件样式，按钮 / 表单 / 分段控制等组件外观会变为 Bootstrap 风格。切换即时生效，本机记忆。
-            </view>
-            <view class="acct-tip" v-else>
-              加载 Element Plus 组件样式，按钮 / 表单 / 分段控制等组件外观会变为 Element Plus 风格。切换即时生效，本机记忆。
-            </view>
-          </view>
-
           <!-- 主题色：预设色板 + 调色盘。写 --ac CSS 变量族挂 <html>，
                全站按钮 / 页签 / 选中态 / 胶囊即时跟随（预设避开上行青蓝与下行玫红方向色） -->
           <view class="acct-sec-head" @click="toggleAcctSection('accent')">
@@ -490,9 +463,6 @@ import {
   getAmapKeyPair,
   setAmapKeyPair,
   getAmapUsageToday,
-  UI_MODE_OPTS,
-  getUiMode,
-  setUiMode,
 } from '../../utils/settings.js'
 import { getAvatar, removeAvatar, pickAvatar } from '../../utils/avatar.js'
 import { getMinStopsMode, setMinStopsMode } from '../../utils/settings.js'
@@ -510,11 +480,11 @@ const CITY_ACT_KEY = 'whbis:city-activated'
 const CITY_ACT_CODE = 'BOUNDLESS_558'
 // 「账号与设置」各分区的展开态：本机记忆，避免每次开窗都要重新点开
 const ACCT_SECTIONS_KEY = 'whbis:acct-sections'
-const ACCT_SECTION_KEYS = ['session', 'pwd', 'refresh', 'skin', 'ui', 'accent', 'font', 'map']
+const ACCT_SECTION_KEYS = ['session', 'pwd', 'refresh', 'skin', 'accent', 'font', 'map']
 // 默认：常用的小分区展开，字体（13 档）与密码表单这类长分区默认收起，
 // 让面板首屏就能看到全部设置项，不用一路滚到底
 const ACCT_SECTIONS_DEFAULT = {
-  session: true, pwd: false, refresh: true, skin: true, ui: true, accent: true, font: false,
+  session: true, pwd: false, refresh: true, skin: true, accent: true, font: false,
   map: true,
 }
 
@@ -546,9 +516,6 @@ export default {
       svgEyeOff: '<svg viewBox="0 0 24 24" width="1em" height="1em" style="display:block" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="m4 4 16 16"/><path d="M9.9 5.1A10.8 10.8 0 0 1 12 5c6.5 0 10 7 10 7a17.8 17.8 0 0 1-2.7 3.5M6.3 6.5A16.4 16.4 0 0 0 2 12s3.5 7 10 7a10.6 10.6 0 0 0 4.4-.9"/><path d="M9.9 9.9a2.9 2.9 0 0 0 4.2 4.2"/></svg>',
       pwdCustom: false,
       skinOpts: SKIN_OPTS,
-      // 界面组件库：原生 / Bootstrap / Element Plus（H5 only；App 恒定原生）
-      uiMode: 'native',
-      uiModeOpts: UI_MODE_OPTS,
       // 主题色：当前生效 hex（含自定义）与预设色板
       accent: '#6366f1',
       accentPresets: ACCENT_PRESETS,
@@ -630,13 +597,11 @@ export default {
       const map = this.mapSourceOpts.find((o) => o.key === this.mapSource)
       const accent = this.accentPresets.find((p) => p.hex === this.accent)
       const days = this.sessionOpts.find((o) => o.days === this.sessionDays)
-      const ui = this.uiModeOpts.find((o) => o.key === this.uiMode)
       return {
         session: days ? days.label : `${this.sessionDays} 天`,
         pwd: this.pwdCustom ? '自定义密码' : '预置口令',
         refresh: this.refreshDefault === 0 ? '手动刷新' : `${this.refreshDefault} 秒`,
         skin: skin ? skin.label : '黑色',
-        ui: ui ? ui.label : '原生',
         accent: accent ? accent.label : '自定义',
         font: font ? font.label : '系统默认',
         // 合并分区摘要：底图来源 + KEY 是否已填
@@ -652,6 +617,8 @@ export default {
     // 登录守卫：未登录一律回登录页（pages.json 首页已指向 login，这里兜底深链/回退）
     if (!requireLogin()) return
     this.account = currentAccount()
+    // 皮肤：页面加载时即从存储读回，避免 settings 面板默认显示「黑色」而非实际保存值
+    this.skin = getSkin()
     // 刷新间隔全站统一：任一控件改动时，反向同步设置面板里的选中态
     this.refreshDefault = getRefreshSec()
     this._offRefresh = onRefreshSecChange((sec) => { this.refreshDefault = sec })
@@ -873,7 +840,6 @@ export default {
       }
       this.syncIdentity()
       this.skin = getSkin()
-      this.uiMode = getUiMode()
       this.accent = getAccent()
       this.refreshDefault = getRefreshSec()
       this.mapSource = getMapSource()
@@ -927,10 +893,6 @@ export default {
     // 皮肤：黑 / 白 / 跟随系统（写 <html data-skin>，全局 CSS 换肤）
     onSkin(key) {
       this.skin = setSkin(key)
-    },
-    // 界面组件库：原生 / Bootstrap / Element Plus（H5 only；App 恒定原生）
-    onUiMode(key) {
-      this.uiMode = setUiMode(key)
     },
     // 主题色：写 --ac CSS 变量族挂 <html>，全站强调元素即时跟随；本机持久化
     onAccent(hex) {
