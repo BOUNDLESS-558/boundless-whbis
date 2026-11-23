@@ -194,8 +194,8 @@
       </template>
     </view>
 
-    <!-- 鼠标悬停车辆图标的浮标：内容与编号标签模式联动（mode1=仅自编号，mode2=自编号·线路号+方向第二行），
-         鼠标离开即消失（不常驻遮挡）；触屏无 hover，单击车图标直接看详情浮窗 -->
+    <!-- 鼠标悬停车辆图标的浮标：内容与编号标签模式联动（mode1=仅自编号，mode2=自编号·线路号·方向），
+         与地图标签文本格式完全一致；鼠标离开即消失（不常驻遮挡）；触屏无 hover，单击车图标直接看详情浮窗 -->
     <view class="bus-hover" v-if="hoverTip" :style="{ left: hoverTip.x + 'px', top: hoverTip.y + 'px' }">
       <text class="bh-no">{{ hoverTip.no || '…' }}</text>
       <text class="bh-line" v-if="hoverTip.line">{{ hoverTip.line }}</text>
@@ -4357,12 +4357,12 @@ export default {
         const pr = page.getBoundingClientRect()
         const org = this.fmtNo(hit.bus.orgId || '')
         const dirTxt = hit.bus.dir === 0 ? '上行' : '下行'
-        // 悬停内容与编号标签模式联动：mode1=仅自编号，mode2=自编号 · 线路号（方向在第二行）
+        // 悬停内容与编号标签模式联动：mode1=仅自编号，mode2=自编号 · 线路号 · 方向（与标签格式完全一致）
         const tip = {
           x: Math.round(hit.p.x + r.left - pr.left),
           y: Math.round(hit.p.y + r.top - pr.top - lift),
-          no: this.cityTagMode === 2 ? `${org} · ${hit.bus.no || ''}` : org,
-          line: this.cityTagMode === 2 ? dirTxt : null,
+          no: this.cityTagMode === 2 ? `${org} · ${hit.bus.no || ''} · ${dirTxt}` : org,
+          line: null,
         }
         const old = this.hoverTip
         if (old && old.no === tip.no && old.line === tip.line && Math.abs(old.x - tip.x) < 1 && Math.abs(old.y - tip.y) < 1) return
@@ -4399,12 +4399,12 @@ export default {
       const pr = page.getBoundingClientRect()
       const org = this.fmtNo(hit.bus.orgId || '')
       const dirTxt = hit.bus.dir === 0 ? '上行' : '下行'
-      // 悬停内容与编号标签模式联动：mode1=仅自编号，mode2=自编号 · 线路号（方向在第二行）
+      // 悬停内容与编号标签模式联动：mode1=仅自编号，mode2=自编号 · 线路号 · 方向（与标签格式完全一致）
       const tip = {
         x: Math.round(hit.p.x + r.left - pr.left),
         y: Math.round(hit.p.y + r.top - pr.top - lift),
-        no: this.cityTagMode === 2 ? `${org} · ${hit.bus.no || ''}` : org,
-        line: this.cityTagMode === 2 ? dirTxt : null,
+        no: this.cityTagMode === 2 ? `${org} · ${hit.bus.no || ''} · ${dirTxt}` : org,
+        line: null,
       }
       const old = this.hoverTip
       if (old && old.no === tip.no && old.line === tip.line && Math.abs(old.x - tip.x) < 1 && Math.abs(old.y - tip.y) < 1) return
@@ -4791,7 +4791,7 @@ export default {
 .bus-label.edge-r {
   transform: translate(-100%, -200%);
 }
-/* 鼠标悬停车辆图标的浮标：内容与编号标签模式联动，离开即消失（不常驻、不拦截鼠标） */
+/* 鼠标悬停车辆图标的浮标：内容与编号标签模式联动（单行完整格式），离开即消失（不常驻、不拦截鼠标） */
 .bus-hover {
   position: absolute;
   z-index: 26;
