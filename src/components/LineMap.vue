@@ -1389,7 +1389,7 @@ export default {
     },
     // 编号标签按钮标签：三档循环
     cityTagModeLabel() {
-      return ['关闭', '自编号', '自编号+线路号'][this.cityTagMode] || '编号标签'
+      return ['关闭', '自编号', '自编号+线路号+方向'][this.cityTagMode] || '编号标签'
     },
     cityFollowTitle() {
       if (!this.cityFollow) return '自动跟随：关（每次手动重扫）'
@@ -2728,7 +2728,8 @@ export default {
       for (const d of cands) {
         if (out.length >= CITY_TAG_MAX) break
         const org = this.fmtNo(d.bus.orgId)
-        const text = this.cityTagMode === 2 ? `${org} · ${d.bus.no || ''}` : org
+        const dirTxt = d.bus.dir === 0 ? '上行' : '下行'
+        const text = this.cityTagMode === 2 ? `${org} · ${d.bus.no || ''} · ${dirTxt}` : org
         const bw = textW(text) * 0.8
         const y = d.y - 17
         const box = { x1: d.x - bw / 2, x2: d.x + bw / 2, y1: y - 6, y2: y + 6 }
@@ -2893,7 +2894,8 @@ export default {
           if (showTag && tagCount < CITY_TAG_MAX && c.bus.orgId) {
             tagCount++
             const org = this.fmtNo(c.bus.orgId)
-            const labelContent = this.cityTagMode === 2 ? `${org} · ${c.bus.no || ''}` : org
+            const dirTxt = c.bus.dir === 0 ? '上行' : '下行'
+            const labelContent = this.cityTagMode === 2 ? `${org} · ${c.bus.no || ''} · ${dirTxt}` : org
             marker.label = {
               content: labelContent,
               color: '#0B1020',

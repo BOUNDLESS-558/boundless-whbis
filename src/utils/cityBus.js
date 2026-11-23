@@ -414,10 +414,11 @@ export async function sweepCity(opts = {}) {
     lines: lines.size,
     count: buses.length,
     buses,
-    // 部分结果（被取消或有失败方向）：不写缓存，避免下次直接复用一份残缺快照
+    // 部分结果（被取消或有失败方向）：仍写缓存（有总比没有强，旧快照会覆盖），
+    // 但保留 partial 标记让 UI 提示「本轮不完整」
     partial: cancelled || done < dirs.length || failed > 0,
   }
-  if (!snap.partial) saveSnapshot(snap)
+  saveSnapshot(snap)
   return snap
 }
 
