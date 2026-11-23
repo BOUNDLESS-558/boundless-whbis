@@ -54,6 +54,13 @@ export const ACCENT_PRESETS = [
   { key: 'green', hex: '#10b981', label: '翠绿' },
   { key: 'orange', hex: '#f97316', label: '活力橙' },
   { key: 'blue', hex: '#3b82f6', label: '天蓝' },
+  // 新增：对比度更清晰的几档强调色
+  { key: 'red', hex: '#ef4444', label: '正红' },
+  { key: 'teal', hex: '#14b8a6', label: '青绿' },
+  { key: 'violet', hex: '#8b5cf6', label: '深紫' },
+  { key: 'sky', hex: '#0ea5e9', label: '湛蓝' },
+  { key: 'lime', hex: '#84cc16', label: '荧光绿' },
+  { key: 'rose', hex: '#fb7185', label: '玫瑰粉' },
 ]
 
 /** 规范成 #rrggbb 小写；非法输入返回 null */

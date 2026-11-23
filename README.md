@@ -36,7 +36,7 @@
 
 ### 2026-11-23（最新）
 
-- **主题色持久化修复（F5 不还原 + 调色盘面板不弹出）**：根因是 `applyAccent()`（把 CSS 变量族挂到 `<html>`）只在打开「账号与设置」面板的 `onAccount()` 里调用，`onLoad()` 只读了 `getSkin()` / `getRefreshSec()` 却没读主题色、也没挂载。修复：`onLoad()` 里补 `this.accent = getAccent(); applyAccent(this.accent)`，F5/重启后立即生效，无需先点开面板。调色盘面板弹出问题：触发器 `ac-picker` 的 `mouseleave` 直接 `showPicker=false`，鼠标还没移到面板上面板就没了。修复：引入 `_pickerTimer` 防抖——离开触发器后延迟 120ms 才隐藏，鼠标进入面板时 `onPickerPanelEnter` 清除计时器，离开面板时 `onPickerPanelLeave` 重新排 hiding。调色盘 `cpHueColor` 原来返回 `_hslToHex(h, 100, 100)`，HSL 下 100% 亮度恒为白，导致 SV 面板全白看不见。改为 `_hslToHex(h, 100, 50)`（纯色相 = 100% 饱和 + 50% 亮度）
+- **移除调色盘、扩展预设主题色**：设置面板「主题色」分区移除 HSV 浮动调色盘（点击彩虹圆点弹出面板的设计），简化为纯预设色点环。`ACCENT_PRESETS` 新增 6 组对比度清晰的强调色：正红 `#ef4444` / 青绿 `#14b8a6` / 深紫 `#8b5cf6` / 湛蓝 `#0ea5e9` / 荧光绿 `#84cc16` / 玫瑰粉 `#fb7185`（均选 Tailwind Color Palette L≈50~55 档，避免过暗或过曝）。同步清理全部关联代码（方法 / computed / data / import / CSS ~130 行）。
 
 - **界面组件库切换（原生 / Bootstrap / Element Plus）**：`utils/settings.js` 新增 `UI_MODE_KEY`、`UI_MODE_OPTS`、`getUiMode()`/`setUiMode()`/`applyUiMode()`；「账号与设置 → 界面组件」分区提供三档分段控制（原生 / Bootstrap / Element Plus），原生为默认。H5 下切换时动态加载对应 CDN CSS（Bootstrap 5.3 / Element Plus 2.7），写 `<html data-ui-mode="…">` 让全局 CSS 据此覆盖。**两种现代模式均翻转为「浅色底 + 深色字」的库原生规范**（不再沿用深色玻璃拟态）：面板变白底 + 圆角 + 深阴影（Bootstrap 12px / Element 8px）、按钮按各自库规范重排（padding / 字重 / 边框 / hover / active）、分段控制改为库风格按钮组、输入框加聚焦阴影、分区标题改为卡片列表项、分割线 / 标签 / 值 / 提示文字全部反色对齐库调色板。App 端恒定原生（`getUiMode()` 对非 H5 直接返回 `'native'`）。启动时 `App.vue` 的 `onLaunch` 调 `applyUiMode()` 恢复上次选择。全局覆盖样式集中在 `App.vue` `<style>` 末尾，原生模式不命中、保持现有设计不变
 
