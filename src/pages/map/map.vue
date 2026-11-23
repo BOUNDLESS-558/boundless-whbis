@@ -265,12 +265,37 @@
                 :title="p.label"
                 @click="onAccent(p.hex)"
               ></view>
+              <!-- 自定义调色盘：内联 HSV，鼠标移入展开 / 移出自动落库 -->
               <view
                 class="ac-dot ac-picker"
-                :class="{ on: !accentPresets.some((p) => p.hex === accent) }"
+                :class="{ on: !accentPresets.some((p) => p.hex === accent), open: showPicker }"
                 title="调色盘：任选自定义颜色"
-                @click="pickAccent"
+                @mouseenter="onPickerEnter"
+                @mouseleave="onPickerLeave"
               ></view>
+            </view>
+            <!-- 内联调色盘面板（仅 H5；跟随 acct-sec-body 流式布局，不 fixed） -->
+            <view v-if="showPicker && acctSec.accent" class="cp-wrap" @mouseenter.stop
+                  @mouseleave="onPickerLeave"
+                  @mousemove="onPickerDrag($event)"
+                  @touchmove.prevent="onPickerDrag($event)">
+              <view class="cp-area" ref="cpAreaRef"
+                    :style="{ '--cp-hue-color': cpHueColor }"
+                    @mousedown.stop="onAreaDown($event)"
+                    @touchstart.prevent="onAreaDown($event)">
+                  <view class="cp-cursor" :style="cpCursorStyle"></view>
+                </view>
+              </view>
+              <view class="cp-hue-bar" ref="cpHueRef"
+                    @mousedown.stop="onHueDown($event)"
+                    @touchstart.prevent="onHueDown($event)">
+                <view class="cp-hue-track" :style="cpHueTrackStyle"></view>
+                <view class="cp-hue-cursor" :style="cpHueCursorStyle"></view>
+              </view>
+              <view class="cp-preview">
+                <view class="cp-sw" :style="{ background: activeColor }"></view>
+                <text class="cp-hex">{{ activeColor }}</text>
+              </view>
             </view>
             <view class="acct-tip">主题色作用于查询按钮 / 页签 / 选中态等强调元素，自定义后本机记忆，改完即时生效</view>
           </view>
@@ -519,6 +544,13 @@ export default {
       // 主题色：当前生效 hex（含自定义）与预设色板
       accent: '#6366f1',
       accentPresets: ACCENT_PRESETS,
+      // 内联 HSV 调色盘状态
+      showPicker: false,
+      _pDrag: false,     // 'sv'|'h' 当前拖拽区域，无则为 false
+      _pHueBase: 0,      // 拖动前的基准色相（用于区分"改 hue"vs"改 sat/bri"）
+      pickerH: 0,        // 当前 hue (0-360)
+      pickerS: 1,        // 当前 saturation (0-1)
+      pickerV: 1,        // 当前 value (0-1)
       refreshOpts: REFRESH_DEFAULT_OPTS,
       // 地图来源：自绘走向图底图瓦片源
       mapSource: 'amap',
@@ -607,6 +639,27 @@ export default {
         // 合并分区摘要：底图来源 + KEY 是否已填
         map: `${map ? map.label : '高德地图'} · KEY ${this.amapKey ? '已填' : '未填'}`,
       }
+    },
+    // 内联调色盘：渲染辅助计算属性
+    cpHueColor() {
+      return this.pickerToHex(this.pickerH, 1, 1)
+    },
+    cpCursorStyle() {
+      // 十字光标位置：cx = s*width, cy = (1-v)*height；黑圈外置白环
+      const x = `${this.pickerS * 100}%`
+      const y = `${(1 - this.pickerV) * 100}%`
+      return { left: x, top: y }
+    },
+    activeColor() {
+      return this.pickerToHex(this.pickerH, this.pickerS, this.pickerV)
+    },
+    cpHueTrackStyle() {
+      // 渐变提示：360° 彩虹带，cursor 位置不依赖它（cursor 独立绘制）
+      return ''
+    },
+    cpHueCursorStyle() {
+      const left = `${(this.pickerH / 360) * 100}%`
+      return { left }
     },
     // 是否所有分区都已展开（决定快捷按钮文案与方向）
     acctAllOpen() {
@@ -898,49 +951,138 @@ export default {
     onAccent(hex) {
       this.accent = setAccent(hex)
     },
-    // 调色盘：原生取色器（H5）。拖动实时预览，确认落库，取消回退到已存颜色
-    pickAccent() {
+    // ── 颜色空间转换（本地副本，避免污染 settings.js 的内部 API）──
+    _hexToRgbNorm(hex) {
+      const n = parseInt(hex.slice(1), 16)
+      return [(n >> 16) & 255, (n >> 8) & 255, n & 255]
+    },
+    _rgbToHsl(r, g, b) {
+      r /= 255; g /= 255; b /= 255
+      const mx = Math.max(r, g, b), mn = Math.min(r, g, b)
+      let h = 0, s = 0
+      const l = (mx + mn) / 2
+      if (mx !== mn) {
+        const d = mx - mn
+        s = l > 0.5 ? d / (2 - mx - mn) : d / (mx + mn)
+        if (mx === r) h = (g - b) / d + (g < b ? 6 : 0)
+        else if (mx === g) h = (b - r) / d + 2
+        else h = (r - g) / d + 4
+        h *= 60
+      }
+      return [h, s * 100, l * 100]
+    },
+    _hslToHex(h, s, l) {
+      h = ((h % 360) + 360) % 360; s /= 100; l /= 100
+      const c = (1 - Math.abs(2 * l - 1)) * s
+      const x = c * (1 - Math.abs(((h / 60) % 2) - 1))
+      const m = l - c / 2
+      let rr = 0, gg = 0, bb = 0
+      if (h < 60) { rr = c; gg = x } else if (h < 120) { rr = x; gg = c }
+      else if (h < 180) { gg = c; bb = x } else if (h < 240) { gg = x; bb = c }
+      else if (h < 300) { rr = x; bb = c } else { rr = c; bb = x }
+      const t = (v) => Math.round((v + m) * 255).toString(16).padStart(2, '0')
+      return '#' + t(rr) + t(gg) + t(bb)
+    },
+    // ── 内联 HSV 调色盘（H5 only，鼠标从面板移开时自动落库）──
+    onPickerEnter() {
       // #ifdef H5
-      try {
-        if (this._acInput && this._acInput.parentNode) this._acInput.parentNode.removeChild(this._acInput)
-        const input = document.createElement('input')
-        input.type = 'color'
-        input.value = this.accent
-        input.style.cssText = 'position:fixed;left:-9999px;top:0;width:0;height:0;opacity:0'
-        let _changed = false   // change 是否已经触发（防止 blur 与 change 双重触发）
-        let _timer = null
-        input.addEventListener('input', () => {
-          previewAccent(input.value) // 拖动实时预览（不落库）
-        })
-        input.addEventListener('change', () => {
-          _changed = true
-          clearTimeout(_timer)
-          this.accent = setAccent(input.value)
-          if (input.parentNode) input.parentNode.removeChild(input)
-          this._acInput = null
-        })
-        input.addEventListener('cancel', () => {
-          clearTimeout(_timer)
-          previewAccent(this.accent) // 取消：回退到已存颜色
-          if (input.parentNode) input.parentNode.removeChild(input)
-          this._acInput = null
-        })
-        // 兜底：部分浏览器在用户点选后、未显式 confirm/cancel 时只触发 blur 不触发 change。
-        // 用短暂延迟区分「focus 丢失但还未选择」与「用户已选完松开」，未改则应用当前值落库。
-        input.addEventListener('blur', () => {
-          if (_changed) return
-          _timer = setTimeout(() => {
-            if (!_changed) {
-              this.accent = setAccent(input.value)
-            }
-            if (input.parentNode) input.parentNode.removeChild(input)
-            this._acInput = null
-          }, 80)
-        })
-        document.body.appendChild(input)
-        this._acInput = input
-        input.click()
-      } catch (e) { /* 忽略 */ }
+      this.showPicker = true
+      this.syncPickerFromAccent()
+      // #endif
+    },
+    onPickerLeave() {
+      // 鼠标离开整块面板（cp-wrap + ac-picker 都触发），落库一次
+      // #ifdef H5
+      if (!this.showPicker) return
+      this.showPicker = false
+      this.releasePickers()
+      this.commitPicker()
+      // #endif
+    },
+    commitPicker() {
+      const hex = this.pickerToHex(this.pickerH, this.pickerS, this.pickerV)
+      if (hex && hex !== this.accent) this.accent = setAccent(hex)
+    },
+    syncPickerFromAccent() {
+      const rgb = this._hexToRgbNorm(getAccent())
+      if (rgb) {
+        const [h, s, l] = this._rgbToHsl(rgb[0], rgb[1], rgb[2])
+        this.pickerH = h
+        this.pickerS = s / 100
+        this.pickerV = l / 100
+      } else {
+        this.pickerH = 231; this.pickerS = 0.76; this.pickerV = 0.95  // fallback to default indigo
+      }
+    },
+    pickerToHex(h, s, v) {
+      return this._hslToHex(h, s * 100, v * 100)
+    },
+    releasePickers() {
+      document.removeEventListener('mousemove', this._pMoveGlobal)
+      document.removeEventListener('mouseup', this._pUpGlobal)
+      document.removeEventListener('touchmove', this._pMoveGlobal)
+      document.removeEventListener('touchend', this._pUpGlobal)
+      this._pMoveGlobal = null
+      this._pUpGlobal = null
+      this._pDrag = false
+    },
+    onAreaDown(e) {
+      // #ifdef H5
+      this._pDrag = 'sv'
+      this._pHueBase = this.pickerH
+      this._attachPickers()
+      this._doAreaMove(e)
+      // #endif
+    },
+    onHueDown(e) {
+      // #ifdef H5
+      this._pDrag = 'h'
+      this._attachPickers()
+      this._doHueMove(e)
+      // #endif
+    },
+    _attachPickers() {
+      this._pMoveGlobal = (e) => {
+        if (this._pDrag === 'sv') this._doAreaMove(e)
+        else if (this._pDrag === 'h') this._doHueMove(e)
+      }
+      this._pUpGlobal = () => { this.releasePickers(); this.commitPicker() }
+      document.addEventListener('mousemove', this._pMoveGlobal, true)
+      document.addEventListener('mouseup', this._pUpGlobal, true)
+      document.addEventListener('touchmove', this._pMoveGlobal, { passive: false })
+      document.addEventListener('touchend', this._pUpGlobal, true)
+    },
+    _doAreaMove(e) {
+      // #ifdef H5
+      const el = this.$refs.cpAreaRef
+      if (!el) return
+      const r = el.getBoundingClientRect()
+      const clientX = e.touches ? e.touches[0].clientX : e.clientX
+      const clientY = e.touches ? e.touches[0].clientY : e.clientY
+      this.pickerS = Math.max(0, Math.min(1, (clientX - r.left) / r.width))
+      this.pickerV = Math.max(0, Math.min(1, 1 - (clientY - r.top) / r.height))
+      previewAccent(this.pickerToHex(this.pickerH, this.pickerS, this.pickerV))
+      // #endif
+    },
+    _doHueMove(e) {
+      // #ifdef H5
+      const el = this.$refs.cpHueRef
+      if (!el) return
+      const r = el.getBoundingClientRect()
+      const clientX = e.touches ? e.touches[0].clientX : e.clientX
+      let h = Math.round(((clientX - r.left) / r.width) * 360) % 360
+      // 防跳变：跨过 0°/360° 边界时用短线走
+      const diff = h - this._pHueBase
+      if (Math.abs(diff) > 180) h = (this._pHueBase + (diff > 0 ? diff - 360 : diff + 360) + 360) % 360
+      this.pickerH = h
+      previewAccent(this.pickerToHex(h, this.pickerS, this.pickerV))
+      // #endif
+    },
+    onPickerDrag(e) {
+      // 兼容：如果事件冒泡到 cp-wrap 层面（例如 touch 穿透），也转发给对应子区域
+      // #ifdef H5
+      if (this._pDrag === 'sv') this._doAreaMove(e)
+      else if (this._pDrag === 'h') this._doHueMove(e)
       // #endif
     },
     // 地图来源：高德 / 腾讯（自绘走向图底图瓦片源，改完对打开的地图即时生效）
@@ -1760,6 +1902,102 @@ export default {
 }
 .ac-picker {
   background: conic-gradient(#f43f5e, #f97316, #facc15, #4ade80, #22d3ee, #818cf8, #e879f9, #f43f5e);
+  position: relative;
+  transition: box-shadow 0.15s ease;
+}
+.ac-picker.open {
+  box-shadow: 0 0 0 4rpx rgba(var(--ac-rgb), 0.85);
+}
+
+/* ── 内联 HSV 调色盘（仅 H5）── */
+.cp-wrap {
+  display: flex;
+  align-items: center;
+  gap: 12rpx;
+  margin-top: 12rpx;
+  padding: 12rpx 14rpx;
+  border-radius: 16rpx;
+  background: rgba(255, 255, 255, 0.06);
+  border: 2rpx solid rgba(255, 255, 255, 0.12);
+}
+.cp-area {
+  position: relative;
+  width: 160rpx;
+  height: 160rpx;
+  border-radius: 10rpx;
+  overflow: hidden;
+  cursor: crosshair;
+  touch-action: none;
+  flex-shrink: 0;
+  /* CSS 双重渐变：水平白→色相，垂直透明→黑，合成 HSV 亮度/饱和度面 */
+  background-image: linear-gradient(to right, #fff, var(--cp-hue-color, #ff0000)),
+                    linear-gradient(to top, transparent, #000);
+}
+.cp-cursor {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  width: 28rpx;
+  height: 28rpx;
+  border-radius: 50%;
+  border: 3rpx solid #fff;
+  box-shadow: 0 0 0 1.5rpx rgba(0, 0, 0, 0.55);
+  pointer-events: none;
+}
+.cp-hue-bar {
+  width: 44rpx;
+  height: 160rpx;
+  border-radius: 8rpx;
+  overflow: hidden;
+  position: relative;
+  cursor: pointer;
+  touch-action: none;
+  flex-shrink: 0;
+  /* CSS 彩虹渐变带 */
+  background: linear-gradient(to bottom,
+    hsl(0,100%,50%), hsl(60,100%,50%), hsl(120,100%,50%),
+    hsl(180,100%,50%), hsl(240,100%,50%), hsl(300,100%,50%), hsl(360,100%,50%));
+}
+.cp-hue-track {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+.cp-hue-cursor {
+  position: absolute;
+  left: -4rpx;
+  top: 50%;
+  transform: translateY(-50%);
+  width: calc(100% + 8rpx);
+  height: 8rpx;
+  border-radius: 4rpx;
+  background: #fff;
+  box-shadow: 0 1rpx 4rpx rgba(0,0,0,0.45);
+  pointer-events: none;
+}
+.cp-preview {
+  display: flex;
+  align-items: center;
+  gap: 8rpx;
+  min-width: 0;
+  flex: 1;
+}
+.cp-sw {
+  width: 44rpx;
+  height: 44rpx;
+  border-radius: 8rpx;
+  border: 2rpx solid rgba(255, 255, 255, 0.3);
+  flex-shrink: 0;
+}
+.cp-hex {
+  font-size: 22rpx;
+  font-family: 'Courier New', monospace;
+  color: rgba(255, 255, 255, 0.72);
+  letter-spacing: 0.5rpx;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 /* 界面字体：两列芯片网格；芯片内的字体名用真字体渲染当预览 */
