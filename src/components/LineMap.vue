@@ -301,11 +301,7 @@
           <view class="cc-bar" v-if="cityBusy"><view class="cc-bar-in" :style="{ width: cityProgress + '%' }"></view></view>
         </view>
         <view class="ctrl-city-row">
-          <!-- 重扫 / 中止 已并入底部栏「重扫」按钮，此处不重复 -->
-          <view class="cc-btn" :class="{ on: cityFollow > 0 }" :title="cityFollowTitle" @click="cycleCityFollow">{{ cityFollowLabel }}</view>
-          <view class="cc-btn" :class="{ on: cityShowOrgId }" title="近景给每辆车标出编号标签" @click="toggleCityTags">编号标签</view>
-          <view class="cc-btn" :class="{ on: cityNetMode !== 'off' }" :title="'线网显示：' + cityNetModeLabel + '（点击切换 精简/全部/关闭）'" @click="cycleCityNetMode">{{ cityNetModeLabel }}</view>
-          <!-- 查车 / 车速榜 已并入底部栏，此处不重复 -->
+          <!-- 所有按钮已并入底部栏，此行保留为空（仅用于控制卡布局占位与 refit 锚点） -->
         </view>
       </block>
     </view>
@@ -337,7 +333,7 @@
     />
 
     <!-- 底部快捷操作栏：常驻贴底，所有高频操作合一，不再分两处。
-         线路态 = 重扫 + 视图工具 + 三向切换（共 9 个）；全市态 = 重扫 + 视图工具 + 车速榜 / 自编号查车（共 8 个，不显示方向分组） -->
+         线路态 = 重扫 + 视图工具 + 三向切换（共 9 个）；全市态 = 重扫 + 视图工具 + 车速榜 / 查车 / 跟随 / 编号标签 / 线网模式（共 13 个，不显示方向分组） -->
     <view class="bottom-bar" v-if="lineNo || cityOn">
       <!-- 通用：重扫（线路态=刷新线路，全市态=重扫全网） -->
       <view class="bb-item" @click="bottomRescan" :title="cityOn ? (cityBusy ? '中止本轮拉取' : '重新拉取全网在运车辆') : (loading ? '刷新中…' : '立即刷新线路')">
@@ -380,7 +376,7 @@
           <text class="bb-label">全部</text>
         </view>
       </template>
-      <!-- 仅全市模式：车速榜 + 查车 -->
+      <!-- 仅全市模式：车速榜 + 查车 + 跟随 + 编号标签 + 线网模式 -->
       <view class="bb-sep" v-if="cityOn"></view>
       <view class="bb-item" v-if="cityOn" :class="{ on: rankOpen }" @click="toggleRank" title="全局快照车速榜">
         <text class="bb-ico">🏁</text>
@@ -389,6 +385,18 @@
       <view class="bb-item" v-if="cityOn" :class="{ on: orgSearchOpen }" @click="toggleOrgSearch" title="按自编号查车">
         <text class="bb-ico">🔍</text>
         <text class="bb-label">查车</text>
+      </view>
+      <view class="bb-item" v-if="cityOn" :class="{ on: cityFollow > 0 }" :title="cityFollowTitle" @click="cycleCityFollow">
+        <text class="bb-ico">🔄</text>
+        <text class="bb-label">{{ cityFollowLabel }}</text>
+      </view>
+      <view class="bb-item" v-if="cityOn" :class="{ on: cityShowOrgId }" title="近景给每辆车标出编号标签" @click="toggleCityTags">
+        <text class="bb-ico">🏷</text>
+        <text class="bb-label">编号标签</text>
+      </view>
+      <view class="bb-item" v-if="cityOn" :class="{ on: cityNetMode !== 'off' }" :title="'线网显示：' + cityNetModeLabel + '（点击切换 精简/全部/关闭）'" @click="cycleCityNetMode">
+        <text class="bb-ico">🕷</text>
+        <text class="bb-label">{{ cityNetModeLabel }}</text>
       </view>
     </view>
 
@@ -6230,7 +6238,7 @@ export default {
   background: linear-gradient(90deg, var(--ac), var(--ac-2));
   transition: width 0.25s ease-out;
 }
-/* 全市数据操作行：只留跟随 / 编号标签 / 线网模式（重扫/查车/车速榜已并入底部栏）。
+/* 全市数据操作行：所有按钮已并入底部栏，此行仅作占位与 refit 锚点。
    与上方信息区之间一条极淡分隔线 */
 .ctrl-city-row {
   display: flex;
