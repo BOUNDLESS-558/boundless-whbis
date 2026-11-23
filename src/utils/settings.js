@@ -27,9 +27,6 @@ const PROFILE_KEY = 'whbis:profile'
 const MAPSRC_KEY = 'whbis:map-source'
 // 复制方式：所有「复制」按钮统一按此档执行（文本 TSV / 画成图片 / Excel 表格）
 const COPY_MODE_KEY = 'whbis:copy-mode'
-// 界面组件库：原生（自定义 UI）/ Bootstrap / Element Plus。H5 下动态加载对应 CSS，
-// 写 <html data-ui-mode="…"> 让全局 CSS 据此切换组件样式；App 端恒定原生。
-const UI_MODE_KEY = 'whbis:ui-mode'
 
 export const SKIN_OPTS = [
   { key: 'dark', label: '黑色' },
@@ -347,84 +344,6 @@ export function onCopyModeChange(cb) {
   if (typeof cb !== 'function') return () => {}
   _copyListeners.add(cb)
   return () => _copyListeners.delete(cb)
-}
-
-// ── 界面组件库（H5 only）──
-// 原生 = 当前自定义 UI（默认）；bootstrap = Bootstrap 5 组件样式；
-// element = Element Plus 组件样式。切换时动态加载对应 CDN CSS，
-// 并把 <html data-ui-mode="…"> 写好让全局 CSS 据此覆盖。
-export const UI_MODE_OPTS = [
-  { key: 'native', label: '原生', note: '当前自定义 UI 设计' },
-  { key: 'bootstrap', label: 'Bootstrap', note: 'Bootstrap 5 组件样式' },
-  { key: 'element', label: 'Element Plus', note: 'Element Plus 组件样式' },
-]
-
-function normalizeUiMode(v) {
-  return UI_MODE_OPTS.some((o) => o.key === v) ? v : 'native'
-}
-
-export function getUiMode() {
-  // #ifdef H5
-  return normalizeUiMode(readRaw(UI_MODE_KEY, 'native'))
-  // #endif
-  // App 端不支持，恒定原生
-  return 'native'
-}
-
-/** 把 UI 模式写到 <html data-ui-mode>，供全局 CSS 选择器命中 */
-export function applyUiMode() {
-  // #ifdef H5
-  try {
-    const m = getUiMode()
-    document.documentElement.dataset.uiMode = m
-    if (m === 'bootstrap') loadBootstrapCss()
-    else if (m === 'element') loadElementCss()
-    else removeExternalCss()
-  } catch (e) { /* 忽略 */ }
-  // #endif
-}
-
-export function setUiMode(key) {
-  const v = normalizeUiMode(key)
-  writeRaw(UI_MODE_KEY, v)
-  applyUiMode()
-  return v
-}
-
-// ── 动态加载 / 卸载第三方组件库 CSS ──
-const _uiCssHostId = 'whbis-ui-css'
-
-function _ensureHost() {
-  let host = document.getElementById(_uiCssHostId)
-  if (!host) {
-    host = document.createElement('div')
-    host.id = _uiCssHostId
-    host.style.display = 'none'
-    document.head.appendChild(host)
-  }
-  return host
-}
-
-function _setLink(url) {
-  const host = _ensureHost()
-  host.innerHTML = `<link rel="stylesheet" href="${url}">`
-}
-
-function _clearLinks() {
-  const host = document.getElementById(_uiCssHostId)
-  if (host) host.innerHTML = ''
-}
-
-function loadBootstrapCss() {
-  _setLink('https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css')
-}
-
-function loadElementCss() {
-  _setLink('https://unpkg.com/element-plus@2.7.0/dist/index.css')
-}
-
-function removeExternalCss() {
-  _clearLinks()
 }
 
 // 说明：非集团线路（蔡城 / 木兰 / 汉奇）已并入全站线路库，默认全部可查询搜索，
