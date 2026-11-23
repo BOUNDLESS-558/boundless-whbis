@@ -30,6 +30,7 @@
         :fs-enabled="false"
         @pick-line="onPickLine"
         @exit-city="onExitCity"
+        @open-settings-section="onOpenSettingsSection"
       >
         <!-- 裸形态顶栏：视图分段 + 搜索联想并入地图左上控制卡 .ctrl，不再浮在地图外面 -->
         <template #top>
@@ -1005,6 +1006,13 @@ export default {
       this.pwdConfirm = ''
       this.pwdShowNew = false
       this.pwdCustom = hasCustomPass(this.account)
+      this.accountShow = true
+    },
+    // 从子组件快捷按钮打开设置面板并直达指定分区
+    onOpenSettingsSection(key) {
+      if (!ACCT_SECTION_KEYS.includes(key)) return
+      this.acctSec = { ...this.acctSec, [key]: true }
+      this.saveAcctSections()
       this.accountShow = true
     },
     // 用户名 + 头像（胶囊常驻显示，面板打开时也用它回填输入缓冲）

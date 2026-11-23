@@ -261,6 +261,22 @@
         </view>
       </view>
 
+      <!-- 快捷设置行：线路态下展示，一键直达【字体】【主题色】【刷新间隔】设置分区 -->
+      <view class="ctrl-settings" v-if="!cityOn && lineNo">
+        <view class="ctrl-set-btn" @click="openSettingsSection('font')" title="界面字体">
+          <text class="css-ico">Aa</text>
+          <text class="css-lab">字体</text>
+        </view>
+        <view class="ctrl-set-btn" :style="{ '--sc': accent }" @click="openSettingsSection('accent')" title="主题色">
+          <view class="css-swatch"></view>
+          <text class="css-lab">主题色</text>
+        </view>
+        <view class="ctrl-set-btn" @click="openSettingsSection('refresh')" title="刷新间隔">
+          <text class="css-ico">↻</text>
+          <text class="css-lab">刷新</text>
+        </view>
+      </view>
+
       <!-- ④ 走向提示：线路态计算中/失败时挂在方向行下方。
            视图工具（缩放/全览/站名/底图）已统一移到地图右下角浮动条，不再占控制卡 -->
       <template v-if="!cityOn">
@@ -1688,6 +1704,8 @@ export default {
     // 刷新间隔下拉：展开权交给全站仲裁器，点复制 / 搜索联想等其它菜单时自动收起
     toggleRefreshMenu() { if (this._dd) this._dd.toggle() },
     closeRefreshMenu() { if (this._dd) this._dd.close() },
+    // 快捷按钮：打开设置面板并直达指定分区（font / accent / refresh）
+    openSettingsSection(key) { this.$emit('open-settings-section', key) },
     // 组件/页面卸载时统一清理（解绑手势、悬停、详情窗拖动、定位定时器、自动刷新）
     cleanup() {
       if (this._dd) this._dd.dispose()
@@ -5525,6 +5543,52 @@ export default {
   color: rgba(255, 255, 255, 0.5);
   font-size: 26rpx;
   padding: 40rpx 0;
+}
+/* 控制卡快捷设置行：线路态下在方向选择区下方，三枚迷你按钮直达【字体】【主题色】【刷新间隔】分区 */
+.ctrl-settings {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10rpx;
+  padding: 10rpx 8rpx 4rpx;
+}
+.ctrl-set-btn {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 64rpx;
+  min-width: 96rpx;
+  padding: 4rpx 14rpx;
+  border-radius: 14rpx;
+  background: rgba(255, 255, 255, 0.06);
+  border: 2rpx solid rgba(255, 255, 255, 0.1);
+  cursor: pointer;
+  transition: background 0.16s, border-color 0.16s;
+}
+.ctrl-set-btn:hover {
+  background: rgba(255, 255, 255, 0.12);
+  border-color: rgba(255, 255, 255, 0.22);
+}
+.css-ico {
+  font-size: 26rpx;
+  line-height: 1;
+  margin-bottom: 2rpx;
+  color: rgba(255, 255, 255, 0.72);
+}
+.css-swatch {
+  width: 20rpx;
+  height: 20rpx;
+  border-radius: 50%;
+  background: var(--sc, #6366f1);
+  margin-bottom: 2rpx;
+  border: 2rpx solid rgba(255, 255, 255, 0.25);
+}
+.css-lab {
+  font-size: 18rpx;
+  color: rgba(255, 255, 255, 0.55);
+  white-space: nowrap;
+  letter-spacing: 0.04em;
 }
 /* 走向尚未贴路（计算中/失败）的提示，避免把站间直连当成真实走向 */
 .view-alert {
