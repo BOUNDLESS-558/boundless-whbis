@@ -1,7 +1,7 @@
 <script>
 import { warmUp } from './utils/api.js'
 import { warmUpBusNumber } from './utils/busNumber.js'
-import { applySkin, watchSystemSkin, applyAccent, applyFont } from './utils/settings.js'
+import { applySkin, watchSystemSkin, applyAccent, applyFont, applyUiMode } from './utils/settings.js'
 // #ifdef H5
 import { assetUrl } from './utils/asset.js'
 // #endif
@@ -19,6 +19,8 @@ export default {
     applyAccent()
     // 界面字体：按设置注入 webfont CSS 并写 --app-font（选过的字体启动即恢复）
     applyFont()
+    // 界面组件库：按设置写 <html data-ui-mode> 并按需加载 Bootstrap / Element Plus CSS
+    applyUiMode()
     // #ifdef H5
     // 子路径部署（如 GitHub Pages /repo/）时，将基址感知的背景图写入 CSS 变量
     document.documentElement.style.setProperty('--app-bg-image', `url("${assetUrl('/static/img/background.jpg')}")`)
@@ -38,7 +40,7 @@ export default {
 /* 主题色变量族默认值（= 历史靛蓝配色），挂在 :root（即 documentElement）。
    注意：必须放 :root 而非 page —— settings.applyAccent() 把用户选择写到 documentElement，
    若 page 也声明默认值，会作为更近的祖先遮蔽 <html> 上的改动，导致选色无反应。*/
-:root {
+::root {
   --ac: #6366f1;
   --ac-hi: #818cf8;
   --ac-deep: #4f46e5;
@@ -71,7 +73,7 @@ page {
 }
 
 /* 文字选中效果 */
-::selection {
+:::selection {
   background: rgba(var(--ac-rgb), 0.45);
   color: #ffffff;
 }
@@ -149,5 +151,197 @@ html[data-skin='light'] .amap-container * {
 }
 ::-webkit-scrollbar-corner {
   background: transparent;
+}
+
+/* ── 界面组件库：Bootstrap / Element Plus 模式下的全局覆盖 ──
+   切换到 bootstrap / element 时，<html data-ui-mode="…"> 让以下选择器命中，
+   把自定义组件的关键交互元素（按钮 / 分段控制 / 输入框 / 分区标题 / 悬浮窗）
+   适配成对应库的视觉风格。原生模式（data-ui-mode="native"）不命中，保持现有设计。 */
+
+/* Bootstrap 模式：按钮 */
+html[data-ui-mode='bootstrap'] .acct-btn,
+html[data-ui-mode='bootstrap'] .acct-seg-item,
+html[data-ui-mode='bootstrap'] .acct-mini,
+html[data-ui-mode='bootstrap'] .amap-btn,
+html[data-ui-mode='bootstrap'] .act-btn {
+  border-radius: 6px;
+  font-weight: 500;
+  transition: background-color 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
+}
+html[data-ui-mode='bootstrap'] .acct-btn:hover,
+html[data-ui-mode='bootstrap'] .acct-seg-item.on:hover,
+html[data-ui-mode='bootstrap'] .amap-btn:hover {
+  filter: brightness(1.12);
+}
+html[data-ui-mode='bootstrap'] .acct-btn.save,
+html[data-ui-mode='bootstrap'] .amap-btn.primary,
+html[data-ui-mode='bootstrap'] .act-btn.main {
+  background: var(--ac, #6366f1);
+  border-color: var(--ac, #6366f1);
+  color: #fff;
+}
+html[data-ui-mode='bootstrap'] .acct-btn.save:hover,
+html[data-ui-mode='bootstrap'] .amap-btn.primary:hover,
+html[data-ui-mode='bootstrap'] .act-btn.main:hover {
+  background: var(--ac-deep, #4f46e5);
+  border-color: var(--ac-deep, #4f46e5);
+}
+html[data-ui-mode='bootstrap'] .acct-btn.ghost,
+html[data-ui-mode='bootstrap'] .act-btn.ghost {
+  background: transparent;
+  border: 1px solid rgba(255,255,255,0.25);
+  color: #eef1ff;
+}
+
+/* Bootstrap 模式：分段控制 */
+html[data-ui-mode='bootstrap'] .acct-seg {
+  background: rgba(255,255,255,0.06);
+  border-radius: 8px;
+  padding: 3px;
+  display: inline-flex;
+  gap: 2px;
+}
+html[data-ui-mode='bootstrap'] .acct-seg-item {
+  border-radius: 6px;
+  padding: 6px 14px;
+  font-size: 13px;
+  cursor: pointer;
+  transition: background-color 0.15s ease;
+  user-select: none;
+}
+html[data-ui-mode='bootstrap'] .acct-seg-item.on {
+  background: var(--ac, #6366f1);
+  color: #fff;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+}
+
+/* Bootstrap 模式：输入框 */
+html[data-ui-mode='bootstrap'] .acct-name-input,
+html[data-ui-mode='bootstrap'] .acct-pwd-input,
+html[data-ui-mode='bootstrap'] .amap-input,
+html[data-ui-mode='bootstrap'] .act-input {
+  border: 1px solid rgba(255,255,255,0.18);
+  border-radius: 6px;
+  padding: 8px 12px;
+  background: rgba(255,255,255,0.04);
+  color: #eef1ff;
+  font-size: 14px;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+html[data-ui-mode='bootstrap'] .acct-name-input:focus,
+html[data-ui-mode='bootstrap'] .acct-pwd-input:focus,
+html[data-ui-mode='bootstrap'] .amap-input:focus,
+html[data-ui-mode='bootstrap'] .act-input:focus {
+  outline: none;
+  border-color: var(--ac, #6366f1);
+  box-shadow: 0 0 0 2px rgba(var(--ac-rgb, 99,102,241), 0.25);
+}
+
+/* Bootstrap 模式：分区标题 */
+html[data-ui-mode='bootstrap'] .acct-sec-head {
+  border-radius: 6px;
+  padding: 8px 10px;
+  transition: background-color 0.15s ease;
+}
+html[data-ui-mode='bootstrap'] .acct-sec-head:hover {
+  background: rgba(255,255,255,0.05);
+}
+
+/* Bootstrap 模式：悬浮窗 */
+html[data-ui-mode='bootstrap'] .float-win {
+  border-radius: 10px;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.4);
+  border: 1px solid rgba(255,255,255,0.08);
+}
+
+/* Element Plus 模式：按钮 */
+html[data-ui-mode='element'] .acct-btn,
+html[data-ui-mode='element'] .acct-seg-item,
+html[data-ui-mode='element'] .acct-mini,
+html[data-ui-mode='element'] .amap-btn,
+html[data-ui-mode='element'] .act-btn {
+  border-radius: 4px;
+  font-weight: 500;
+  transition: all 0.15s ease;
+}
+html[data-ui-mode='element'] .acct-btn.save,
+html[data-ui-mode='element'] .amap-btn.primary,
+html[data-ui-mode='element'] .act-btn.main {
+  background: var(--ac, #6366f1);
+  border-color: var(--ac, #6366f1);
+  color: #fff;
+}
+html[data-ui-mode='element'] .acct-btn.save:hover,
+html[data-ui-mode='element'] .amap-btn.primary:hover,
+html[data-ui-mode='element'] .act-btn.main:hover {
+  background: var(--ac-deep, #4f46e5);
+  border-color: var(--ac-deep, #4f46e5);
+}
+html[data-ui-mode='element'] .acct-btn.ghost,
+html[data-ui-mode='element'] .act-btn.ghost {
+  background: transparent;
+  border: 1px solid rgba(255,255,255,0.25);
+  color: #eef1ff;
+}
+
+/* Element Plus 模式：分段控制 */
+html[data-ui-mode='element'] .acct-seg {
+  background: rgba(255,255,255,0.06);
+  border-radius: 4px;
+  padding: 2px;
+  display: inline-flex;
+  gap: 2px;
+}
+html[data-ui-mode='element'] .acct-seg-item {
+  border-radius: 3px;
+  padding: 6px 14px;
+  font-size: 13px;
+  cursor: pointer;
+  transition: background-color 0.15s ease;
+  user-select: none;
+}
+html[data-ui-mode='element'] .acct-seg-item.on {
+  background: var(--ac, #6366f1);
+  color: #fff;
+  box-shadow: 0 1px 2px rgba(0,0,0,0.15);
+}
+
+/* Element Plus 模式：输入框 */
+html[data-ui-mode='element'] .acct-name-input,
+html[data-ui-mode='element'] .acct-pwd-input,
+html[data-ui-mode='element'] .amap-input,
+html[data-ui-mode='element'] .act-input {
+  border: 1px solid rgba(255,255,255,0.18);
+  border-radius: 4px;
+  padding: 8px 12px;
+  background: rgba(255,255,255,0.04);
+  color: #eef1ff;
+  font-size: 14px;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+html[data-ui-mode='element'] .acct-name-input:focus,
+html[data-ui-mode='element'] .acct-pwd-input:focus,
+html[data-ui-mode='element'] .amap-input:focus,
+html[data-ui-mode='element'] .act-input:focus {
+  outline: none;
+  border-color: var(--ac, #6366f1);
+  box-shadow: 0 0 0 2px rgba(var(--ac-rgb, 99,102,241), 0.2);
+}
+
+/* Element Plus 模式：分区标题 */
+html[data-ui-mode='element'] .acct-sec-head {
+  border-radius: 4px;
+  padding: 8px 10px;
+  transition: background-color 0.15s ease;
+}
+html[data-ui-mode='element'] .acct-sec-head:hover {
+  background: rgba(255,255,255,0.05);
+}
+
+/* Element Plus 模式：悬浮窗 */
+html[data-ui-mode='element'] .float-win {
+  border-radius: 8px;
+  box-shadow: 0 4px 20px rgba(0,0,0,0.35);
+  border: 1px solid rgba(255,255,255,0.06);
 }
 </style>

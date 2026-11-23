@@ -36,6 +36,8 @@
 
 ### 2026-11-23（最新）
 
+- **界面组件库切换（原生 / Bootstrap / Element Plus）**：`utils/settings.js` 新增 `UI_MODE_KEY`、`UI_MODE_OPTS`、`getUiMode()`/`setUiMode()`/`applyUiMode()`；「账号与设置 → 界面组件」分区提供三档分段控制（原生 / Bootstrap / Element Plus），原生为默认。H5 下切换时动态加载对应 CDN CSS（Bootstrap 5.3 / Element Plus 2.7），写 `<html data-ui-mode="…">` 让全局 CSS 据此覆盖按钮 / 分段控制 / 输入框 / 分区标题 / 悬浮窗的圆角、阴影、聚焦态。App 端恒定原生（`getUiMode()` 对非 H5 直接返回 `'native'`）。启动时 `App.vue` 的 `onLaunch` 调 `applyUiMode()` 恢复上次选择。全局覆盖样式集中在 `App.vue` `<style>` 末尾，原生模式不命中、保持现有设计不变
+
 - **Actions 日志标注站点来源**：每轮采集收尾逐条打印全部线路——营运公司 / 线路号 / 「正在使用高德地图站点数据信息」或「无高德站点数据，正在使用 OSRM 兜底」/ 信息存储文件名（`bNN.json`）；抬头明确「每次执行 Actions 都重新获取全部线路站点信息」。同步导出 `reports/osrm-lines.json`（当前 366 条 OSRM 兜底线路），随 `reports` 一起提交，排查走向问题先查该清单
 - **646 路走向不完整（多次返修）**：根因是资产只有 24/25 站、丢了「官堤路公交场站」；用 `AMAP_KEY` 走 `inputtips → lineid` 链路重采，现双方向 36/35 站、首末站与 polyline 端点 0m 吻合，地图显示完整走向
 - **全市两浮窗常驻 + 位置/状态记忆**：车速榜、自编号查车默认打开（只有 ✕ 显式关闭才隐藏），标题栏 grip 可拖动（`utils/panelPos.js` 的 `bindFloatDrag`，只绑手柄不误触按钮/输入）；开关、折叠、位置、输入、档位全部 localStorage，二次进入或重载恢复上次位置与状态。拖动过的窗格自动解除「上下错开」约束自由摆放
