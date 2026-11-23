@@ -123,16 +123,39 @@ export function createResizable(el, opts = {}) {
 
   // clip:false + height 时不会加 overflow，若记忆/拖拽出的高度比内容矮，
   // 内容（如全市态底部「重扫 / 自动跟随 / 自编号 / 车速榜」）就会溢出到卡片之外。
-  // 这里把高度抬到内容真实高度（上限 maxH），保证内容永远被卡片包裹；
-  // 因为它只放大不缩小、且加 overflow 会裁掉绝对定位的联想下拉，故沿用 overflow:visible。
-  function refit() {
+  // 这里把高度调整到内容真实高度（上限 maxH），保证内容永远被卡片包裹。
+  // 关键：不能直接用 el.scrollHeight —— 设了 inline height 后 scrollHeight 会被撑到≈height，
+  // 永远算不出"内容真实高度"，收缩分支因此失效（卡片底部留空白的根因）。
+  // 做法：临时摘掉 inline height 让浏览器按内容回流，读一次真实高度，再立即写回目标高度。
+  // 同步执行无视觉闪烁；overflow 仍保持 visible，避免裁掉绝对定位的联想下拉。
+  // allowShrink：默认只放大（拖拽时用，尊重用户主动拉大的高度）；仅 applyStored 时传 true，
+  // 用于清掉"记忆里留着上次拖大高度"导致的过期虚高（内容没那么多却留大片空白）。
+  function refit(allowShrink = false) {
     if (clip || !rh || heightProp !== 'height') return
     if (!el.style.height) return
+    const cur = el.getBoundingClientRect().height
+    const prev = el.style.height
+    el.style.height = ''
     // scrollHeight 含内边距但不含边框，补上边框再 +1 防亚像素，宁可略高也不溢出
     const border = Math.max(0, el.offsetHeight - el.clientHeight)
     const need = el.scrollHeight + border + 1
-    const cur = el.getBoundingClientRect().height
-    if (need > cur + 1) el.style.height = Math.round(clamp(need, minH, maxH)) + 'px'
+    el.style.height = prev
+    let next = null
+    if (need > cur + 1) {
+      next = Math.round(clamp(need, minH, maxH))
+    } else if (allowShrink && need < cur - 1 && need >= minH) {
+      // 内容变少时同步收缩，避免卡片底部留大片空白（只在读取存储时做，不影响拖拽）
+      next = Math.round(need)
+    }
+    if (next != null) {
+      el.style.height = next + 'px'
+      // 只在 applyStored 的收缩矫正里同步纠正存储（拖拽时 end() 会写用户拖的真实高度，
+      // 这里再写会覆盖用户意图）。readSize 可能返回 {w} 单独项，需保留。
+      if (allowShrink) {
+        const s = readSize(key) || {}
+        writeSize(key, { ...s, h: next })
+      }
+    }
   }
 
   function applyStored() {
@@ -142,7 +165,7 @@ export function createResizable(el, opts = {}) {
     if (rw && s.w) el.style.width = Math.round(clamp(s.w, minW, maxW)) + 'px'
     if (rh && s.h) el.style[heightProp] = Math.round(clamp(s.h, minH, maxH)) + 'px'
     ensureClip()
-    refit()
+    refit(true)
   }
   applyStored()
   // 记忆尺寸改变了占位，通知宿主重排（控制卡/侧栏要重新量 fitRect）。

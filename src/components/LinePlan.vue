@@ -9,6 +9,20 @@
       <view class="plan-title">🕐 发车时刻（共 {{ totalCount }} 班）</view>
       <view class="ph-fold" :class="{ folded: collapsed }" @click="collapsed = !collapsed" :title="collapsed ? '展开' : '折叠'">▾</view>
     </view>
+    <!-- 线路号徽章 + 所属营运公司徽标：紧跟在标题下方，仅在有线路号时显示 -->
+    <view class="plan-line-info" v-if="lineName">
+      <view class="pli-badge">{{ lineName }}{{ roadUnit ? '路' : '' }}</view>
+      <view class="pli-companies" v-if="operatorCompanies.length || orgBadge">
+        <view class="org-tag" v-for="c in operatorCompanies" :key="c.no" :title="c.label">
+          <text class="org-no">{{ c.no }}</text>
+          <text class="org-name">{{ c.short }}</text>
+        </view>
+        <view class="org-tag foreign" v-if="orgBadge" :title="orgBadge.full">
+          <image class="org-logo" :src="companyLogo" mode="aspectFit" />
+          <text class="org-name">{{ orgBadge.label }}</text>
+        </view>
+      </view>
+    </view>
     <!-- 工具行：与车辆面板 .panel-tools 同构（左提示，右复制按钮） -->
     <view class="plan-tools">
       <!-- 环形线没有上下行：不再拆上/下行计数，只报总班次 + 环形提示 -->
@@ -63,6 +77,16 @@ export default {
     lineNo: { type: String, default: '' },
     // 当前在线车辆标识（busId MD5 + 纯数字自编号），用于判定班次是否已实际发出
     onlineBusKeys: { type: Array, default: () => [] },
+    // 当前线路展示名（如 337 / H81），用于在面板标题下方显示线路号徽章
+    lineName: { type: String, default: '' },
+    // 是否在数字后显示「路」字（内环/外环/内线/外线不加）
+    roadUnit: { type: Boolean, default: true },
+    // 所属营运公司列表，每项 { no, short, label }
+    operatorCompanies: { type: Array, default: () => [] },
+    // 非集团线路的公司徽标（来自公司字典），{ full, label }
+    orgBadge: { type: Object, default: null },
+    // 公司 Logo URL
+    companyLogo: { type: String, default: '' },
   },
   data() {
     return {
@@ -290,6 +314,92 @@ export default {
 .plans.folded .plan-head {
   margin-bottom: 0;
 }
+/* 线路号徽章 + 营运公司徽标行：紧跟在面板标题下方，仅在有线路号时显示 */
+.plan-line-info {
+  display: flex;
+  align-items: center;
+  gap: 8rpx;
+  padding: 10rpx 4rpx 14rpx;
+  flex-wrap: nowrap;
+  min-width: 0;
+  border-bottom: 1rpx solid rgba(255, 255, 255, 0.06);
+}
+.pli-badge {
+  flex-shrink: 0;
+  height: 32rpx;
+  padding: 0 14rpx;
+  border-radius: 999rpx;
+  background: rgba(var(--ac-rgb), 0.18);
+  border: 2rpx solid rgba(var(--ac-rgb), 0.45);
+  font-size: 22rpx;
+  font-weight: 800;
+  color: var(--ac-text);
+  line-height: 1;
+  display: inline-flex;
+  align-items: center;
+}
+.pli-companies {
+  display: flex;
+  align-items: center;
+  gap: 6rpx;
+  margin-left: auto;
+  flex-shrink: 0;
+}
+/* 所属营运公司徽标：与实时车辆面板（LineMap.vue）逐字同款，全站统一 */
+.org-tag {
+  display: inline-flex;
+  align-items: center;
+  max-width: 100%;
+  min-width: 0;
+  background: linear-gradient(135deg, rgba(251, 191, 36, 0.18), rgba(251, 191, 36, 0.06));
+  border: 2rpx solid rgba(251, 191, 36, 0.42);
+  border-radius: 999rpx;
+  padding: 2rpx 18rpx 2rpx 2rpx;
+  white-space: nowrap;
+  box-shadow: inset 0 1rpx 0 rgba(255, 255, 255, 0.14), 0 3rpx 8rpx rgba(251, 191, 36, 0.12);
+}
+.org-no {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36rpx;
+  height: 36rpx;
+  border-radius: 50%;
+  font-size: 24rpx;
+  font-weight: 800;
+  color: #1a1205;
+  background: linear-gradient(135deg, #fde68a, #fbbf24 45%, #f59e0b);
+  box-shadow: 0 4rpx 12rpx rgba(251, 191, 36, 0.5), inset 0 1rpx 0 rgba(255, 255, 255, 0.6),
+    inset 0 -2rpx 4rpx rgba(180, 83, 9, 0.3);
+  margin-right: 10rpx;
+  flex-shrink: 0;
+}
+.org-name {
+  font-size: 18rpx;
+  line-height: 1;
+  font-weight: 700;
+  color: #fde68a;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-shadow: 0 1rpx 2rpx rgba(0, 0, 0, 0.3);
+}
+.org-logo {
+  width: 36rpx;
+  height: 36rpx;
+  border-radius: 50%;
+  margin-right: 10rpx;
+  flex-shrink: 0;
+}
+.org-tag.foreign {
+  background: rgba(255, 255, 255, 0.07);
+  border-color: rgba(255, 255, 255, 0.18);
+}
+.org-tag.foreign .org-name {
+  color: rgba(255, 255, 255, 0.9);
+  font-weight: 700;
+}
 .plan-title {
   flex: 1;
   min-width: 0;
@@ -307,7 +417,7 @@ export default {
   align-items: center;
   justify-content: space-between;
   gap: 14rpx;
-  margin-bottom: 18rpx;
+  margin: 12rpx 0 18rpx;
 }
 .plans.folded .plan-tools {
   margin-bottom: 0;

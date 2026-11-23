@@ -8,7 +8,7 @@
  *
  * 关键约束：
  *   - Key 通过环境变量 AMAP_KEY（含签名 AMAP_SECRET）提供，不进前端代码、不提交仓库；
- *     CI 下由仓库 Secrets 注入（见 .github/workflows/daily-collect.yml），每 6h 自动跑本步。
+ *     CI 下由仓库 Secrets 注入（见 .github/workflows/daily-collect.yml），每 2h 自动跑本步。
  *   - 坐标口径：高德返回的是 GCJ-02，与上游 /line、资产落盘口径一致 → 直接存，无需转换。
  *   - 只写 source:'amap' 的行；已为 amap 的行默认跳过（--force 才重写）。绝不删除 B 的结果：
  *     高德没收录的线路（D/K 定制线等）A 不写，原 OSRM 行保持不动。
@@ -19,13 +19,16 @@
  *   node scripts/scan-routes-amap.mjs                          # 全量（按免费额度限速）
  *   node scripts/scan-routes-amap.mjs --city 武汉 --delay 1100 # 控制 QPS（免费 1000~5000/日）
  *   node scripts/scan-routes-amap.mjs --retry-unmatched         # 只重试未命中的线，done 的不动
+ *   node scripts/scan-routes-amap.mjs --force                   # 全量强制重拉（跳过进度台账，每线每方向重新获取）
  *   node scripts/scan-routes-amap.mjs --only-changed scripts/.changed-lines.txt
  *        # 增量重拉：仅对 scan-routes.mjs --detect-changes 登记的「站点变化的线路」刷新高德走向
- *        # （配合 auto-collect 每 6h 跑：上游站点一变，本步自动重拉最新走向）
+ *        # （本地调试用；CI 下 auto-collect 已改为 --force 全量重拉，不再走此增量模式）
  *
- * 增量说明：auto-collect 默认（非全量）会先跑 `scan-routes.mjs --detect-changes` 探测
- * 上游 /line 站点变化、写 .changed-lines.txt，再以此文件驱动本步只重拉变化线路，
- * 既实现「线路更新后获取最新走向」，又把高德日配额消耗压到「变化线路」量级。
+ * 全量重拉说明：auto-collect 每 2h 跑一次，高德步骤使用 --force 跳过进度台账，
+ * 对整个武汉公交系统的每条线路、每个方向重新拉取高德官方轨迹与站点数据，
+ * 确保站点信息始终与上游保持一致。高德日配额（1000~5000/日）是主要约束：
+ * 全量约 1000+ 条线 × 2 方向 ≈ 2000 次请求，配额耗尽时自动切备用链路
+ * inputtips → lineid（配额池独立），两条链路都耗尽才提前停机。
  *
  * 断点续跑：scripts/.amap-progress.json 记录每条线的采集结果（done / partial /
  * no-match / not-found），已记录的线直接跳过，高德未收录 / 方向匹配不上的也不会每轮重打。

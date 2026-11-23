@@ -11,7 +11,7 @@ uni-app（Vue 3 + Vite 5）跨端应用：H5 网页版 + Android App，查询武
 3. **推送前处理 CI 采集分叉**：`git fetch origin`，若 `origin/main` 有新的「数据: 自动采集更新」提交，先 `git merge origin/main`；资产文件冲突一律保留本地手工修复版本（用 `git checkout --ours -- <file>` 后 `git add`），再推送。`README.md` / 代码文件一般无冲突。
 4. **收尾验证**：三分支 `git rev-parse` 与 `origin/<branch>` 一致、工作区干净；临时探针 / `%TEMP%` 下的 Edge profile 全部清理。
 
-**GitHub Actions 自动采集部署**：`.github/workflows/daily-collect.yml`（标题「自动采集+自动发布」）每 37 分钟跑 `scripts/auto-collect.mjs`：采集 → 提交数据到 `origin/main` → 构建 → 部署 `pages`。所以远端 `main` 会持续有新提交，推送前必须 merge。workflow 只认默认分支（main）上的文件；`schedule`/`workflow_dispatch` 依赖它。
+**GitHub Actions 自动采集部署**：`.github/workflows/daily-collect.yml`（标题「自动采集+自动发布」）每 2 小时跑 `scripts/auto-collect.mjs`：采集 → 提交数据到 `origin/main` → 构建 → 部署 `pages`。所以远端 `main` 会持续有新提交，推送前必须 merge。workflow 只认默认分支（main）上的文件；`schedule`/`workflow_dispatch` 依赖它。
 **本地打包 Pages 不依赖推源码**：`npm run deploy:pages` 只读本地 `src/` 构建后强推 `pages`；推 `main`/`BETA` 只为同步源码与驱动 CI，不是部署前提。
 
 日常验证**不要主动构建**：`build:h5` / `build:app` / `deploy:pages` 只在交付或用户明确要求出包时执行，日常验证用 `dev:h5` + 探针/单测（用户原话：「没有必要每次都构建一下生成的产物」）。
@@ -210,4 +210,4 @@ CDP 驱动 Edge headless 真实浏览器实测，`node scripts/probe-xxx.mjs` �
 
 - **Actions 站点来源日志**：`scripts/auto-collect.mjs` 每轮采集收尾调用 `writeStationSourceReport()`，逐条、分组、对齐打印全部线路：营运公司 / 线路号 / 「正在使用高德地图站点数据信息」或「无高德站点数据，正在使用 OSRM 兜底」/ 信息存储文件名；抬头强调「每次执行 Actions 都重新获取全部线路站点信息」。站点粒度按方向判定（`dirs[k].source`），任一方向 `source='osrm'` 即兜底。同时导出 `reports/osrm-lines.json`（`rule` 字段写判据、`total` + `lines[]`），随 `reports` 提交。排查走向偏差先查日志与清单。
 - **646 路修复经验**：曾多次返修，根因是静态资产只有 24/25 站、丢了「官堤路公交场站」；用 `AMAP_KEY` 走 `inputtips → lineid` 重采到 36/35 站。**修线路走向先看资产站数/首末站与 polyline 端点是否吻合**，别只调 OSRM 参数。
-- **站点签名与增量重拉**：`scan-routes.mjs --detect-changes` 写 `scripts/.changed-lines.txt`，`scan-routes-amap.mjs --only-changed` 增量重拉高德走向；`--backfill-stops` 补「source 已是 amap 但站点还是集团 MD5 站号」的半成品。采集器都「只补强不降级」，CI 每 37 分钟累积。
+- **高德全量重拉**：`auto-collect.mjs` 每轮用 `scan-routes-amap.mjs --force` 对全部线路、全部方向重新拉取高德官方轨迹与站点数据（跳过进度台账，确保站点信息与上游一致）；`--backfill-stops` 补齐「source 已是 amap 但站点还是集团 MD5 站号」的半成品（不限量，一轮扫完）。采集器都「只补强不降级」，CI 每 2 小时累积。

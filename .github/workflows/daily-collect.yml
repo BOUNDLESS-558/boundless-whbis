@@ -17,10 +17,9 @@ on:
   push:
     branches: [main]
   schedule:
-    # 每 37 分钟一次（cron 分钟字段按小时取模：每小时的 00/37 分触发，
-    # 间隔 37min / 23min 交替，平均约 30min——这是标准 5 段 cron 能表达的最密粒度）。
-    # 采集器并发+断点续跑，高频轮次靠 concurrency 排队不重叠。
-    - cron: '*/37 * * * *'
+    # 每 2 小时一次（cron 分钟字段固定 0，每小时的 00 分触发）。
+    # 采集器并发+断点续跑，靠 concurrency 排队不重叠。
+    - cron: '0 */2 * * *'
     # 周日补充全量重枚举（FULL_SCAN=1），UTC 04:23 = 北京时间 12:23
     - cron: '23 4 * * 0'
   workflow_dispatch:

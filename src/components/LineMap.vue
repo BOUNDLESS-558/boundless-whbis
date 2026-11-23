@@ -89,7 +89,7 @@
         </g>
         <!-- 实时车辆（单击弹出详情面板）：白环把车点从同色走向线上拉开 -->
         <g v-for="b in svgBuses" :key="b.key" style="cursor: pointer" @click="onBusTap(b.bus)">
-          <!-- 定位成功后的扩散环：告诉用户“就是这个点” -->
+          <!-- 定位成功后的扩散环：告诉用户"就是这个点" -->
           <circle v-if="b.located" class="bus-pulse" :cx="b.x" :cy="b.y" r="9" fill="none" :stroke="b.color" stroke-width="2.4" />
           <circle :cx="b.x" :cy="b.y" r="15" :fill="b.color" opacity="0.16" />
           <circle
@@ -194,20 +194,19 @@
       </template>
     </view>
 
-    <!-- 鼠标悬停车辆图标的浮标：内容与编号标签模式联动（mode1=仅自编号，mode2=自编号·线路号·方向），
-         与地图标签文本格式完全一致；鼠标离开即消失（不常驻遮挡）；触屏无 hover，单击车图标直接看详情浮窗 -->
+    <!-- 鼠标悬停车辆图标的浮标：始终显示「线路号 · 自编号 · 营运方向」完整格式，
+         与地图标签文本格式一致；鼠标离开即消失（不常驻遮挡）；触屏无 hover，单击车图标直接看详情浮窗 -->
     <view class="bus-hover" v-if="hoverTip" :style="{ left: hoverTip.x + 'px', top: hoverTip.y + 'px' }">
       <text class="bh-no">{{ hoverTip.no || '…' }}</text>
       <text class="bh-line" v-if="hoverTip.line">{{ hoverTip.line }}</text>
     </view>
 
-    <!-- 左上角控制卡：搜索 / 主操作 / 视图工具 / 方向与线路，全部收进一张玻璃卡片，
-         区内用细分割线断开 —— 之前四个独立胶囊各自带阴影，浮在地图上分不出层级 -->
+    <!-- 左上角控制卡：搜索 + 线路信息一体化设计，全市态切换时整体展开为统计区 -->
     <view class="ctrl">
       <!-- ◎ 宿主注入的首块（首页地图视图：视图分段 + 线路搜索联想）。
-         顶栏卡不再浮在地图外面，而是并入这张控制卡，与方向行 / 视图工具行共用一个卡壳 -->
+           顶栏卡不再浮在地图外面，而是并入这张控制卡，与方向行 / 视图工具行共用一个卡壳 -->
       <slot name="top"></slot>
-      <view class="ctrl-div" v-if="hasTopSlot"></view>
+      <view class="ctrl-div" v-if="hasTopSlot && !embedded"></view>
 
       <!-- ① 搜索行（仅独立页渲染；嵌入态线路由宿主页给定） -->
       <view class="ctrl-search" v-if="!embedded">
@@ -225,53 +224,13 @@
         <view class="ctrl-go" @click="doSearchMap">查询</view>
       </view>
 
-      <view class="ctrl-div" v-if="!embedded"></view>
-
-      <!-- ② 方向与线路：直接选方向 + 当前线路号 + 营运公司徽标（必须单行）
-           实时车辆挂载即自动加载，刷新统一走车辆面板的 ↻/间隔下拉，不再放「一键查询」按钮。
-           全市公交视图下整行隐藏：上下行属于「当前这一条线」，与全市线网不是一个作用域 -->
-      <view class="ctrl-dir" v-if="!cityOn">
-        <!-- 环形线路没有上下行：不给「全部 / 上行 / 下行」按钮，只留一个不可点的「环形」标识 -->
-        <view class="dir-tab loop on" v-if="isLoop">环形</view>
-        <template v-else>
-          <view class="dir-tab" :class="{ active: dirFilter === 2 }" @click="setDirView(2)">全部</view>
-          <view class="dir-tab up" :class="{ active: dirFilter === 0 }" @click="setDirView(0)">上行</view>
-          <view class="dir-tab down" :class="{ active: dirFilter === 1 }" @click="setDirView(1)">下行</view>
-          <!-- 循环切换视角（全部→上行→下行）的小方键：紧贴在三个 tab 右侧，颜色随当前视角变化 -->
-          <view class="dir-swap" :class="'d' + dirFilter" @click="cycleDirView" :title="'切换到下一个视角（当前：' + dirFilterLabel + '）'">⇄</view>
-        </template>
-        <!-- 线路号徽章：胶囊描边 + 大号数字 + 小字「路」，与右侧公司徽标同一视觉语言。
-             环线（408内环/外环等）名称已含方向语素，不再追加「路」，避免出现「408内环路」 -->
-        <view class="dir-cur" v-if="lineName" :title="'当前线路：' + lineName + (roadUnit ? ' 路' : '')">
-          <text class="dc-no">{{ lineName }}</text>
-          <text class="dc-unit" v-if="roadUnit">路</text>
-        </view>
-        <view class="dir-cur none" v-else>未选择线路</view>
-        <!-- 所属营运公司徽标：集团线由在线车辆自编号首位推断；
-             非集团线（蔡城 / 木兰 / 汉奇）没有实时车辆，改从公司字典取，保证这一行永远有归属 -->
-        <view class="ctrl-org" v-if="operatorCompanies.length || orgBadge">
-          <view class="org-tag" v-for="c in operatorCompanies" :key="c.no" :title="c.label">
-            <text class="org-no">{{ c.no }}</text>
-            <text class="org-name">{{ c.short }}</text>
-          </view>
-          <view class="org-tag foreign" v-if="orgBadge" :title="orgBadge.full">
-            <image class="org-logo" :src="companyLogo" mode="aspectFit" />
-            <text class="org-name">{{ orgBadge.label }}</text>
-          </view>
-        </view>
-      </view>
-
-      <!-- ④ 走向提示：线路态计算中/失败时挂在方向行下方。
-           视图工具（缩放/全览/站名/底图）已统一移到地图右下角浮动条，不再占控制卡 -->
-      <template v-if="!cityOn">
-        <view class="view-alert" v-if="routeAlert">{{ routeAlert }}</view>
-      </template>
+      <!-- 走向提示：线路态计算中/失败时才显示，不占无效位置 -->
+      <view class="view-alert" v-if="!cityOn && routeAlert">{{ routeAlert }}</view>
 
       <!-- 全市公交区：指标区（数字重 / 标签轻）+ 次操作键行。
            线路号与自编号通查不在这里：顶栏搜索是全站唯一查询入口，全市态下查询=就地
            筛选线路 / 定位车辆（已筛选芯片可清除/打开线路）；卡片加高是安全的（fitRect 读实测 bottom） -->
       <block v-if="cityOn">
-        <view class="ctrl-div"></view>
         <view class="ctrl-city">
           <view class="cc-figs">
             <view class="cc-fig">
@@ -299,9 +258,6 @@
           </view>
           <text class="cc-warn" v-if="cityWarnText">⚠ {{ cityWarnText }}</text>
           <view class="cc-bar" v-if="cityBusy"><view class="cc-bar-in" :style="{ width: cityProgress + '%' }"></view></view>
-        </view>
-        <view class="ctrl-city-row">
-          <!-- 所有按钮已并入底部栏，此行保留为空（仅用于控制卡布局占位与 refit 锚点） -->
         </view>
       </block>
     </view>
@@ -466,6 +422,20 @@
           <FavStar v-if="lineNo && !cityOn" :line="favLine" small />
           <view class="collapse-btn" :class="{ folded: panelCollapsed }" @click="panelCollapsed = !panelCollapsed" :title="panelCollapsed ? '展开' : '折叠'">▾</view>
         </view>
+        <!-- 线路号徽章 + 所属营运公司徽标：紧跟在标题下方，仅在有线路号时显示 -->
+        <view class="panel-line-info" v-if="lineName">
+          <view class="pli-badge">{{ lineName }}{{ roadUnit ? '路' : '' }}</view>
+          <view class="pli-companies" v-if="operatorCompanies.length || orgBadge">
+            <view class="org-tag" v-for="c in operatorCompanies" :key="c.no" :title="c.label">
+              <text class="org-no">{{ c.no }}</text>
+              <text class="org-name">{{ c.short }}</text>
+            </view>
+            <view class="org-tag foreign" v-if="orgBadge" :title="orgBadge.full">
+              <image class="org-logo" :src="companyLogo" mode="aspectFit" />
+              <text class="org-name">{{ orgBadge.label }}</text>
+            </view>
+          </view>
+        </view>
         <!-- 非集团线路：高德只提供静态站点与走向，没有实时车辆，明确标注避免误以为是故障 -->
         <view class="foreign-note" v-if="isForeignLine && !cityOn">
           <image v-if="foreignCompany" class="fn-logo" :src="companyLogo" mode="aspectFit" />
@@ -535,11 +505,19 @@
            自带折叠键（与车辆面板同一枚圆键），两张卡各自成块、各折各的 -->
       <view class="plan-side" v-if="lineNo">
         <!-- 传在线车辆标识：发车时刻据此判断班次是否已实际发出，消除过点残留的「待发」 -->
-        <LinePlan :line-no="lineNo" :online-bus-keys="onlineBusKeys" />
+        <LinePlan
+        :line-no="lineNo"
+        :online-bus-keys="onlineBusKeys"
+        :line-name="lineName"
+        :road-unit="roadUnit"
+        :operator-companies="operatorCompanies"
+        :org-badge="orgBadge"
+        :company-logo="companyLogo"
+      />
       </view>
     </view>
 
-    <!-- 刷新间隔下拉的“点外部关闭”透明遮罩：面板带 backdrop-filter 会形成包含块，遮罩只能放在面板外 -->
+    <!-- 刷新间隔下拉的"点外部关闭"透明遮罩：面板带 backdrop-filter 会形成包含块，遮罩只能放在面板外 -->
     <view class="rm-mask" v-if="refreshMenu" @click="closeRefreshMenu"></view>
 
     <!-- 车辆详情窗：单击地图标记 / 示意图车辆 / 右侧列表项弹出。可拖动、可固定位置、可关闭；
@@ -557,6 +535,11 @@
           <text class="sheet-grip">⣿</text>
           <text class="sheet-line" :title="sheetTitle">{{ sheetTitle }}</text>
           <text class="sheet-dir" :class="isLoop ? 'loop' : 'd' + selectedBus.dir">{{ dirLabel(selectedBus.dir) }}</text>
+          <view class="org-tag" :class="{ foreign: selectedBusOrg && selectedBusOrg.foreign }" v-if="selectedBusOrg" :title="selectedBusOrg.label">
+            <image v-if="selectedBusOrg.foreign" class="org-logo" :src="companyLogo" mode="aspectFit" />
+            <text v-else class="org-no">{{ selectedBusOrg.no }}</text>
+            <text class="org-name">{{ selectedBusOrg.short }}</text>
+          </view>
         </view>
         <view class="sheet-actions">
           <view
@@ -568,23 +551,16 @@
           <view class="sheet-close" @click.stop="closeSheet" title="关闭">✕</view>
         </view>
       </view>
-      <!-- 元数据行：公司全名独占一行，不再被「左标签 + 右值」挤到折行 -->
-      <view class="sheet-sub" :title="busCompanyText(selectedBus)">
-        <text class="ss-tag">营运公司</text>
-        <text class="ss-org">{{ busCompanyText(selectedBus) }}</text>
-      </view>
-      <!-- 当前走向：这辆车所在方向的起点站 → 终点站（下行已反转），与全站首末站绿/琥珀语义一致 -->
+      <!-- 营运公司已并入标题行（方向徽标右侧），不再单独占行 -->
+      <!-- 当前走向：起绿点 / 终琥珀点，站名 → 箭头，方向徽标靠右 -->
       <view class="sheet-route" v-if="sheetRoute">
-        <view class="sr-head">
-          <text class="sk">当前走向</text>
-          <text class="sr-dir" :class="isLoop ? 'loop' : 'd' + sheetRoute.dir">{{ dirLabel(sheetRoute.dir) }}</text>
-        </view>
         <view class="sr-line">
-          <text class="sr-tag sr-start">起</text>
+          <text class="sr-dot sr-start" title="起点站"></text>
           <text class="sr-name sr-from" :title="sheetRoute.from">{{ sheetRoute.from }}</text>
           <text class="sr-arrow">→</text>
-          <text class="sr-tag sr-end">终</text>
+          <text class="sr-dot sr-end" title="终点站"></text>
           <text class="sr-name sr-to" :title="sheetRoute.to">{{ sheetRoute.to }}</text>
+          <text class="sr-dir" :class="isLoop ? 'loop' : 'd' + sheetRoute.dir">{{ dirLabel(sheetRoute.dir) }}</text>
         </view>
       </view>
       <!-- 2×2 指标网格：小标签在上、数值在下，短值各占半行宽度，省掉四行横排 -->
@@ -595,11 +571,14 @@
         </view>
         <view class="sg-cell">
           <text class="sg-k">车速</text>
-          <view class="sg-v"><text class="sg-num">{{ selectedBus.gpsSpeed }}</text><text class="sg-u">km/h</text></view>
+          <view class="sg-v">
+            <text class="sg-num" :style="{ color: speedBandColor }">{{ selectedBus.gpsSpeed }}</text>
+            <text class="sg-u">km/h</text>
+          </view>
         </view>
         <view class="sg-cell">
           <text class="sg-k">运行状态</text>
-          <view class="sg-v">{{ busStateText(selectedBus) }}</view>
+          <view class="sg-v"><text class="sg-num" :style="{ color: busStateColor }">{{ busStateText(selectedBus) }}</text></view>
         </view>
         <view class="sg-cell">
           <text class="sg-k">GPS 时间</text>
@@ -708,7 +687,7 @@ import { createResizable } from '../utils/panelResize.js'
 import { readPanelPos, writePanelPos, clampPanelPos, bindFloatDrag } from '../utils/panelPos.js'
 import {
   citySweepCost, sweepCity, loadSnapshot, loadLastSnapshot, snapshotAge,
-  findBusByOrgId, searchBusesByOrgSuffix, refreshOrgIds, clusterPoints, SPEED_BANDS, CITY_FRESH_MS,
+  findBusByOrgId, searchBusesByOrgSuffix, refreshOrgIds, clusterPoints, SPEED_BANDS, speedBandOf, CITY_FRESH_MS,
   cityWarned, markCityWarned, loadCityNet, netSearchLines, bboxIntersects,
 } from '../utils/cityBus.js'
 import LinePlan from './LinePlan.vue'
@@ -913,7 +892,7 @@ const mercY = (lat) => {
   return (1 - Math.log(Math.tan(r) + 1 / Math.cos(r)) / Math.PI) / 2
 }
 const zoomScale = (z) => 256 * Math.pow(2, z)
-// Mercator 逆投影：定位时要把“希望车出现的屏幕点”反算成地图中心
+// Mercator 逆投影：定位时要把"希望车出现的屏幕点"反算成地图中心
 const invMercX = (u) => u * 360 - 180
 const invMercY = (v) => (Math.atan(Math.sinh(Math.PI * (1 - 2 * v))) * 180) / Math.PI
 const clampNum = (v, min, max) => Math.min(max, Math.max(min, v))
@@ -1090,7 +1069,7 @@ export default {
       hoverTip: null,
       // 嵌入态全屏开关：true 时根节点挂 .fs（fixed 铺满视口）
       isFullscreen: false,
-      // 刚定位过的车辆：在自绘图上画一圈扩散波，告诉用户“就是这一个点”
+      // 刚定位过的车辆：在自绘图上画一圈扩散波，告诉用户"就是这一个点"
       locatedBus: null,
       // 全市快照内容被就地改写过的计数（refreshOrgIds 不走响应式 setter，靠它推 marker 重算）
       cityDirty: 0,
@@ -1157,6 +1136,17 @@ export default {
     }
   },
   computed: {
+    // 车速分档颜色：与车速榜 SPEED_BANDS 同一套色（灰/绿/amber/红），一眼看出快慢
+    speedBandColor() {
+      const v = Number(this.selectedBus && this.selectedBus.gpsSpeed) || 0
+      const band = speedBandOf(v)
+      return SPEED_BANDS[band] ? SPEED_BANDS[band].color : '#e2e8f0'
+    },
+    // 运行状态颜色：到站=绿 / 离站=橙 / 行驶=青 / 停靠=琥珀，与自编号、车速同一套大字+配色模式
+    busStateColor() {
+      const s = busStateOf(this.selectedBus, this.stopsByDir[this.selectedBus.dir], this.routeByDir[this.selectedBus.dir])
+      return s === '到站' ? '#6ee7b7' : s === '已离站' ? '#fb923c' : s === '行驶' ? '#67e8f9' : '#fcd34d'
+    },
     // 当前线路是否为「非集团线路」（高德静态数据源，无实时车辆）
     isForeignLine() {
       return companyKeyOfNo(this.lineName || this.lineNo) !== 'JT'
@@ -1233,7 +1223,7 @@ export default {
     hasTopSlot() {
       return !!this.$slots.top
     },
-    // 渲染方式由「地图服务设置」决定：选“走向图”时即使填了 Key 也用自绘；
+    // 渲染方式由「地图服务设置」决定：选"走向图"时即使填了 Key 也用自绘；
     // 未设置时按有无 Key 自动选择（保持旧行为）
     useMap() {
       return useNativeMap()
@@ -1290,7 +1280,7 @@ export default {
       const s = this.routeState
       if (s[0] === 'loading' || s[1] === 'loading') return '走向贴路计算中…（当前为站间直连，稍后自动替换）'
       const failed = ['fail'].includes(s[0]) && ['fail'].includes(s[1])
-      if (failed) return '贴路服务暂不可用，当前为站间直连；可点“刷新”重试'
+      if (failed) return '贴路服务暂不可用，当前为站间直连；可点"刷新"重试'
       return ''
     },
     // 详情窗标题：全市态显示这辆车自己的线路，线路态显示当前线路
@@ -1366,7 +1356,7 @@ export default {
       if (!m) return { count: '—', lines: '—', main: '—', sub: '', lab: '个方向' }
       return { count: m.count, lines: m.lines, main: m.done, sub: '/ ' + m.total, lab: '个方向' }
     },
-    // 时间戳只留“什么时候”，耗时是开发指标（已写在完成 toast 里），不占用户一行
+    // 时间戳只留"什么时候"，耗时是开发指标（已写在完成 toast 里），不占用户一行
     cityStampText() {
       const m = this.cityMeta
       if (!m) return '尚未拉取'
@@ -1473,7 +1463,7 @@ export default {
             height: 30,
             // 不给 marker 挂 callout，也**不能传 title**：uni-h5 的 MapMarker 会在点击时
             // 把 title 生成的 callout 切到可见（callout.visible = !visible），
-            // 于是每点一次车图标，车头上方就多出一个“337 3240”白框，直到地图重建才消失。
+            // 于是每点一次车图标，车头上方就多出一个"337 3240"白框，直到地图重建才消失。
             // 线路号/自编号/上下行/车速等只在详情浮窗里展示。
           })
         })
@@ -1513,7 +1503,7 @@ export default {
     },
     // 全市态的原生折线：视野裁剪 + 条数封顶。
     // uni-h5 每条折线都是一个独立覆盖物，1000 多条会把地图彻底拖死，所以只绘视野内的前 180 条
-    // （统计行会明说这个上限，不让用户误以为全市就这些线；完整线网请用“走向图”渲染方式）
+    // （统计行会明说这个上限，不让用户误以为全市就这些线；完整线网请用"走向图"渲染方式）
     cityNativeNet() {
       void this.viewTick
       void this.cityNetTick
@@ -1564,6 +1554,20 @@ export default {
         // short 用于控制卡里的徽标（一行放不下全名，全名留给 title / 车辆详情窗）
         // 展示口径：只用单字序号「一公司 / 二公司」，去掉「第」；全名仍保留「第一营运公司」供 title
         .map((no) => ({ no, short: `${CN_ORG[no].replace(/^第/, '')}公司`, label: `武汉公交集团${CN_ORG[no]}营运公司` }))
+    },
+    // 车辆详情窗的所属公司徽标：与实时车辆面板同款（圆形序号 + 短名）。
+    // 非集团线路（无 orgId 首位数字）走公司字典徽标，保证每辆车都有归属。
+    selectedBusOrg() {
+      const b = this.selectedBus
+      if (!b) return null
+      const d = String(b.orgId || '').charAt(0)
+      if (d >= '1' && d <= '9') {
+        const no = Number(d)
+        return { no, short: `${CN_ORG[no].replace(/^第/, '')}公司`, label: `武汉公交集团${CN_ORG[no]}营运公司`, foreign: false }
+      }
+      const badge = this.orgBadge
+      if (badge) return { no: '', short: badge.label, label: badge.full, foreign: true }
+      return null
     },
     // 详情窗位置：拖动过后用 left/top 绝对定位（覆盖默认的居中贴底）
     sheetStyle() {
@@ -1809,7 +1813,7 @@ export default {
         this.$nextTick(() => this.measureUi())
       })
     },
-    // 搜索框“查询”：在当前页直接切换到输入的线路（保持当前视角方向）
+    // 搜索框"查询"：在当前页直接切换到输入的线路（保持当前视角方向）
     doSearchMap() {
       const no = (this.searchNo || '').trim()
       if (!no) {
@@ -2502,7 +2506,7 @@ export default {
       this.cityFilterNo = ''
       this.cityHitLine = null
       this.selectedBus = null
-      // 回到线路视图：清掉全市视野与“用户已移动”标记，重新量占位并自适应整条线
+      // 回到线路视图：清掉全市视野与"用户已移动"标记，重新量占位并自适应整条线
       this.camInited = false
       this._userMoved = false
       this._view = null
@@ -2729,7 +2733,7 @@ export default {
         if (out.length >= CITY_TAG_MAX) break
         const org = this.fmtNo(d.bus.orgId)
         const dirTxt = d.bus.dir === 0 ? '上行' : '下行'
-        const text = this.cityTagMode === 2 ? `${org} · ${d.bus.no || ''} · ${dirTxt}` : org
+        const text = this.cityTagMode === 2 ? `${d.bus.no || ''} · ${org} · ${dirTxt}` : org
         const bw = textW(text) * 0.8
         const y = d.y - 17
         const box = { x1: d.x - bw / 2, x2: d.x + bw / 2, y1: y - 6, y2: y + 6 }
@@ -2895,7 +2899,7 @@ export default {
             tagCount++
             const org = this.fmtNo(c.bus.orgId)
             const dirTxt = c.bus.dir === 0 ? '上行' : '下行'
-            const labelContent = this.cityTagMode === 2 ? `${org} · ${c.bus.no || ''} · ${dirTxt}` : org
+            const labelContent = this.cityTagMode === 2 ? `${c.bus.no || ''} · ${org} · ${dirTxt}` : org
             marker.label = {
               content: labelContent,
               color: '#0B1020',
@@ -3114,13 +3118,24 @@ export default {
     // 幂等：同一 DOM 节点只挂一次（__rs 标记）；面板随 v-if 重建出的新节点在下次 measureUi 时补挂。
     setupPanelResize() {
       if (typeof document === 'undefined' || typeof window === 'undefined') return
-      const vw = window.innerWidth || 1280
       const vh = window.innerHeight || 800
-      const upx = (r) => { try { return uni.upx2px(r) } catch (e) { return Math.round(r / 2) } }
-      // 宽度固定（CSS 里定死，避免拖窄把文字挤扁），只开放「调高度」并记忆：
-      // 底部手柄改高，控制卡用 height（自身滚动），两张卡用 maxHeight（保留内部列表滚动）。
+      // 左侧控制卡（.ctrl）高度固定、由 CSS 自然贴合内容，**不接可缩放手柄**：
+      // 用户曾拖出虚高记忆 → 面板底部留大片空白；且顶栏是卡内首块，拉高只会压缩地图可视区。
+      // 清掉历史记忆键 + 可能残留的内联高度 / 手柄 DOM（从旧版升级上来的页面样式仍生效），
+      // 让卡片回到 CSS 自然高度。右侧车辆卡 / 时刻表卡仍开放调高度（maxHeight + 内部列表滚动）。
+      try {
+        uni.removeStorageSync('whbis:panel-size:v1:ctrl')
+        const ctrlEl = document.querySelector('.ctrl')
+        if (ctrlEl) {
+          ctrlEl.style.height = ''
+          ctrlEl.style.overflow = ''
+          const oldGrip = ctrlEl.querySelector('.rs-grip')
+          if (oldGrip) oldGrip.remove()
+          ctrlEl.__rs = null
+          if (ctrlEl.__ro) { ctrlEl.__ro.disconnect(); ctrlEl.__ro = null }
+        }
+      } catch (e) { /* 存储不可用忽略 */ }
       const specs = [
-        { sel: '.ctrl', opts: { key: 'ctrl', axis: 'y', edge: 'bottom', heightProp: 'height', clip: false, minH: upx(240), maxH: vh - 48, onResize: () => this.scheduleMeasure() } },
         { sel: '.panel', opts: { key: 'panel', axis: 'y', edge: 'bottom', heightProp: 'maxHeight', minH: 120, maxH: vh - 48, onResize: () => this.scheduleMeasure() } },
         { sel: '.plan-side', opts: { key: 'plan', axis: 'y', edge: 'bottom', heightProp: 'maxHeight', minH: 120, maxH: vh - 48, onResize: () => this.scheduleMeasure() } },
       ]
@@ -3134,22 +3149,6 @@ export default {
         } else {
           el.__rs = createResizable(el, sp.opts)
           ;(this._resizers || (this._resizers = [])).push(el.__rs)
-        }
-        // 控制卡内容会随全市按钮换行 / 筛选芯片 / 进度条动态变高。
-        // 固定 height + clip:false 时这些变化不会自动撑开卡片，底部按钮会溢出到卡外；
-        // 用 ResizeObserver 盯住内容区，高度一变就 refit（refit 只放大不缩小，不影响用户手动调高）。
-        // 每次 setup 都重新绑定：全市节点是 v-if 动态出现/消失的，旧观察目标会被卸载。
-        if (sp.sel === '.ctrl' && typeof ResizeObserver !== 'undefined') {
-          const targets = [el.querySelector('.ctrl-city'), el.querySelector('.ctrl-city-row')].filter(Boolean)
-          const sig = targets.map((n) => n.className).join('|')
-          // 目标集合变了（切换全市态）才重建 observer，避免重复触发
-          if (el.__roSig !== sig) {
-            if (el.__ro) el.__ro.disconnect()
-            const ro = new ResizeObserver(() => { if (el.__rs && el.__rs.refit) el.__rs.refit() })
-            targets.forEach((n) => ro.observe(n))
-            el.__ro = ro
-            el.__roSig = sig
-          }
         }
       })
     },
@@ -3226,7 +3225,7 @@ export default {
     },
     // 相机自适应到整条线路（含在线车辆），并让线路中心落在可绘制区域中心
     fitRoute() {
-      // 全市态下“全览”览的是车点包围盒，不能拿本线站点把视野拽回去
+      // 全市态下"全览"览的是车点包围盒，不能拿本线站点把视野拽回去
       if (this.cityOn) { this.fitCity(); return }
       const pts = []
       ;[0, 1].forEach((d) => {
@@ -3297,7 +3296,7 @@ export default {
       if (this.useMap) this.mapKey++
     },
     resetView() {
-      // 全览：清掉“用户已调整视角”标记并重新自适应（全市态下览的是车点包围盒）
+      // 全览：清掉"用户已调整视角"标记并重新自适应（全市态下览的是车点包围盒）
       this._userMoved = false
       this.camInited = false
       // 先重新量取占位，再自适应（控制卡可能已经变了高度）
@@ -3630,7 +3629,7 @@ export default {
           const isFirst = i === 0
           const isLast = i === arr.length - 1
           const terminal = isFirst || isLast
-          // 起点=绿 / 终点=琥珀，与方向色（青 / 玫红）区分，明确“起”“终”
+          // 起点=绿 / 终点=琥珀，与方向色（青 / 玫红）区分，明确"起""终"
           const END_COLOR = { first: '#22c55e', last: '#f59e0b' }
           const endKind = isFirst ? 'first' : isLast ? 'last' : ''
           const endTag = isFirst ? '起' : isLast ? '终' : ''
@@ -3725,10 +3724,11 @@ export default {
       // 4) 车辆（圆点 + 已算好的车号位置）
       this.svgBuses = this.shownBuses.map((b, i) => {
         const p = busPts[i]
+        const dirTxt = b.dir === 0 ? '上行' : '下行'
         return {
           key: b.dir + '-' + i,
           dir: b.dir,
-          label: this.selectedBus === b ? this.fmtNo(b.orgId) : '',
+          label: `${this.lineName || ''} · ${this.fmtNo(b.orgId || '')} · ${dirTxt}`,
           x: p.x,
           y: p.y,
           labelY: p.ly,
@@ -3838,7 +3838,7 @@ export default {
     },
     // 原生地图的标记点击（单击 / 双击都可，双击就是连点两次）。
     // ⚠ uni-h5 的 markertap 是自定义事件：normalizeCustomEvent 只返回 { type, timeStamp, target, currentTarget, detail }，
-    //   参数全在 e.detail 里——直接读 e.markerId 恒为 undefined，会让“点车图标”完全没反应。
+    //   参数全在 e.detail 里——直接读 e.markerId 恒为 undefined，会让"点车图标"完全没反应。
     onMarkerTap(e) {
       const detail = (e && e.detail) || {}
       const raw = detail.markerId != null ? detail.markerId : (e && e.markerId)
@@ -4327,11 +4327,6 @@ export default {
       // 拖地图时不弹浮标（否则平移路上会一路闪）
       if (this._drag && this._drag.moved) return
       if (this.cityOn) {
-        // 编号标签关（mode 0）时不弹悬停浮标
-        if (!this.cityTagMode) {
-          if (this.hoverTip) this.hoverTip = null
-          return
-        }
         // 全市态命中池换成快照里的车点；点位密，半径收到 14px，免得鼠标一滑就跳到邻车
         const pool = this.cityShown
         if (!pool.length) {
@@ -4355,13 +4350,11 @@ export default {
         const lift = this.useMap ? 30 : 20
         const page = (typeof document !== 'undefined' && document.querySelector('.lmap-page')) || host
         const pr = page.getBoundingClientRect()
-        const org = this.fmtNo(hit.bus.orgId || '')
         const dirTxt = hit.bus.dir === 0 ? '上行' : '下行'
-        // 悬停内容与编号标签模式联动：mode1=仅自编号，mode2=自编号 · 线路号 · 方向（与标签格式完全一致）
         const tip = {
           x: Math.round(hit.p.x + r.left - pr.left),
           y: Math.round(hit.p.y + r.top - pr.top - lift),
-          no: this.cityTagMode === 2 ? `${org} · ${hit.bus.no || ''} · ${dirTxt}` : org,
+          no: `${hit.bus.no || ''} · ${this.fmtNo(hit.bus.orgId || '')} · ${dirTxt}`,
           line: null,
         }
         const old = this.hoverTip
@@ -4389,21 +4382,14 @@ export default {
         return
       }
       // 浮标落在图标上方：原生 marker 图标底边对着坐标点，自绘圆点以坐标点为圆心
-      // 编号标签关（mode 0）时不弹悬停浮标
-      if (!this.cityTagMode) {
-        if (this.hoverTip) this.hoverTip = null
-        return
-      }
       const lift = this.useMap ? 42 : 20
       const page = (typeof document !== 'undefined' && document.querySelector('.lmap-page')) || host
       const pr = page.getBoundingClientRect()
-      const org = this.fmtNo(hit.bus.orgId || '')
       const dirTxt = hit.bus.dir === 0 ? '上行' : '下行'
-      // 悬停内容与编号标签模式联动：mode1=仅自编号，mode2=自编号 · 线路号 · 方向（与标签格式完全一致）
       const tip = {
         x: Math.round(hit.p.x + r.left - pr.left),
         y: Math.round(hit.p.y + r.top - pr.top - lift),
-        no: this.cityTagMode === 2 ? `${org} · ${hit.bus.no || ''} · ${dirTxt}` : org,
+        no: `${this.lineName || ''} · ${this.fmtNo(hit.bus.orgId || '')} · ${dirTxt}`,
         line: null,
       }
       const old = this.hoverTip
@@ -4421,7 +4407,7 @@ export default {
       }, 1600)
     },
     // 挑一个不被详情浮窗 / 控制卡 / 右侧面板遮住的屏幕点（相对地图容器）
-    // 不挑的话“定位”会把车放到窗口正后面，放大了也看不见（桌面端实测就是如此）
+    // 不挑的话"定位"会把车放到窗口正后面，放大了也看不见（桌面端实测就是如此）
     freeSpot(w, h, hr) {
       const boxes = []
       if (typeof document !== 'undefined') {
@@ -4445,7 +4431,7 @@ export default {
       ]
       return spots.find((p) => !blocked(p.x, p.y)) || spots[0]
     },
-    // 详情面板内「在地图上定位」：居中 + 放到最大缩放，做到“精确定位到车”
+    // 详情面板内「在地图上定位」：居中 + 放到最大缩放，做到"精确定位到车"
     focusBus(bus) {
       if (!bus) return
       // 原生地图上限一般 18~19；自绘相机上限 18.5（与 fitRoute / zoomAt 的夹取保持一致）
@@ -4464,7 +4450,7 @@ export default {
       if (this.useMap) {
         this.mapCenter = center
         this.mapScale = ZOOM
-        // 同步“当前视野”，否则下一次自动刷新会把画面还原到定位前的位置
+        // 同步"当前视野"，否则下一次自动刷新会把画面还原到定位前的位置
         this._view = { center, scale: ZOOM }
         this.mapKey++
       } else {
@@ -4897,56 +4883,52 @@ export default {
     display: none;
   }
 }
-/* 左上角控制卡：整块是一张玻璃卡片，内部分 搜索 / 主操作 / 视图 / 方向 四个区 */
+/* 左上角控制卡：整块是一张玻璃卡片，紧凑贴合内容高度 */
 .ctrl {
   position: absolute;
-  top: 24rpx;
-  left: 24rpx;
-  width: 860rpx;
-  max-width: calc(100vw - 48rpx);
+  top: 12rpx;
+  left: 12rpx;
+  width: 680rpx;
+  max-width: calc(100vw - 24rpx);
   display: flex;
   flex-direction: column;
-  gap: 12rpx;
-  padding: 12rpx;
+  gap: 0;
+  padding: 4rpx;
   box-sizing: border-box;
   background: rgba(11, 16, 32, 0.82);
   backdrop-filter: blur(28px) saturate(160%);
   -webkit-backdrop-filter: blur(28px) saturate(160%);
   border: 2rpx solid rgba(255, 255, 255, 0.14);
-  border-radius: 26rpx;
-  box-shadow: 0 18rpx 48rpx rgba(0, 0, 0, 0.45), inset 0 1rpx 0 rgba(255, 255, 255, 0.1);
+  border-radius: 16rpx;
+  box-shadow: 0 10rpx 28rpx rgba(0, 0, 0, 0.42), inset 0 1rpx 0 rgba(255, 255, 255, 0.08);
   z-index: 10;
 }
-/* 组间分割线：比单纯拉开间距更能表达“这里是不同的组” */
+/* 仅用于宿主顶栏与主体内容的分隔 */
 .ctrl-div {
-  height: 2rpx;
-  margin: 0 8rpx;
-  background: rgba(255, 255, 255, 0.09);
+  height: 1rpx;
+  margin: 4rpx 0;
+  background: rgba(255, 255, 255, 0.07);
 }
-/* 搜索行：卡片内的一条凹槽，不再是自带阴影的独立胶囊 */
+/* 搜索行：透明背景（背景由宿主 .ctrl 统一提供） */
 .ctrl-search {
   display: flex;
   align-items: center;
-  gap: 10rpx;
-  padding: 6rpx;
-  background: rgba(255, 255, 255, 0.06);
-  border: 2rpx solid rgba(255, 255, 255, 0.1);
-  border-radius: 18rpx;
+  gap: 6rpx;
 }
 .ctrl-icon {
   flex-shrink: 0;
-  font-size: 26rpx;
+  font-size: 22rpx;
   opacity: 0.75;
 }
 /* 自定义导航后的返回按钮 */
 .ctrl-back {
   flex-shrink: 0;
-  width: 52rpx;
-  height: 52rpx;
-  line-height: 46rpx;
+  width: 44rpx;
+  height: 44rpx;
+  line-height: 44rpx;
   text-align: center;
   border-radius: 14rpx;
-  font-size: 36rpx;
+  font-size: 32rpx;
   color: rgba(255, 255, 255, 0.8);
   background: rgba(255, 255, 255, 0.07);
   cursor: pointer;
@@ -4959,8 +4941,8 @@ export default {
 .ctrl-input {
   flex: 1;
   min-width: 0;
-  height: 52rpx;
-  font-size: 26rpx;
+  height: 36rpx;
+  font-size: 22rpx;
   color: #fff;
   background: transparent;
   border: none;
@@ -4970,168 +4952,19 @@ export default {
 }
 .ctrl-go {
   flex-shrink: 0;
-  height: 52rpx;
-  line-height: 52rpx;
-  padding: 0 26rpx;
-  font-size: 24rpx;
+  height: 36rpx;
+  line-height: 36rpx;
+  padding: 0 16rpx;
+  font-size: 22rpx;
   font-weight: 700;
   color: #fff;
   background: linear-gradient(135deg, var(--ac), var(--ac-2));
-  border-radius: 14rpx;
+  border-radius: 12rpx;
   cursor: pointer;
   transition: filter 0.18s;
 }
 .ctrl-go:active {
   filter: brightness(1.12);
-}
-/* 方向分段条：卡片底部一块凹槽，三个 tab 与线路信息同排 */
-.ctrl-dir {
-  display: flex;
-  align-items: center;
-  /* 单行：营运公司徽标必须紧跟在“337 路”后面，一旦允许换行就会跑到第二排、看着像错位 */
-  flex-wrap: nowrap;
-  gap: 6rpx;
-  padding: 6rpx;
-  box-sizing: border-box;
-  width: 100%;
-  min-width: 0;
-  background: rgba(255, 255, 255, 0.06);
-  border: 2rpx solid rgba(255, 255, 255, 0.1);
-  border-radius: 18rpx;
-}
-.dir-tab {
-  /* 固定行高 + 双轴 flex 居中：只用 padding 撑高时中文基线会偏，且选中加粗后文字会上下跳 */
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  height: 52rpx;
-  padding: 0 24rpx;
-  box-sizing: border-box;
-  font-size: 24rpx;
-  line-height: 1;
-  white-space: nowrap;
-  flex-shrink: 0;
-  color: rgba(255, 255, 255, 0.68);
-  border-radius: 14rpx;
-  cursor: pointer;
-  transition: background 0.2s, color 0.2s;
-}
-.dir-tab:hover {
-  color: #fff;
-  background: rgba(255, 255, 255, 0.1);
-}
-.dir-tab.active {
-  color: #fff;
-  background: linear-gradient(135deg, var(--ac), var(--ac-2));
-  font-weight: 700;
-}
-/* 上/下行选中态直接用方向色，与地图走向线同色 */
-.dir-tab.up.active {
-  color: #062a33;
-  background: linear-gradient(135deg, #67e8f9, #06b6d4);
-  box-shadow: 0 6rpx 18rpx rgba(6, 182, 212, 0.35);
-}
-.dir-tab.up.active:hover {
-  color: #062a33;
-}
-.dir-tab.down.active {
-  color: #fff;
-  background: linear-gradient(135deg, #fda4af, #e11d48);
-  box-shadow: 0 6rpx 18rpx rgba(225, 29, 72, 0.35);
-}
-/* 环形线标识：不可点，用独立紫罗兰色与「上/下行」区分 */
-.dir-tab.loop {
-  color: #ede9fe;
-  background: rgba(139, 92, 246, 0.22);
-  border: 2rpx solid rgba(167, 139, 250, 0.5);
-  font-weight: 700;
-  cursor: default;
-}
-/* 方向行内的“循环切换”小键：紧贴三个 tab 右侧，颜色随当前视角（上行青 / 下行玫红 / 中性）。
-   它本质上就是“切方向”，放在方向行里才有归属感；挂在一键查询旁边时像个多余的旁路按钮。 */
-.dir-swap {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 48rpx;
-  height: 48rpx;
-  box-sizing: border-box;
-  flex: 0 0 auto;
-  font-size: 26rpx;
-  line-height: 1;
-  color: rgba(255, 255, 255, 0.62);
-  background: rgba(255, 255, 255, 0.07);
-  border: 2rpx solid rgba(255, 255, 255, 0.12);
-  border-radius: 12rpx;
-  cursor: pointer;
-  transition: color 0.18s, background 0.18s, border-color 0.18s, transform 0.12s;
-}
-.dir-swap:hover {
-  color: #fff;
-  background: rgba(255, 255, 255, 0.15);
-}
-.dir-swap:active {
-  transform: scale(0.94);
-}
-.dir-swap.d0 {
-  color: #67e8f9;
-  background: rgba(34, 211, 238, 0.16);
-  border-color: rgba(34, 211, 238, 0.42);
-}
-.dir-swap.d1 {
-  color: #fda4af;
-  background: rgba(244, 63, 94, 0.16);
-  border-color: rgba(244, 63, 94, 0.42);
-}
-/* 线路号徽章：靠右，与左侧三个方向 tab 用留白分开；胶囊描边 + 靛蓝点缀。
-   可收缩 + min-width:0：长线路名宁可在卡内省略号，也不能把后面的徽标顶出卡外造成错位 */
-.dir-cur {
-  display: inline-flex;
-  align-items: center;
-  height: 52rpx;
-  margin-left: auto;
-  padding: 0 18rpx;
-  border-radius: 999rpx;
-  background: rgba(var(--ac-rgb), 0.14);
-  border: 2rpx solid rgba(var(--ac-rgb), 0.38);
-  white-space: nowrap;
-  flex: 0 1 auto;
-  min-width: 0;
-}
-/* 无线路时的弱化态 */
-.dir-cur.none {
-  font-size: 22rpx;
-  color: rgba(255, 255, 255, 0.45);
-  background: rgba(255, 255, 255, 0.05);
-  border-color: rgba(255, 255, 255, 0.12);
-}
-.dc-no {
-  font-size: 28rpx;
-  font-weight: 800;
-  line-height: 1;
-  color: var(--ac-text);
-  font-variant-numeric: tabular-nums;
-  /* 作为 dir-cur 的 flex 子项可收缩，溢出时省略号收尾（dir-cur 已继承 white-space:nowrap） */
-  flex: 0 1 auto;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-.dc-unit {
-  margin-left: 5rpx;
-  font-size: 20rpx;
-  line-height: 1;
-  color: rgba(199, 210, 254, 0.65);
-  flex: 0 0 auto;
-}
-/* 营运公司徽标：紧跟线路号同一行（不换行）；地方不够时只把公司名省成省略号 */
-.ctrl-org {
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  gap: 8rpx;
-  flex: 0 1 auto;
-  min-width: 0;
 }
 .org-tag {
   display: inline-flex;
@@ -5149,20 +4982,20 @@ export default {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 40rpx;
-  height: 40rpx;
+  width: 36rpx;
+  height: 36rpx;
   border-radius: 50%;
-  font-size: 26rpx;
+  font-size: 24rpx;
   font-weight: 800;
   color: #1a1205;
   background: linear-gradient(135deg, #fde68a, #fbbf24 45%, #f59e0b);
   box-shadow: 0 4rpx 12rpx rgba(251, 191, 36, 0.5), inset 0 1rpx 0 rgba(255, 255, 255, 0.6),
     inset 0 -2rpx 4rpx rgba(180, 83, 9, 0.3);
-  margin-right: 12rpx;
+  margin-right: 10rpx;
   flex-shrink: 0;
 }
 .org-name {
-  font-size: 20rpx;
+  font-size: 18rpx;
   line-height: 1;
   font-weight: 700;
   color: #fde68a;
@@ -5179,10 +5012,10 @@ export default {
   border-color: rgba(255, 255, 255, 0.18);
 }
 .org-logo {
-  width: 40rpx;
-  height: 40rpx;
+  width: 36rpx;
+  height: 36rpx;
   border-radius: 50%;
-  margin-right: 12rpx;
+  margin-right: 10rpx;
   flex-shrink: 0;
 }
 .org-tag.foreign .org-name {
@@ -5261,13 +5094,44 @@ export default {
 .panel.collapsed .panel-header {
   margin-bottom: 0;
 }
+/* 线路号徽章 + 营运公司徽标行：紧跟在面板标题下方，仅在有线路号时显示 */
+.panel-line-info {
+  display: flex;
+  align-items: center;
+  gap: 8rpx;
+  padding: 10rpx 4rpx 14rpx;
+  flex-wrap: nowrap;
+  min-width: 0;
+  border-bottom: 1rpx solid rgba(255, 255, 255, 0.06);
+}
+.pli-badge {
+  flex-shrink: 0;
+  height: 32rpx;
+  padding: 0 14rpx;
+  border-radius: 999rpx;
+  background: rgba(var(--ac-rgb), 0.18);
+  border: 2rpx solid rgba(var(--ac-rgb), 0.45);
+  font-size: 22rpx;
+  font-weight: 800;
+  color: var(--ac-text);
+  line-height: 1;
+  display: inline-flex;
+  align-items: center;
+}
+.pli-companies {
+  display: flex;
+  align-items: center;
+  gap: 6rpx;
+  margin-left: auto;
+  flex-shrink: 0;
+}
 /* 刷新行：标题栏下方的独立一行，按钮宽度不被标题挤压而竖排换行 */
 .panel-tools {
   flex-shrink: 0;
   display: flex;
   align-items: center;
   gap: 14rpx;
-  margin-bottom: 18rpx;
+  margin: 12rpx 0 18rpx;
 }
 .panel.collapsed .panel-tools {
   margin-bottom: 0;
@@ -5354,7 +5218,7 @@ export default {
   background: linear-gradient(135deg, var(--ac), var(--ac-2));
   box-shadow: 0 8rpx 20rpx rgba(6, 182, 212, 0.35);
 }
-/* 自动刷新进行中：外圈加一道青色光环，一眼看出“正在自动跑” */
+/* 自动刷新进行中：外圈加一道青色光环，一眼看出"正在自动跑" */
 .refresh-pill.auto {
   box-shadow: 0 0 0 3rpx rgba(103, 232, 249, 0.55), 0 8rpx 20rpx rgba(6, 182, 212, 0.35);
 }
@@ -5460,7 +5324,7 @@ export default {
   font-size: 22rpx;
   color: #67e8f9;
 }
-/* 下拉的“点外部关闭”透明遮罩：面板带 backdrop-filter 会形成包含块，遮罩只能放在面板外层 */
+/* 下拉的"点外部关闭"透明遮罩：面板带 backdrop-filter 会形成包含块，遮罩只能放在面板外层 */
 .rm-mask {
   position: fixed;
   left: 0;
@@ -5581,13 +5445,13 @@ export default {
 /* 走向尚未贴路（计算中/失败）的提示，避免把站间直连当成真实走向 */
 .view-alert {
   align-self: flex-start;
-  font-size: 20rpx;
-  line-height: 1.4;
-  color: #fbbf24;
-  background: rgba(251, 191, 36, 0.12);
-  border: 2rpx solid rgba(251, 191, 36, 0.32);
-  border-radius: 12rpx;
-  padding: 8rpx 16rpx;
+  font-size: 17rpx;
+  line-height: 1.3;
+  color: rgba(251, 191, 36, 0.85);
+  padding: 3rpx 12rpx;
+  border-radius: 8rpx;
+  background: rgba(251, 191, 36, 0.08);
+  margin-top: 2rpx;
 }
 /* 车辆列表项的方向徽标（上行 / 下行，宽度随文字自适应） */
 .bus-dir {
@@ -5668,11 +5532,11 @@ export default {
   -webkit-user-select: none;
   user-select: none;
 }
-/* 拖动中：提升阴影，视觉上“拿起来了” */
+/* 拖动中：提升阴影，视觉上"拿起来了" */
 .bus-sheet.dragging {
   box-shadow: 0 32rpx 84rpx rgba(0, 0, 0, 0.62), 0 0 0 2rpx rgba(103, 232, 249, 0.35);
 }
-/* 已固定：标题栏不可拖，边框变成紫色提示“锁定中” */
+/* 已固定：标题栏不可拖，边框变成紫色提示"锁定中" */
 .bus-sheet.pinned {
   border-color: rgba(var(--ac-rgb), 0.55);
 }
@@ -5686,7 +5550,7 @@ export default {
   flex: 1;
   min-width: 0;
 }
-/* 拖动把柄：一个竖排点阵，暗示“这里可以拖” */
+/* 拖动把柄：一个竖排点阵，暗示"这里可以拖" */
 .sheet-grip {
   font-size: 24rpx;
   line-height: 1;
@@ -5740,7 +5604,7 @@ export default {
   border-radius: 6rpx;
   background: linear-gradient(180deg, rgba(var(--ac-rgb), 0.6), rgba(139, 92, 246, 0.5));
 }
-/* 换乘卡：带内高光的玻璃质感 + 细亮边，整张卡有“抬起来”的层次。
+/* 换乘卡：带内高光的玻璃质感 + 细亮边，整张卡有"抬起来"的层次。
    左侧一条色带随方向色，hover/当前态点亮，静止时低调不抢戏。 */
 .st-chip {
   position: relative;
@@ -5866,7 +5730,7 @@ export default {
 .st-chip.cur .st-dest {
   color: #fde68a;
 }
-/* “当前”胶囊：琥珀实心小标，和线路金牌呼应 */
+/* "当前"胶囊：琥珀实心小标，和线路金牌呼应 */
 .st-cur {
   flex: 0 0 auto;
   margin-left: auto;
@@ -5953,14 +5817,15 @@ export default {
   box-shadow: 0 4rpx 12rpx rgba(139, 92, 246, 0.28), inset 0 1rpx 0 rgba(255, 255, 255, 0.25);
 }
 /* 元数据行：左侧线路归属胶囊 + 右侧换乘条数胶囊，分列两端、各自成标 */
+/* 站点详情窗的元信息行：左标签 + 右值，与车辆窗旧版同构 */
 .sheet-sub {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 16rpx;
   min-width: 0;
-  padding: 16rpx 0;
-  border-bottom: 2rpx solid rgba(255, 255, 255, 0.08);
+  padding: 14rpx 0;
+  border-bottom: 2rpx solid rgba(255, 255, 255, 0.06);
 }
 .ss-tag {
   flex: 0 1 auto;
@@ -5988,11 +5853,10 @@ export default {
   background: rgba(var(--ac-rgb), 0.14);
   border: 2rpx solid rgba(var(--ac-rgb), 0.32);
 }
-/* 2×2 指标网格：标签在上、数值在下；竖线只在右列、横线只在第二行 */
+/* 2×2 指标网格：标签在上、数值在下；竖线分左右列，横线分上下行 */
 .sheet-grid {
   display: flex;
   flex-wrap: wrap;
-  border-bottom: 2rpx solid rgba(255, 255, 255, 0.06);
 }
 .sg-cell {
   box-sizing: border-box;
@@ -6000,36 +5864,45 @@ export default {
   min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: 6rpx;
-  padding: 14rpx 0 16rpx;
+  gap: 8rpx;
+  padding: 18rpx 20rpx;
 }
 .sg-cell:nth-child(odd) {
-  padding-right: 20rpx;
+  padding-right: 24rpx;
 }
 .sg-cell:nth-child(even) {
   padding-left: 24rpx;
-  border-left: 2rpx solid rgba(255, 255, 255, 0.06);
+  border-left: 1rpx solid rgba(255, 255, 255, 0.06);
 }
 .sg-cell:nth-child(n+3) {
-  border-top: 2rpx solid rgba(255, 255, 255, 0.06);
+  border-top: 1rpx solid rgba(255, 255, 255, 0.06);
 }
 .sg-k {
-  font-size: 20rpx;
-  color: rgba(255, 255, 255, 0.44);
+  font-size: 19rpx;
+  font-weight: 500;
+  color: rgba(255, 255, 255, 0.4);
   white-space: nowrap;
+  letter-spacing: 0.5rpx;
 }
+/* 车速单元：分档色数字 + 单位，与车速榜同一套快慢语义 */
 .sg-v {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 2rpx;
   min-width: 0;
-  font-size: 28rpx;
-  font-weight: 700;
-  color: #eef1ff;
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
   overflow: hidden;
-  text-overflow: ellipsis;
+}
+.sg-num {
+  font-size: 28rpx;
+  font-weight: 800;
+  line-height: 1;
+  color: #eef1ff;
+  font-variant-numeric: tabular-nums;
 }
 .sg-u {
-  margin-left: 6rpx;
+  margin-left: 2rpx;
   font-size: 18rpx;
   font-weight: 600;
   color: rgba(255, 255, 255, 0.46);
@@ -6042,33 +5915,36 @@ export default {
   gap: 16rpx;
   min-width: 0;
   padding: 14rpx 0;
-  border-bottom: 2rpx solid rgba(255, 255, 255, 0.06);
+  border-bottom: 1rpx solid rgba(255, 255, 255, 0.06);
 }
 .sc-v {
   flex: 1 1 0;
   min-width: 0;
   text-align: right;
-  font-size: 22rpx;
+  font-size: 21rpx;
   font-weight: 600;
   color: #eef1ff;
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  letter-spacing: 0.3rpx;
 }
-/* 当前走向：起绿 / 终琥珀，站名过长时各自省略，箭头不压缩 */
+/* 当前走向：起绿圆点 / 终琥珀圆点，站名过长时各自省略，箭头不压缩 */
 .sheet-route {
-  padding: 16rpx 0;
-  border-bottom: 2rpx solid rgba(255, 255, 255, 0.06);
+  padding: 14rpx 0;
+  border-bottom: 1rpx solid rgba(255, 255, 255, 0.06);
 }
-.sr-head {
+/* 走向行：起讫站一行走完，方向徽标靠右推到行尾 */
+.sr-line {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  margin-bottom: 10rpx;
+  gap: 8rpx;
+  min-width: 0;
 }
 .sr-dir {
   flex: 0 0 auto;
+  margin-left: auto;
   padding: 1rpx 10rpx;
   border-radius: 7rpx;
   font-size: 18rpx;
@@ -6076,22 +5952,15 @@ export default {
 .sr-dir.d0 { color: #67e8f9; background: rgba(6, 182, 212, 0.18); }
 .sr-dir.d1 { color: #fda4af; background: rgba(225, 29, 72, 0.18); }
 .sr-dir.loop { color: #ddd6fe; background: rgba(139, 92, 246, 0.18); }
-.sr-line {
-  display: flex;
-  align-items: center;
-  gap: 8rpx;
-  min-width: 0;
-}
-.sr-tag {
+/* 起讫站圆点：起绿 / 终琥珀，比徽标更轻量 */
+.sr-dot {
   flex: 0 0 auto;
-  padding: 1rpx 9rpx;
-  border-radius: 7rpx;
-  font-size: 18rpx;
-  font-weight: 800;
-  color: #0b1020;
+  width: 18rpx;
+  height: 18rpx;
+  border-radius: 50%;
 }
-.sr-start { background: #22c55e; }
-.sr-end { background: #f59e0b; }
+.sr-start { background: #22c55e; box-shadow: 0 0 0 3rpx rgba(34, 197, 94, 0.22); }
+.sr-end { background: #f59e0b; box-shadow: 0 0 0 3rpx rgba(245, 158, 11, 0.22); }
 .sr-name {
   min-width: 0;
   overflow: hidden;
@@ -6115,10 +5984,6 @@ export default {
   flex: 0 0 auto;
   font-size: 22rpx;
   color: rgba(255, 255, 255, 0.42);
-}
-.sk {
-  font-size: 26rpx;
-  color: rgba(255, 255, 255, 0.55);
 }
 .sheet-btns {
   display: flex;
@@ -6145,72 +6010,72 @@ export default {
   background: linear-gradient(135deg, var(--ac), var(--ac-2));
   border: none;
 }
-/* 全市详情窗的“打开这条线路”：主行动用靛蓝青渐变（与定位键的次操作拉开） */
+/* 全市详情窗的"打开这条线路"：主行动用靛蓝青渐变（与定位键的次操作拉开） */
 .sheet-btn.go {
   color: #fff;
   background: linear-gradient(135deg, var(--ac), var(--ac-2));
   border: none;
 }
 /* —— 全市实时分布 —— */
-/* 统计行：卡片内的一行小字，不自带背景/描边（控制卡是“整卡包裹”，子块再套壳就退回碎片感） */
+/* 统计行：卡片内的一行小字，不自带背景/描边（控制卡是"整卡包裹"，子块再套壳就退回碎片感） */
+/* —— 全市实时分布 —— */
 .ctrl-city {
   display: flex;
   flex-direction: column;
-  gap: 8rpx;
-  padding: 14rpx 16rpx;
-  border-radius: 16rpx;
-  background: rgba(255, 255, 255, 0.035);
-  border: 2rpx solid rgba(255, 255, 255, 0.06);
+  gap: 3rpx;
+  padding: 5rpx 10rpx;
+  border-radius: 12rpx;
+  background: rgba(255, 255, 255, 0.03);
 }
 /* 指标组：数字重、标签轻，靠字号与透明度分层；格子之间一条极淡竖线断开，不各自套背景 */
 .cc-figs {
   display: flex;
   align-items: baseline;
   flex-wrap: wrap;
-  row-gap: 6rpx;
+  row-gap: 4rpx;
 }
 .cc-fig {
   display: flex;
   align-items: baseline;
-  padding: 0 16rpx;
+  padding: 0 10rpx;
 }
 .cc-fig:first-child {
   padding-left: 4rpx;
 }
 .cc-fig + .cc-fig {
-  border-left: 2rpx solid rgba(255, 255, 255, 0.09);
+  border-left: 2rpx solid rgba(255, 255, 255, 0.07);
 }
 .f-num {
-  font-size: 36rpx;
+  font-size: 32rpx;
   font-weight: 800;
-  line-height: 1.1;
+  line-height: 1.05;
   color: #fff;
   letter-spacing: -0.6rpx;
   font-variant-numeric: tabular-nums;
 }
 /* 分母（已完成/总方向）：同一个数字的后半段，压小压淡到不抢主体 */
 .f-sub {
-  font-size: 20rpx;
+  font-size: 18rpx;
   font-weight: 600;
   line-height: 1;
   color: rgba(255, 255, 255, 0.36);
   font-variant-numeric: tabular-nums;
 }
 .f-lab {
-  margin-left: 8rpx;
-  font-size: 19rpx;
+  margin-left: 6rpx;
+  font-size: 18rpx;
   line-height: 1;
   color: rgba(255, 255, 255, 0.5);
   white-space: nowrap;
 }
-/* 已筛选徽标：琥珀色表示“现在看到的是子集”，✕ 就在它里面，不必去按钮行找；
+/* 已筛选徽标：琥珀色表示"现在看到的是子集"，✕ 就在它里面，不必去按钮行找；
    芯片整体可点（打开该线路），hover 微亮提示 */
 .cc-chip {
   display: inline-flex;
   align-items: center;
-  gap: 10rpx;
-  margin-left: 12rpx;
-  padding: 4rpx 14rpx;
+  gap: 8rpx;
+  margin-left: 10rpx;
+  padding: 3rpx 12rpx;
   border-radius: 999rpx;
   background: rgba(245, 158, 11, 0.14);
   border: 2rpx solid rgba(251, 191, 36, 0.4);
@@ -6221,40 +6086,40 @@ export default {
   background: rgba(252, 211, 77, 0.22);
 }
 .chip-txt {
-  font-size: 19rpx;
+  font-size: 18rpx;
   font-weight: 700;
-  line-height: 1.3;
+  line-height: 1.2;
   color: #fcd34d;
   white-space: nowrap;
 }
 .chip-x {
-  font-size: 20rpx;
-  line-height: 1.3;
+  font-size: 18rpx;
+  line-height: 1.2;
   color: rgba(252, 211, 77, 0.7);
   cursor: pointer;
 }
-/* 元信息：时间戳 + 线网规模，整行小字且允许自然换行（旧版挂在按钮行右侧会撑出卡片） */
+/* 元信息：时间戳 + 线网规模，整行小字且允许自然换行 */
 .cc-meta {
   display: flex;
   flex-wrap: wrap;
   padding: 0 4rpx;
 }
 .cm-item {
-  font-size: 19rpx;
-  line-height: 1.6;
+  font-size: 17rpx;
+  line-height: 1.4;
   color: rgba(255, 255, 255, 0.44);
 }
 /* 快照过期 / 本轮中止：单独一行琥珀色，与上面的灰色元信息拉开优先级 */
 .cc-warn {
   padding: 0 4rpx;
-  font-size: 19rpx;
-  line-height: 1.5;
+  font-size: 17rpx;
+  line-height: 1.3;
   color: #fbbf24;
 }
 /* 扫描进度条：扫描中才出现，走满后由统计文本接手 */
 .cc-bar {
-  height: 6rpx;
-  border-radius: 3rpx;
+  height: 4rpx;
+  border-radius: 2rpx;
   overflow: hidden;
   background: rgba(255, 255, 255, 0.1);
 }
@@ -6264,34 +6129,27 @@ export default {
   background: linear-gradient(90deg, var(--ac), var(--ac-2));
   transition: width 0.25s ease-out;
 }
-/* 全市数据操作行：所有按钮已并入底部栏，此行仅作占位与 refit 锚点。
-   与上方信息区之间一条极淡分隔线 */
+/* 全市数据操作行（已合并至底部栏，此处仅兼容旧引用） */
 .ctrl-city-row {
-  display: flex;
-  align-items: center;
-  gap: 8rpx;
-  flex-wrap: wrap;
-  margin-top: 12rpx;
-  padding: 12rpx 4rpx 2rpx;
-  border-top: 2rpx solid rgba(255, 255, 255, 0.07);
+  display: none;
 }
 /* 底部快捷操作栏：常驻贴底，所有高频操作合一（9~11 个按钮，紧凑排布） */
 .bottom-bar {
   position: absolute;
   left: 50%;
   transform: translateX(-50%);
-  bottom: 24rpx;
+  bottom: 12rpx;
   z-index: 11;
   display: flex;
   align-items: center;
   gap: 0;
-  padding: 8rpx 6rpx;
-  border-radius: 32rpx;
-  background: rgba(11, 16, 32, 0.78);
+  padding: 4rpx 4rpx;
+  border-radius: 28rpx;
+  background: rgba(11, 16, 32, 0.82);
   backdrop-filter: blur(20px) saturate(160%);
   -webkit-backdrop-filter: blur(20px) saturate(160%);
-  border: 2rpx solid rgba(255, 255, 255, 0.12);
-  box-shadow: 0 12rpx 32rpx rgba(0, 0, 0, 0.38);
+  border: 1rpx solid rgba(255, 255, 255, 0.14);
+  box-shadow: 0 8rpx 24rpx rgba(0, 0, 0, 0.42);
   overflow-x: auto;
 }
 .bb-item {
@@ -6299,10 +6157,10 @@ export default {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  min-width: 60rpx;
-  height: 56rpx;
-  padding: 2rpx 8rpx;
-  border-radius: 16rpx;
+  min-width: 52rpx;
+  height: 48rpx;
+  padding: 2rpx 6rpx;
+  border-radius: 14rpx;
   cursor: pointer;
   transition: background 0.16s, color 0.16s;
   flex-shrink: 0;
@@ -6311,9 +6169,9 @@ export default {
 .bb-item.on { background: rgba(var(--ac-rgb), 0.28); }
 .bb-item.on .bb-label { color: var(--ac-text); }
 .bb-ico {
-  font-size: 26rpx;
+  font-size: 24rpx;
   line-height: 1;
-  margin-bottom: 1rpx;
+  margin-bottom: 0;
   color: rgba(255, 255, 255, 0.72);
 }
 .bb-ico.up   { color: #22D3EE; }
@@ -6321,17 +6179,17 @@ export default {
 .bb-ico.all  { color: #A78BFA; }
 .bb-ico.spin { animation: rp-spin 0.9s linear infinite; }
 .bb-label {
-  font-size: 16rpx;
-  color: rgba(255, 255, 255, 0.58);
+  font-size: 14rpx;
+  color: rgba(255, 255, 255, 0.55);
   white-space: nowrap;
-  letter-spacing: 0.04em;
+  letter-spacing: 0.03em;
 }
 .bb-sep {
-  flex: 0 0 2rpx;
-  width: 2rpx;
-  height: 32rpx;
-  margin: 0 4rpx;
-  background: rgba(255, 255, 255, 0.14);
+  flex: 0 0 1rpx;
+  width: 1rpx;
+  height: 28rpx;
+  margin: 0 2rpx;
+  background: rgba(255, 255, 255, 0.12);
   border-radius: 1rpx;
   flex-shrink: 0;
 }
@@ -6341,16 +6199,16 @@ export default {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  height: 56rpx;
-  padding: 0 20rpx;
+  height: 48rpx;
+  padding: 0 16rpx;
   box-sizing: border-box;
-  font-size: 21rpx;
+  font-size: 19rpx;
   line-height: 1;
   white-space: nowrap;
   color: rgba(255, 255, 255, 0.86);
   background: rgba(255, 255, 255, 0.07);
   border: 2rpx solid rgba(255, 255, 255, 0.1);
-  border-radius: 14rpx;
+  border-radius: 12rpx;
   cursor: pointer;
   transition: background 0.18s, border-color 0.18s, transform 0.12s;
 }

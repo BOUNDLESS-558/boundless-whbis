@@ -966,16 +966,19 @@ export default {
   align-self: center;
   margin-left: auto;
 }
-/* 营运公司徽标 */
+/* 营运公司徽标：与实时车辆面板（LineMap.vue）逐字同款，全站统一 */
 .org-tag {
   display: inline-flex;
   align-items: center;
-  background: rgba(251, 191, 36, 0.12);
-  border: 2rpx solid rgba(251, 191, 36, 0.35);
+  max-width: 100%;
+  min-width: 0;
+  background: linear-gradient(135deg, rgba(251, 191, 36, 0.18), rgba(251, 191, 36, 0.06));
+  border: 2rpx solid rgba(251, 191, 36, 0.42);
   border-radius: 999rpx;
   padding: 2rpx 18rpx 2rpx 2rpx;
   margin: 0 12rpx 0 0;
   white-space: nowrap;
+  box-shadow: inset 0 1rpx 0 rgba(255, 255, 255, 0.14), 0 3rpx 8rpx rgba(251, 191, 36, 0.12);
 }
 .org-no {
   display: inline-flex;
@@ -987,14 +990,22 @@ export default {
   font-size: 24rpx;
   font-weight: 800;
   color: #1a1205;
-  background: linear-gradient(135deg, #fbbf24, #f59e0b);
-  box-shadow: 0 4rpx 12rpx rgba(251, 191, 36, 0.45), inset 0 1rpx 0 rgba(255, 255, 255, 0.4);
+  background: linear-gradient(135deg, #fde68a, #fbbf24 45%, #f59e0b);
+  box-shadow: 0 4rpx 12rpx rgba(251, 191, 36, 0.5), inset 0 1rpx 0 rgba(255, 255, 255, 0.6),
+    inset 0 -2rpx 4rpx rgba(180, 83, 9, 0.3);
   margin-right: 10rpx;
   flex-shrink: 0;
 }
 .org-name {
-  font-size: 19rpx;
-  color: #fcd34d;
+  font-size: 18rpx;
+  line-height: 1;
+  font-weight: 700;
+  color: #fde68a;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-shadow: 0 1rpx 2rpx rgba(0, 0, 0, 0.3);
 }
 /* 指标行：5 项排成数据看板，项与项之间用渐隐竖线分隔，比纯留白更整齐 */
 .ops-row {

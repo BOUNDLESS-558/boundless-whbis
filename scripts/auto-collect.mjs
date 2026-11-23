@@ -211,13 +211,14 @@ step('营运公司（在线车辆反推）', ['scripts/scan-org-live.mjs'], { op
 
 // ── 3~6. 高德相关（有 Key 才跑，失败不阻断）──
 // 高德 Web 服务 Key 相关（需 AMAP_KEY）
+// 每轮高德采集都会重新获取全部线路的站点信息：--force 跳过进度台账，
+// 对整个武汉公交系统的每条线路、每个方向重新拉取高德官方轨迹与站点数据。
 if (AMAP_KEY) {
   step('非集团线路（蔡城/木兰/汉奇）', ['scripts/scan-foreign.mjs', '--delay', '1200'], { optional: true })
-  step('高德官方轨迹（A 源 · 增量重拉变化线路）', ['scripts/scan-routes-amap.mjs', '--only-changed', 'scripts/.changed-lines.txt', '--delay', '1100', '--ci-log'], { optional: true })
-  // 补齐每日高德配额耗尽时留下的半成品线路：这些线 source 已是 amap、但站点还是集团 MD5 站号，
-  // 上面的 --only-changed 只认「站点签名变化」清单，永远碰不到它们。--backfill-stops 专门挑
-  // 这类线路重采，已换成高德站的不动；每轮限量避免单次 job 过长，靠每 37 分钟一轮反复跑累积补完。
-  step('高德站点补齐（集团站 → 高德站）', ['scripts/scan-routes-amap.mjs', '--backfill-stops', '--delay', '1100', '--max-lines', '60', '--ci-log'], { optional: true })
+  step('高德官方轨迹（A 源 · 全量重拉）', ['scripts/scan-routes-amap.mjs', '--force', '--delay', '1100', '--ci-log'], { optional: true })
+  // 补齐上一步之后仍残留的半成品线路：source 已是 amap、但站点还是集团 MD5 站号。
+  // --backfill-stops 专门挑这类线路重采站点，已换成高德站的不动；不限量，一轮全部扫完。
+  step('高德站点补齐（集团站 → 高德站）', ['scripts/scan-routes-amap.mjs', '--backfill-stops', '--delay', '1100', '--ci-log'], { optional: true })
   step('高德 POI id 回填', ['scripts/scan-amap-ids.mjs'], { optional: true })
 } else {
   console.log('\n（跳过高德 Key 步骤：未配置 AMAP_KEY）')
