@@ -339,7 +339,7 @@
     />
 
     <!-- 底部快捷操作栏：常驻贴底，所有高频操作合一，不再分两处。
-         地图模式 = 刷新 + 视图工具 + 三向切换（共 9 个）；全市模式 = 再加上车速榜 + 查车（共 11 个） -->
+         线路态 = 刷新 + 视图工具 + 三向切换（共 9 个）；全市态 = 刷新 + 视图工具 + 车速榜 / 自编号查车（共 8 个，不显示方向分组） -->
     <view class="bottom-bar" v-if="lineNo || cityOn">
       <!-- 通用：刷新 -->
       <view class="bb-item" @click="refreshNow" :title="loading ? '刷新中…' : '立即刷新'">
@@ -366,20 +366,22 @@
         <text class="bb-ico">🗺</text>
         <text class="bb-label">底图</text>
       </view>
-      <!-- 方向分组 -->
-      <view class="bb-sep"></view>
-      <view class="bb-item" :class="{ on: dirFilter === 0 }" @click="setDirView(0)" title="仅显示上行车辆">
-        <text class="bb-ico up">↑</text>
-        <text class="bb-label">上行</text>
-      </view>
-      <view class="bb-item" :class="{ on: dirFilter === 1 }" @click="setDirView(1)" title="仅显示下行车辆">
-        <text class="bb-ico down">↓</text>
-        <text class="bb-label">下行</text>
-      </view>
-      <view class="bb-item" :class="{ on: dirFilter === 2 }" @click="setDirView(2)" title="上下行同时显示">
-        <text class="bb-ico all">⇄</text>
-        <text class="bb-label">全部</text>
-      </view>
+      <!-- 方向分组：仅线路态显示，全市态不显示 -->
+      <template v-if="!cityOn">
+        <view class="bb-sep"></view>
+        <view class="bb-item" :class="{ on: dirFilter === 0 }" @click="setDirView(0)" title="仅显示上行车辆">
+          <text class="bb-ico up">↑</text>
+          <text class="bb-label">上行</text>
+        </view>
+        <view class="bb-item" :class="{ on: dirFilter === 1 }" @click="setDirView(1)" title="仅显示下行车辆">
+          <text class="bb-ico down">↓</text>
+          <text class="bb-label">下行</text>
+        </view>
+        <view class="bb-item" :class="{ on: dirFilter === 2 }" @click="setDirView(2)" title="上下行同时显示">
+          <text class="bb-ico all">⇄</text>
+          <text class="bb-label">全部</text>
+        </view>
+      </template>
       <!-- 仅全市模式：车速榜 + 查车 -->
       <view class="bb-sep" v-if="cityOn"></view>
       <view class="bb-item" v-if="cityOn" :class="{ on: rankOpen }" @click="toggleRank" title="全局快照车速榜">
