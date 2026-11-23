@@ -161,9 +161,20 @@ function safeJson(s) {
   try { return JSON.parse(s) } catch (e) { return null }
 }
 
+// 线网站序里相邻两站的距离上限（米）：超过就判为上游坐标错乱（实测有 287 路一段 79km
+// 跳到广东、D650 等定制线 50km 跨城），这种段若照画就是横穿地图的「飞线」。
+// 处置：断开成分段子路径，各自独立成线，而不是把两点硬连起来。
+const NET_JUMP_MAX_M = 2500
+
 /** 把生成器的存储形态（lines[].dirs[].p 展平坐标串）揉成渲染友好的索引 */
 function normalizeNet(body) {
   if (!body || !Array.isArray(body.lines) || !body.lines.length) return null
+  const R = 6371000, rad = (d) => (d * Math.PI) / 180
+  const gapMeters = (lng1, lat1, lng2, lat2) => {
+    const dLat = rad(lat2 - lat1), dLng = rad(lng2 - lng1)
+    const a = Math.sin(dLat / 2) ** 2 + Math.cos(rad(lat1)) * Math.cos(rad(lat2)) * Math.sin(dLng / 2) ** 2
+    return R * 2 * Math.asin(Math.sqrt(a))
+  }
   const dirs = []
   const byNo = new Map()
   for (const l of body.lines) {
@@ -186,6 +197,43 @@ function normalizeNet(body) {
       if (p.length < 4) continue
       // 站点数（坐标对个数），用于远景挑主干线、近景全画
       const dd = { no: l.no, code: l.code, dir: Number(d.d) || 0, p, n: p.length / 2, bb: [minLng, minLat, maxLng, maxLat] }
+      // 站序跳变检测：把 p 切成若干「连续子段」，飞线段与孤立坏点都不画。
+      // dd.parts 是 [from,to] 索引对数组（左闭右闭），渲染侧逐段独立 M 起笔画，
+      // 原生折线也按段画；没有跳变时就是整条 [[0,n-1]]。
+      const ranges = []
+      let start = 0
+      const nPts = p.length / 2
+      let hadJump = false
+      // 只有 2 个站且相距 >2.5km 的定制线（D111 等）本质是坏数据：画出来就是一条跨城飞线，直接不画
+      if (nPts === 2 && gapMeters(p[0], p[1], p[2], p[3]) > NET_JUMP_MAX_M) continue
+      for (let i = 2; i < p.length; i += 2) {
+        if (gapMeters(p[i - 2], p[i - 1], p[i], p[i + 1]) > NET_JUMP_MAX_M) {
+          hadJump = true
+          const end = i / 2 - 1 // 跳变前一点的索引
+          // 至少 2 点才成线；定制线常见「起点/终点跨城」的 2 点方向，保留就是一条飞线，直接丢
+          if (end - start >= 1) ranges.push([start, end])
+          start = i / 2
+        }
+      }
+      if (nPts - 1 - start >= 1) ranges.push([start, nPts - 1])
+      // 有跳变但凑不出任何 ≥2 点的连续段（如 D1221 每两点都跨城）→ 整条丢弃，绝不用全长兜底
+      if (hadJump && !ranges.length) continue
+      dd.parts = ranges.length ? ranges : [[0, nPts - 1]]
+      // 剔除跳变产生的孤立坏点后重算包围盒：否则单个跨城错点把 bb 撑到全省，
+      // 让这条线永远「在视野内」白占预算，也可能把全览缩放拽飞。
+      if (ranges.length > 1) {
+        let nLng = Infinity, sLng = -Infinity, nLat = Infinity, sLat = -Infinity
+        for (const [from, to] of ranges) {
+          for (let i = from; i <= to; i++) {
+            const ln = p[i * 2], la = p[i * 2 + 1]
+            if (ln < nLng) nLng = ln
+            if (ln > sLng) sLng = ln
+            if (la < nLat) nLat = la
+            if (la > sLat) sLat = la
+          }
+        }
+        if (isFinite(nLng)) dd.bb = [nLng, nLat, sLng, sLat]
+      }
       entry.dirs.push(dd)
       dirs.push(dd)
     }

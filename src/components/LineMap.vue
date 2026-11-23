@@ -1477,12 +1477,17 @@ export default {
         if (d.n < 2) continue
         const step = Math.max(1, Math.ceil(d.n / 80))
         const points = []
-        for (let i = 0; i < d.n; i += step) points.push({ latitude: d.p[i * 2 + 1], longitude: d.p[i * 2] })
-        const last = d.n - 1
-        if (last % step !== 0) points.push({ latitude: d.p[last * 2 + 1], longitude: d.p[last * 2] })
-        if (points.length < 2) continue
+        // 按 parts（[from,to] 索引对）分段：跳变（飞线）处拆成多条折线，不跨段硬连
+        const parts = d.parts || [[0, d.n - 1]]
         const st = DIR_STYLE[d.dir]
-        out.push({ points, color: st.inner, width: this.cityFilterNo ? 5 : 2, arrowLine: false })
+        for (const [from, to] of parts) {
+          if (to - from < 1) continue
+          const pts = []
+          for (let i = from; i <= to; i += step) pts.push({ latitude: d.p[i * 2 + 1], longitude: d.p[i * 2] })
+          if ((to - from) % step !== 0) pts.push({ latitude: d.p[to * 2 + 1], longitude: d.p[to * 2] })
+          if (pts.length < 2) continue
+          out.push({ points: pts, color: st.inner, width: this.cityFilterNo ? 5 : 2, arrowLine: false })
+        }
       }
       return out
     },
@@ -2605,18 +2610,24 @@ export default {
       // 热点：上千条线 × 上万点逐帧拼 SVG path。Math.round 数值拼接比 toFixed(1) 的字符串
       // 格式化更快（两者都是 0.1px 精度），是拖动卡顿的主因之一。
       const r1 = (v) => Math.round(v * 10) / 10
+      // 按 parts（[from,to] 索引对）分段画：跨站跳变（飞线）处断开，每段各自 M 起笔，不跨段硬连
       const pathOf = (d) => {
-        const n = d.n
+        const parts = d.parts || [[0, d.n - 1]]
         const seg = []
-        for (let i = 0; i < n; i += step) {
-          const x = r1((d.mu[i] - cu) * s + cx)
-          const y = r1((d.mv[i] - cv) * s + cy)
-          seg.push((i === 0 ? 'M' : 'L') + x + ' ' + y)
-        }
-        if ((n - 1) % step !== 0) {
-          const x = r1((d.mu[n - 1] - cu) * s + cx)
-          const y = r1((d.mv[n - 1] - cv) * s + cy)
-          seg.push('L' + x + ' ' + y)
+        for (const [from, to] of parts) {
+          if (to - from < 1) continue
+          let first = true
+          for (let i = from; i <= to; i += step) {
+            const x = r1((d.mu[i] - cu) * s + cx)
+            const y = r1((d.mv[i] - cv) * s + cy)
+            seg.push((first ? 'M' : 'L') + x + ' ' + y)
+            first = false
+          }
+          if ((to - from) % step !== 0) {
+            const x = r1((d.mu[to] - cu) * s + cx)
+            const y = r1((d.mv[to] - cv) * s + cy)
+            seg.push('L' + x + ' ' + y)
+          }
         }
         return seg.join('')
       }
