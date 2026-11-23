@@ -349,6 +349,40 @@
       <view class="vt-btn wide" v-if="!useMap" :class="{ on: showBaseMap }" @click="toggleBaseMap" title="显示/隐藏底图">底图</view>
     </view>
 
+    <!-- 底部快捷操作栏：常驻贴底，常用操作一步到位，不用滚回控制卡 -->
+    <view class="bottom-bar" v-if="lineNo || cityOn">
+      <view class="bb-item" @click="refreshNow" :title="loading ? '刷新中…' : '立即刷新'">
+        <text class="bb-ico" :class="{ spin: loading }">↻</text>
+        <text class="bb-label">刷新</text>
+      </view>
+      <view class="bb-item" @click="resetView" :title="cityOn ? '全览全市' : '全览线路'">
+        <text class="bb-ico">⊞</text>
+        <text class="bb-label">全览</text>
+      </view>
+      <view class="bb-divider"></view>
+      <view class="bb-item" :class="{ on: dirFilter === 0 }" @click="setDirView(0)" title="上行">
+        <text class="bb-ico up">↑</text>
+        <text class="bb-label">上行</text>
+      </view>
+      <view class="bb-item" :class="{ on: dirFilter === 1 }" @click="setDirView(1)" title="下行">
+        <text class="bb-ico down">↓</text>
+        <text class="bb-label">下行</text>
+      </view>
+      <view class="bb-item" :class="{ on: dirFilter === 2 }" @click="setDirView(2)" title="全部">
+        <text class="bb-ico all">⇄</text>
+        <text class="bb-label">全部</text>
+      </view>
+      <view class="bb-divider"></view>
+      <view class="bb-item" :class="{ on: rankOpen }" @click="toggleRank" title="车速榜">
+        <text class="bb-ico">🏁</text>
+        <text class="bb-label">车速榜</text>
+      </view>
+      <view class="bb-item" :class="{ on: orgSearchOpen }" @click="toggleOrgSearch" title="自编号查车">
+        <text class="bb-ico">🔍</text>
+        <text class="bb-label">查车</text>
+      </view>
+    </view>
+
     <!-- 自编号查车：按输入末尾数字跨公司模糊匹配全市快照，随输入实时呈现。
          完整编号（321B2426）取尾号 2426，前 3/4 位公司代码不参与匹配；
          可与车速榜同时打开（此时下移到车速榜下方），纯本地过滤不发请求，点结果选中车辆并在地图定位 -->
@@ -6230,6 +6264,63 @@ export default {
   height: 28rpx;
   margin: 0 2rpx;
   background: rgba(255, 255, 255, 0.14);
+}
+/* 底部快捷操作栏：常驻贴底，常用功能一步到位 */
+.bottom-bar {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  bottom: 24rpx;
+  z-index: 11;
+  display: flex;
+  align-items: center;
+  gap: 0;
+  padding: 10rpx 8rpx;
+  border-radius: 36rpx;
+  background: rgba(11, 16, 32, 0.78);
+  backdrop-filter: blur(20px) saturate(160%);
+  -webkit-backdrop-filter: blur(20px) saturate(160%);
+  border: 2rpx solid rgba(255, 255, 255, 0.12);
+  box-shadow: 0 12rpx 32rpx rgba(0, 0, 0, 0.38);
+}
+.bb-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-width: 88rpx;
+  height: 72rpx;
+  padding: 4rpx 12rpx;
+  border-radius: 20rpx;
+  cursor: pointer;
+  transition: background 0.16s, color 0.16s;
+}
+.bb-item:hover { background: rgba(255, 255, 255, 0.1); }
+.bb-item.on { background: rgba(var(--ac-rgb), 0.28); }
+.bb-item.on .bb-label { color: var(--ac-text); }
+.bb-ico {
+  font-size: 30rpx;
+  line-height: 1;
+  margin-bottom: 2rpx;
+  color: rgba(255, 255, 255, 0.72);
+}
+.bb-ico.up   { color: #22D3EE; }
+.bb-ico.down { color: #FB7185; }
+.bb-ico.all  { color: #A78BFA; }
+.bb-ico.spin { animation: rp-spin 0.9s linear infinite; }
+.bb-label {
+  font-size: 18rpx;
+  color: rgba(255, 255, 255, 0.58);
+  white-space: nowrap;
+  letter-spacing: 0.04em;
+}
+.bb-divider {
+  flex: 0 0 2rpx;
+  width: 2rpx;
+  height: 36rpx;
+  margin: 0 4rpx;
+  background: rgba(255, 255, 255, 0.12);
+  border-radius: 1rpx;
 }
 /* 数据操作键尺寸 */
 .cc-btn {
