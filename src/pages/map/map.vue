@@ -275,8 +275,9 @@
               ></view>
             </view>
             <!-- 内联调色盘面板（仅 H5；跟随 acct-sec-body 流式布局，不 fixed） -->
-            <view v-if="showPicker && acctSec.accent" class="cp-wrap" @mouseenter.stop
-                  @mouseleave="onPickerLeave"
+            <view v-if="showPicker && acctSec.accent" class="cp-wrap"
+                  @mouseenter="onPickerPanelEnter"
+                  @mouseleave="onPickerPanelLeave"
                   @mousemove="onPickerDrag($event)"
                   @touchmove.prevent="onPickerDrag($event)">
               <view class="cp-area" ref="cpAreaRef"
@@ -528,6 +529,7 @@ export default {
       accentPresets: ACCENT_PRESETS,
       // 内联 HSV 调色盘状态
       showPicker: false,
+      _pickerTimer: null, // 防抖：鼠标离开触发器后延迟 120ms 才隐藏，给面板留出移入时间
       _pDrag: false,     // 'sv'|'h' 当前拖拽区域，无则为 false
       _pHueBase: 0,      // 拖动前的基准色相（用于区分"改 hue"vs"改 sat/bri"）
       pickerH: 0,        // 当前 hue (0-360)
@@ -651,6 +653,9 @@ export default {
     this.account = currentAccount()
     // 皮肤：页面加载时即从存储读回，避免 settings 面板默认显示「黑色」而非实际保存值
     this.skin = getSkin()
+    // 主题色：同理，页面加载时立即读回并挂载 CSS 变量族，否则 F5 后主题色丢失
+    this.accent = getAccent()
+    applyAccent(this.accent)
     // 刷新间隔全站统一：任一控件改动时，反向同步设置面板里的选中态
     this.refreshDefault = getRefreshSec()
     this._offRefresh = onRefreshSecChange((sec) => { this.refreshDefault = sec })
@@ -965,17 +970,38 @@ export default {
     // ── 内联 HSV 调色盘（H5 only，鼠标从面板移开时自动落库）──
     onPickerEnter() {
       // #ifdef H5
+      if (this._pickerTimer) { clearTimeout(this._pickerTimer); this._pickerTimer = null }
       this.showPicker = true
       this.syncPickerFromAccent()
       // #endif
     },
-    onPickerLeave() {
-      // 鼠标离开整块面板（cp-wrap + ac-picker 都触发），落库一次
+    _scheduleHide() {
       // #ifdef H5
-      if (!this.showPicker) return
-      this.showPicker = false
-      this.releasePickers()
-      this.commitPicker()
+      if (this._pickerTimer) { clearTimeout(this._pickerTimer); this._pickerTimer = null }
+      this._pickerTimer = setTimeout(() => {
+        this.showPicker = false
+        this.releasePickers()
+        this.commitPicker()
+        this._pickerTimer = null
+      }, 120)
+      // #endif
+    },
+    onPickerLeave() {
+      // 鼠标离开触发器（ac-picker）：延迟隐藏，给面板留出移入时间
+      // #ifdef H5
+      this._scheduleHide()
+      // #endif
+    },
+    onPickerPanelEnter() {
+      // 鼠标进入面板：取消待执行的隐藏
+      // #ifdef H5
+      if (this._pickerTimer) { clearTimeout(this._pickerTimer); this._pickerTimer = null }
+      // #endif
+    },
+    onPickerPanelLeave() {
+      // 鼠标离开面板：再次排 hiding（若已进入面板则不会触发）
+      // #ifdef H5
+      this._scheduleHide()
       // #endif
     },
     commitPicker() {
