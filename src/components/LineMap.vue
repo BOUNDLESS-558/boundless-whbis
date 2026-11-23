@@ -390,9 +390,9 @@
         <text class="bb-ico">🔄</text>
         <text class="bb-label">{{ cityFollowLabel }}</text>
       </view>
-      <view class="bb-item" v-if="cityOn" :class="{ on: cityShowOrgId }" title="近景给每辆车标出编号标签" @click="toggleCityTags">
+      <view class="bb-item" v-if="cityOn" :class="{ on: cityTagMode > 0 }" :title="'编号标签：' + cityTagModeLabel + '（点击切换）'" @click="toggleCityTags">
         <text class="bb-ico">🏷</text>
-        <text class="bb-label">编号标签</text>
+        <text class="bb-label">{{ cityTagModeLabel }}</text>
       </view>
       <view class="bb-item" v-if="cityOn" :class="{ on: cityNetMode !== 'off' }" :title="'线网显示：' + cityNetModeLabel + '（点击切换 精简/全部/关闭）'" @click="cycleCityNetMode">
         <text class="bb-ico">🕷</text>
@@ -1150,8 +1150,8 @@ export default {
       cityNetTick: 0,
       // 线路号查询命中线网时的条目（统计行要显示它的方向数/站数）
       cityHitLine: null,
-      // 近景是否给单车标自编号
-      cityShowOrgId: true,
+      // 编号标签模式：0=关闭 1=仅自编号 2=自编号+线路号（337 · 319N2379）
+      cityTagMode: 1,
       // 原生视野变更计数：_view 是普通属性（非响应式），全市聚合要靠它触发重算
       viewTick: 0,
     }
@@ -1386,6 +1386,10 @@ export default {
     },
     cityFollowLabel() {
       return this.cityFollow ? `自动跟随 ${this.cityFollow}分` : '自动跟随 关'
+    },
+    // 编号标签按钮标签：三档循环
+    cityTagModeLabel() {
+      return ['关闭', '自编号', '自编号+线路号'][this.cityTagMode] || '编号标签'
     },
     cityFollowTitle() {
       if (!this.cityFollow) return '自动跟随：关（每次手动重扫）'
@@ -2525,7 +2529,7 @@ export default {
         const v = Number(uni.getStorageSync(CITY_FOLLOW_KEY))
         if (CITY_FOLLOW_OPTS.includes(v)) this.cityFollow = v
         const t = uni.getStorageSync('whbis:city-tags')
-        if (t !== '' && t != null) this.cityShowOrgId = Number(t) !== 0
+        if (t !== '' && t != null) this.cityTagMode = Number(t)
         const nm = uni.getStorageSync(CITY_NET_MODE_KEY)
         if (CITY_NET_MODES.includes(nm)) this.cityNetMode = nm
       } catch (e) { /* 存储不可用保持默认 */ }
@@ -2711,9 +2715,10 @@ export default {
       }
       this.cityNetPaths = paths
     },
-    // 自编号标签（自绘模式）：只在近景出现，并做像素级避让，数量封顶
+    // 自编号标签（自绘模式）：只在近景出现，并做像素级避让，数量封顶。
+    // mode 0=关闭 1=仅自编号 2=自编号+线路号（337 · 319N2379）
     buildCityTags(dots) {
-      if (!this.cityShowOrgId) return []
+      if (!this.cityTagMode) return []
       if (this.cam.zoom < CITY_TAG_MIN_ZOOM) return []
       const cands = dots.filter((d) => d.bus && d.bus.orgId)
       // 选中/刚定位的车优先占位，其余按速度档高到低（快车的自编号更有意义）
@@ -2722,7 +2727,8 @@ export default {
       const out = []
       for (const d of cands) {
         if (out.length >= CITY_TAG_MAX) break
-        const text = this.fmtNo(d.bus.orgId)
+        const org = this.fmtNo(d.bus.orgId)
+        const text = this.cityTagMode === 2 ? `${org} · ${d.bus.no || ''}` : org
         const bw = textW(text) * 0.8
         const y = d.y - 17
         const box = { x1: d.x - bw / 2, x2: d.x + bw / 2, y1: y - 6, y2: y + 6 }
@@ -2738,9 +2744,9 @@ export default {
       return 1
     },
     toggleCityTags() {
-      this.cityShowOrgId = !this.cityShowOrgId
+      this.cityTagMode = (this.cityTagMode + 1) % 3
       try {
-        uni.setStorageSync('whbis:city-tags', this.cityShowOrgId ? 1 : 0)
+        uni.setStorageSync('whbis:city-tags', this.cityTagMode)
       } catch (e) { /* 忽略 */ }
       this.renderSchematic()
       if (this.useMap) this.mapKey++
@@ -2869,7 +2875,7 @@ export default {
       const scale = (this._view && this._view.scale) || this.mapScale || 13
       const cell = scale >= CITY_CLUSTER_MIN_ZOOM ? 0 : CITY_CELL_NATIVE
       // 近景才给单车标自编号：1300 个 label 覆盖物会把 <map> 压死
-      const showTag = this.cityShowOrgId && scale >= CITY_TAG_MIN_SCALE
+      const showTag = this.cityTagMode > 0 && scale >= CITY_TAG_MIN_SCALE
       let tagCount = 0
       const out = []
       clusterPoints(items, cell).forEach((c, i) => {
@@ -2886,8 +2892,10 @@ export default {
           }
           if (showTag && tagCount < CITY_TAG_MAX && c.bus.orgId) {
             tagCount++
+            const org = this.fmtNo(c.bus.orgId)
+            const labelContent = this.cityTagMode === 2 ? `${org} · ${c.bus.no || ''}` : org
             marker.label = {
-              content: String(c.bus.orgId),
+              content: labelContent,
               color: '#0B1020',
               fontSize: 10,
               borderRadius: 8,
