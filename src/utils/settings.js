@@ -86,17 +86,17 @@ export const ACCENT_PRESETS = [
   { key: 'berry', hex: '#9d174d', label: '浆果红' },
   { key: 'sea-blue', hex: '#0ea6a8', label: '海蓝' },
   { key: 'pine', hex: '#2d5a4c', label: '松绿' },
-  // 续增 10 档：深蓝/靛青/暖棕/深洋红/海沫/灰绿/酒红/暖金/薰衣草紫/墨绿补充
-  { key: 'midnight', hex: '#1e3a5f', label: '深夜蓝' },
-  { key: 'indigo-deep', hex: '#4338ca', label: '深靛蓝' },
-  { key: 'warm-brown', hex: '#78350f', label: '暖棕' },
-  { key: 'deep-magenta', hex: '#be185d', label: '深洋红' },
-  { key: 'seafoam', hex: '#a7f3d0', label: '海沫绿' },
-  { key: 'muted-green', hex: '#6b8e6b', label: '灰绿' },
-  { key: 'wine-red', hex: '#7f1d1d', label: '酒红' },
-  { key: 'honey-gold', hex: '#d97706', label: '蜜金' },
-  { key: 'soft-lavender', hex: '#c4b5fd', label: '柔薰衣' },
-  { key: 'forest', hex: '#14532d', label: '森林绿' },
+  // 续增 10 档：猩红/砖红/巧克力/钴蓝/天青绿/暖杏/银灰/海军蓝/翡翠/象牙白
+  { key: 'crimson', hex: '#dc2626', label: '猩红' },
+  { key: 'brick-red', hex: '#9a3434', label: '砖红' },
+  { key: 'chocolate', hex: '#5c3a21', label: '巧克力' },
+  { key: 'cobalt', hex: '#1e40af', label: '钴蓝' },
+  { key: 'sky-teal', hex: '#0d9488', label: '天青绿' },
+  { key: 'warm-apricot', hex: '#fb923c', label: '暖杏' },
+  { key: 'silver-gray', hex: '#9ca3af', label: '银灰' },
+  { key: 'navy-blue', hex: '#1e3a8a', label: '海军蓝' },
+  { key: 'emerald', hex: '#059669', label: '翡翠绿' },
+  { key: 'ivory', hex: '#e5e7eb', label: '象牙白' },
 ]
 
 /** 规范成 #rrggbb 小写；非法输入返回 null */
@@ -598,6 +598,59 @@ export const FONT_OPTS = [
   {
     key: 'noto-serif-cafeteria', label: '思源宋体·餐巾', note: '典雅宋体 · 文艺杂志风', family: "'Noto Serif JP'",
     css: [FS5 + 'noto-serif-jp@5.1.0/400.css', FS5 + 'noto-serif-jp@5.1.0/700.css'],
+  },
+  // 续增 12 档：几何无衬线 / 现代衬线 / 英文手写艺术 / 装饰粗体 / 斜体衬线
+  {
+    key: 'rubik', label: 'Rubik', note: '几何无衬线英文 · 现代清爽', family: "'Rubik'",
+    css: [FS5 + 'rubik@7.0.0/400.css', FS5 + 'rubik@7.0.0/500.css', FS5 + 'rubik@7.0.0/700.css'],
+  },
+  {
+    key: 'merriweather', label: 'Merriweather', note: '厚重衬线英文 · 长文舒适', family: "'Merriweather'",
+    css: [FS5 + 'merriweather@4.0.0/400.css', FS5 + 'merriweather@4.0.0/700.css'],
+  },
+  {
+    key: 'montserrat', label: 'Montserrat', note: '都市无衬线英文 · 百搭', family: "'Montserrat'",
+    css: [FS5 + 'montserrat@7.0.0/400.css', FS5 + 'montserrat@7.0.0/500.css', FS5 + 'montserrat@7.0.0/700.css'],
+  },
+  {
+    key: 'lato', label: 'Lato', note: '稳重无衬线英文 · 专业感', family: "'Lato'",
+    css: [FS5 + 'lato@3.0.0/400.css', FS5 + 'lato@3.0.0/700.css'],
+  },
+  {
+    key: 'bebas-neue', label: 'Bebas Neue', note: '超粗体大写英文 · 海报感', family: "'Bebas Neue'",
+    css: [FS5 + 'bebas-neue@1.0.0/400.css'],
+  },
+  {
+    key: 'raleway', label: 'Raleway', note: '优雅纤细英文 · 时尚', family: "'Raleway'",
+    css: [FS5 + 'raleway@7.0.0/300.css', FS5 + 'raleway@7.0.0/400.css', FS5 + 'raleway@7.0.0/700.css'],
+  },
+  {
+    key: 'oswald', label: 'Oswald', note: '压缩无衬线英文 · 新闻标题', family: "'Oswald'",
+    css: [FS5 + 'oswald@7.0.0/400.css', FS5 + 'oswald@7.0.0/700.css'],
+  },
+  {
+    key: 'dancing-script', label: 'Dancing Script', note: '流畅英文草书 · 浪漫', family: "'Dancing Script'",
+    css: [FS5 + 'dancing-script@4.0.0/400.css'],
+  },
+  {
+    key: 'indie-flower', label: 'Indie Flower', note: '随性英文手写 · 轻松', family: "'Indie Flower'",
+    css: [FS5 + 'indie-flower@1.0.0/400.css'],
+  },
+  {
+    key: 'permanent-marker', label: 'Permanent Marker', note: '马克笔英文 · 涂鸦感', family: "'Permanent Marker'",
+    css: [FS5 + 'permanent-marker@1.0.0/400.css'],
+  },
+  {
+    key: 'special-elite', label: 'Special Elite', note: '复古打字机英文 · 怀旧', family: "'Special Elite'",
+    css: [FS5 + 'special-elite@1.0.0/400.css'],
+  },
+  {
+    key: 'pt-sans', label: 'PT Sans', note: '俄式无衬线英文 · 端庄', family: "'PT Sans'",
+    css: [FS5 + 'pt-sans@8.400/css.css'],
+  },
+  {
+    key: 'pt-serif', label: 'PT Serif', note: '俄式衬线英文 · 经典', family: "'PT Serif'",
+    css: [FS5 + 'pt-serif@8.400/css.css'],
   },
 ]
 
