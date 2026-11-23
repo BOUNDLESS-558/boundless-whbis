@@ -11,7 +11,7 @@
  *   默认靛蓝与历史配色逐像素一致。H5 生效（App 端保持默认）。
  * - 用户名（展示名）：按账号本地保存，仅改显示不改登录身份；账号名不可修改。
  * - 登录有效期：会话本体在 auth.js，这里原样转出 get/setSessionDays。
- * - 地图来源：自绘走向图底图瓦片源（高德 / 腾讯）。两者均为 GCJ-02，与公交接口同源零纠偏；
+ * - 地图来源：高德（免 Key 标准瓦片）。GCJ-02 栅格，与公交接口同源零纠偏；
  *   仅影响底图，线路轨迹规划仍走高德 Web 服务。
  * - 高德地图 KEY：用户自填 Web端(JS API) Key，自绘模式下拉官方公交真实轨迹让走向更精确；
  *   留空走免 Key 的 OSRM 贴路。
@@ -24,7 +24,6 @@ const SKIN_KEY = 'whbis:skin'
 const ACCENT_KEY = 'whbis:accent'
 const REFRESH_KEY = 'whbis:refresh-default'
 const PROFILE_KEY = 'whbis:profile'
-const MAPSRC_KEY = 'whbis:map-source'
 // 复制方式：所有「复制」按钮统一按此档执行（文本 TSV / 画成图片 / Excel 表格）
 const COPY_MODE_KEY = 'whbis:copy-mode'
 
@@ -170,12 +169,6 @@ export function accentRgba(alpha) {
   const [r, g, b] = hexToRgb(getAccent())
   return `rgba(${r}, ${g}, ${b}, ${alpha})`
 }
-// 自绘走向图底图瓦片源
-export const MAP_SOURCE_OPTS = [
-  { key: 'amap', label: '高德地图' },
-  { key: 'tencent', label: '腾讯地图' },
-]
-
 function readRaw(key, fallback) {
   try {
     const v = uni.getStorageSync(key)
@@ -291,20 +284,6 @@ export function onRefreshSecChange(cb) {
 // 兼容旧命名：语义已从「各视图的默认值」升级为「全站统一值」
 export const getRefreshDefault = getRefreshSec
 export const setRefreshDefault = setRefreshSec
-
-// ── 地图来源（自绘走向图底图瓦片源）──
-
-export function getMapSource() {
-  const v = readRaw(MAPSRC_KEY, 'amap')
-  return MAP_SOURCE_OPTS.some((o) => o.key === v) ? v : 'amap'
-}
-
-export function setMapSource(key) {
-  if (MAP_SOURCE_OPTS.some((o) => o.key === key)) {
-    writeRaw(MAPSRC_KEY, key)
-  }
-  return getMapSource()
-}
 
 // ── 复制方式（全站统一）──
 // text = TSV 纯文本；image = PNG 图片（页脚带生成时间）；

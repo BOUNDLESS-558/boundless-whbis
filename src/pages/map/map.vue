@@ -327,27 +327,13 @@
 
           <view class="acct-div"></view>
 
-          <!-- 地图来源 + 高德 KEY（合并）：底图瓦片源 + 自填 KEY 拉官方公交真实轨迹 -->
+          <!-- 高德地图 KEY：自填后拉官方公交真实轨迹 -->
           <view class="acct-sec-head" @click="toggleAcctSection('map')">
-            <text class="acct-sec-title">地图来源与线路走向</text>
+            <text class="acct-sec-title">线路走向</text>
             <text class="acct-sec-sum" v-if="!acctSec.map">{{ acctSecSummary.map }}</text>
             <text class="acct-sec-chev" :class="{ folded: !acctSec.map }">▾</text>
           </view>
           <view v-show="acctSec.map" class="acct-sec-body">
-            <view class="amap-sub-label">底图瓦片源</view>
-            <view class="acct-seg">
-              <view
-                class="acct-seg-item"
-                v-for="o in mapSourceOpts"
-                :key="o.key"
-                :class="{ on: mapSource === o.key }"
-                @click="onMapSource(o.key)"
-              >{{ o.label }}</view>
-            </view>
-            <view class="acct-tip">底图瓦片源，线路走向 / 车辆 / 站点不受影响，改完即时生效</view>
-
-            <view class="amap-sub-div"></view>
-
             <view class="amap-sub-label">高德地图 KEY</view>
             <view class="amap-sub-hint">官方公交轨迹 · 走向更精确</view>
             <view class="amap-apply">
@@ -462,7 +448,6 @@ import { requireLogin, currentAccount, logout, getSessionInfo, hasCustomPass, ch
 import {
   SKIN_OPTS,
   REFRESH_DEFAULT_OPTS,
-  MAP_SOURCE_OPTS,
   ACCENT_PRESETS,
   getSkin,
   setSkin,
@@ -472,8 +457,6 @@ import {
   getRefreshSec,
   setRefreshSec as saveRefreshSec,
   onRefreshSecChange,
-  getMapSource,
-  setMapSource,
   getSimSignboard,
   setSimSignboard,
   FONT_OPTS,
@@ -505,12 +488,11 @@ const CITY_ACT_KEY = 'whbis:city-activated'
 const CITY_ACT_CODE = 'BOUNDLESS_558'
 // 「账号与设置」各分区的展开态：本机记忆，避免每次开窗都要重新点开
 const ACCT_SECTIONS_KEY = 'whbis:acct-sections'
-const ACCT_SECTION_KEYS = ['session', 'pwd', 'refresh', 'skin', 'accent', 'font', 'map']
+const ACCT_SECTION_KEYS = ['session', 'pwd', 'refresh', 'skin', 'accent', 'font']
 // 默认：常用的小分区展开，字体（13 档）与密码表单这类长分区默认收起，
 // 让面板首屏就能看到全部设置项，不用一路滚到底
 const ACCT_SECTIONS_DEFAULT = {
   session: true, pwd: false, refresh: true, skin: true, accent: true, font: false,
-  map: true,
 }
 
 export default {
@@ -552,9 +534,6 @@ export default {
       pickerS: 1,        // 当前 saturation (0-1)
       pickerV: 1,        // 当前 value (0-1)
       refreshOpts: REFRESH_DEFAULT_OPTS,
-      // 地图来源：自绘走向图底图瓦片源
-      mapSource: 'amap',
-      mapSourceOpts: MAP_SOURCE_OPTS,
       // 高德地图 KEY + 安全密钥：自填后拉官方公交真实轨迹（本机记忆）
       amapKey: '',
       amapKeyInput: '',
@@ -626,7 +605,6 @@ export default {
     acctSecSummary() {
       const font = this.fontOpts.find((o) => o.key === this.uiFont)
       const skin = this.skinOpts.find((o) => o.key === this.skin)
-      const map = this.mapSourceOpts.find((o) => o.key === this.mapSource)
       const accent = this.accentPresets.find((p) => p.hex === this.accent)
       const days = this.sessionOpts.find((o) => o.days === this.sessionDays)
       return {
@@ -636,8 +614,8 @@ export default {
         skin: skin ? skin.label : '黑色',
         accent: accent ? accent.label : '自定义',
         font: font ? font.label : '系统默认',
-        // 合并分区摘要：底图来源 + KEY 是否已填
-        map: `${map ? map.label : '高德地图'} · KEY ${this.amapKey ? '已填' : '未填'}`,
+        // 合并分区摘要：KEY 是否已填
+        map: `KEY ${this.amapKey ? '已填' : '未填'}`,
       }
     },
     // 内联调色盘：渲染辅助计算属性
@@ -895,7 +873,6 @@ export default {
       this.skin = getSkin()
       this.accent = getAccent()
       this.refreshDefault = getRefreshSec()
-      this.mapSource = getMapSource()
       const amapPair = getAmapKeyPair()
       this.amapKey = amapPair.key
       this.amapKeyInput = amapPair.key
@@ -1084,13 +1061,6 @@ export default {
       if (this._pDrag === 'sv') this._doAreaMove(e)
       else if (this._pDrag === 'h') this._doHueMove(e)
       // #endif
-    },
-    // 地图来源：高德 / 腾讯（自绘走向图底图瓦片源，改完对打开的地图即时生效）
-    onMapSource(key) {
-      this.mapSource = setMapSource(key)
-      const c = this.$refs.mapC
-      if (c && typeof c.onMapSourceChange === 'function') c.onMapSourceChange()
-      uni.showToast({ title: `地图来源：${key === 'tencent' ? '腾讯地图' : '高德地图'}`, icon: 'none' })
     },
     // 高德链接：申请 KEY / 查看用量额度（H5 新标签；App 端调系统浏览器）
     openAmapUrl(url) {
