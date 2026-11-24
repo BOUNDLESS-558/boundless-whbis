@@ -637,7 +637,7 @@ export const ACCENT_PRESETS = [
 /**
  * 扩展色：程序化铺满 HSL 色环，补足到总数 999 种。
  * 手工精选项（上面 537 条）全部保留在前；扩展项 key 为 xNNN、label「扩展 NNN」，
- * 统一归入设置面板的「扩展」分类（见 map.vue 的 accentCatOptions / filteredAccentPresets）。
+ * 每项按 HSL 自动打上 cat 分类标签，融入设置面板现有颜色分类（不再单列「扩展」）。
  * 生成在模块加载时完成（462 次简单 HSL→RGB，耗时可忽略），不写死进源码。
  */
 ;(function fillAccentTo999() {
@@ -650,6 +650,25 @@ export const ACCENT_PRESETS = [
     const f = (n) => l - a * Math.max(-1, Math.min(k(n) - 3, Math.min(9 - k(n), 1)))
     const to = (x) => Math.round(x * 255).toString(16).padStart(2, '0')
     return `#${to(f(0))}${to(f(8))}${to(f(4))}`
+  }
+  // 按 HSL 把扩展色自动归入现有分类（与 map.vue 的 accentCatOptions key 对齐）
+  const autoCat = (h, s, l) => {
+    if (l <= 32) return 'dark'
+    if (s <= 18) return l >= 80 ? 'gray' : 'warmgray'
+    if (l >= 86) return 'pastel'
+    if (s >= 90 && l >= 55) return 'neon'
+    if (h < 15 || h >= 345) return l < 50 ? 'crimson' : 'red'
+    if (h < 45) return s < 55 ? 'earth' : (l < 50 ? 'brown' : 'orange')
+    if (h < 70) return l < 55 ? 'gold' : 'yellow'
+    if (h < 160) {
+      if (l < 45) return 'forest'
+      if (s < 55) return 'olive'
+      return h < 100 ? 'green' : 'mint'
+    }
+    if (h < 200) return l < 50 ? 'teal' : 'sky'
+    if (h < 250) return l < 45 ? 'navy' : 'blue'
+    if (h < 290) return s < 50 ? 'plum' : 'lavender'
+    return l < 50 ? 'berry' : 'rose'
   }
   const seenHex = new Set(ACCENT_PRESETS.map((p) => p.hex.toLowerCase()))
   let i = 0
@@ -666,7 +685,11 @@ export const ACCENT_PRESETS = [
           if (seenHex.has(hex)) continue
           seenHex.add(hex)
           i++
-          ACCENT_PRESETS.push({ key: `x${String(i).padStart(3, '0')}`, hex, label: `扩展 ${String(i).padStart(3, '0')}` })
+          ACCENT_PRESETS.push({
+            key: `x${String(i).padStart(3, '0')}`, hex,
+            label: `扩展 ${String(i).padStart(3, '0')}`,
+            cat: autoCat(h, s, l),
+          })
         }
       }
     }

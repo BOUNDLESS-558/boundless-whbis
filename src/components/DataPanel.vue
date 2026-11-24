@@ -48,7 +48,7 @@
           <text class="dp-c time">最终下线</text>
           <text class="dp-c speed">最高车速</text>
           <text class="dp-c over">超速次数</text>
-          <text class="dp-c">发车次数</text>
+          <text class="dp-c depart">发车次数</text>
           <text class="dp-c trans">车辆调配记录</text>
         </view>
         <view class="dp-row" v-for="r in rows" :key="r.orgId">
@@ -61,7 +61,7 @@
           <text class="dp-c over">
             <text class="dp-badge" :class="{ hot: r.speedCount > 0 }">{{ r.speedCount }}</text>
           </text>
-          <text class="dp-c">{{ r.departures }}</text>
+          <text class="dp-c depart">{{ r.departures }}</text>
           <text class="dp-c trans small" :title="transferText(r)">{{ transferText(r) }}</text>
         </view>
       </scroll-view>
@@ -75,6 +75,8 @@
 <script>
 import { copyTable } from '../utils/clipboard.js'
 import { formatBusNo } from '../utils/busNumber.js'
+import { APP_CONFIG } from '../config.js'
+import { assetUrl } from '../utils/asset.js'
 import CopyPill from './CopyPill.vue'
 
 const PROFILE_URL = 'static/vehicle-ops/profile.json'
@@ -151,25 +153,21 @@ export default {
     },
     load() {
       // 优先读 Vercel 数据库 API（实时）；失败回退静态 profile.json（兼容本地 dev / 未配库环境）
-      import('../config.js').then(({ APP_CONFIG }) => {
-        const api = APP_CONFIG.vehicleOpsApi
-        const tryStatic = () => {
-          import('../utils/asset.js').then(({ assetUrl }) => {
-            fetch(assetUrl(PROFILE_URL), { cache: 'no-store' })
-              .then((r) => (r.ok ? r.json() : Promise.reject(new Error('HTTP ' + r.status))))
-              .then((j) => this.apply(j))
-              .catch((e) => console.warn('[DataPanel] 静态读取失败', e))
-          })
-        }
-        if (!api) return tryStatic()
-        fetch(api, { cache: 'no-store' })
+      const api = APP_CONFIG.vehicleOpsApi
+      const tryStatic = () => {
+        fetch(assetUrl(PROFILE_URL), { cache: 'no-store' })
           .then((r) => (r.ok ? r.json() : Promise.reject(new Error('HTTP ' + r.status))))
           .then((j) => this.apply(j))
-          .catch((e) => {
-            console.warn('[DataPanel] API 读取失败，回退静态资产', e)
-            tryStatic()
-          })
-      })
+          .catch((e) => console.warn('[DataPanel] 静态读取失败', e))
+      }
+      if (!api) return tryStatic()
+      fetch(api, { cache: 'no-store' })
+        .then((r) => (r.ok ? r.json() : Promise.reject(new Error('HTTP ' + r.status))))
+        .then((j) => this.apply(j))
+        .catch((e) => {
+          console.warn('[DataPanel] API 读取失败，回退静态资产', e)
+          tryStatic()
+        })
     },
     apply(j) {
       if (!j || !j.buses) return
@@ -224,7 +222,7 @@ export default {
 .dp-sort.on { background: var(--ac, #6366f1); color: #fff; }
 .dp-sort-arrow { margin-left: 6rpx; }
 .dp-table-scroll { max-height: 60vh; overflow-y: auto; overflow-x: auto; }
-.dp-row { display: flex; align-items: center; padding: 12rpx 8rpx; border-bottom: 2rpx solid rgba(120,160,220,0.08); min-width: 1500rpx; }
+.dp-row { display: flex; align-items: center; padding: 12rpx 8rpx; border-bottom: 2rpx solid rgba(120,160,220,0.08); min-width: 1700rpx; }
 .dp-thead { position: sticky; top: 0; background: #101a2e; color: #9aa6bd; font-size: 20rpx; z-index: 2; }
 /* 固定列宽而非均分：完整字段（公司全名/多线路/完整时间/调配记录）不被省略号截断，窄屏横向滚动查看 */
 .dp-c { flex: 0 0 auto; font-size: 22rpx; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -234,7 +232,8 @@ export default {
 .dp-c.time { width: 220rpx; }
 .dp-c.speed { width: 130rpx; }
 .dp-c.over { width: 110rpx; }
-.dp-c.trans { width: 360rpx; }
+.dp-c.depart { width: 130rpx; }
+.dp-c.trans { width: 400rpx; padding-left: 16rpx; box-sizing: border-box; }
 .dp-c.small { font-size: 19rpx; color: #9aa6bd; }
 .dp-unit { font-size: 17rpx; color: #7f8aa3; margin-left: 4rpx; }
 .dp-badge { display: inline-block; min-width: 36rpx; padding: 2rpx 10rpx; border-radius: 999rpx; background: rgba(120,160,220,0.12); text-align: center; }
