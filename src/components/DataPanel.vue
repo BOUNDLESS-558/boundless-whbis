@@ -1,84 +1,79 @@
 <template>
   <!-- 数据面板：每辆车的营运档案（最高车速 / 超速次数 / 上下线 / 发车次数 / 调配 / 公司）
        数据来自 Actions 每 15 分钟采集落盘的 src/static/vehicle-ops/profile.json -->
-  <view class="dp-card">
-    <view class="dp-head">
-      <text class="dp-grip" title="按住拖动窗口" @click.stop>⣿</text>
-      <view class="dp-title-wrap">
-        <text class="dp-title">📊 数据面板</text>
-        <text class="dp-sub">{{ stamp || '尚未同步' }} · {{ rows.length }} 辆</text>
-      </view>
-      <view class="dp-head-ops" @click.stop>
+  <!-- 纯内容组件：外层由 map.vue 的 FloatWin 提供标题 / 拖动 / 关闭，这里不再画第二层卡片头 -->
+  <view class="dp-body">
+    <!-- 操作行：同步 / 导出 / 数据时次 -->
+    <view class="dp-actions">
+      <text class="dp-stamp">{{ stamp ? stamp + ' · ' + rows.length + ' 辆' : '尚未同步 · 0 辆' }}</text>
+      <view class="dp-ops">
         <CopyPill label="导出" :disabled="!rows.length" @copy="onCopy" />
-        <view class="dp-mini" :title="loading ? '同步中' : '同步最新数据'" @click="onSync">{{ loading ? '…' : '↻' }}</view>
-        <view class="dp-mini" title="关闭" @click="$emit('close')">✕</view>
+        <view class="dp-mini" :title="loading ? '同步中' : '同步最新数据'" @click="onSync">{{ loading ? '…' : '↻ 同步' }}</view>
+      </view>
+    </view>
+    <!-- 筛选 + 排序工具条 -->
+    <view class="dp-toolbar">
+      <input
+        class="dp-search"
+        v-model="keyword"
+        type="text"
+        placeholder="筛选自编号 / 线路 / 公司"
+        confirm-type="search"
+      />
+      <view class="dp-sorts">
+        <view
+          v-for="s in sortOptions"
+          :key="s.key"
+          class="dp-sort"
+          :class="{ on: sortKey === s.key }"
+          @click="onSort(s.key)"
+        >{{ s.label }}<text v-if="sortKey === s.key" class="dp-sort-arrow">{{ desc ? '↓' : '↑' }}</text></view>
       </view>
     </view>
 
-    <view class="dp-body">
-      <!-- 筛选 + 排序工具条 -->
-      <view class="dp-toolbar">
-        <input
-          class="dp-search"
-          v-model="keyword"
-          type="text"
-          placeholder="筛选自编号 / 线路 / 公司"
-          confirm-type="search"
-        />
-        <view class="dp-sorts">
-          <view
-            v-for="s in sortOptions"
-            :key="s.key"
-            class="dp-sort"
-            :class="{ on: sortKey === s.key }"
-            @click="onSort(s.key)"
-          >{{ s.label }}<text v-if="sortKey === s.key" class="dp-sort-arrow">{{ desc ? '↓' : '↑' }}</text></view>
-        </view>
-      </view>
-
-      <view class="dp-empty" v-if="!rows.length">
-        <text class="dp-empty-big">📂</text>
-        <text class="dp-empty-txt">暂无营运数据。点右上角「↻」同步项目内采集数据（需 Actions 已运行）。</text>
-      </view>
+    <view class="dp-empty" v-if="!rows.length">
+      <text class="dp-empty-big">📂</text>
+      <text class="dp-empty-txt">暂无营运数据。点上方「↻ 同步」读取项目内采集数据（需 Actions 已运行）。</text>
+    </view>
 
       <scroll-view class="dp-table-scroll" scroll-y v-else>
+        <!-- 每行一辆车：所属公司 / 线路号 / 自编号 / 首次上线 / 最终下线 / 最高车速 /
+             超速次数 / 发车次数 / 调配记录 全部完整展示，长行可横向滚动 -->
         <view class="dp-row dp-thead">
+          <text class="dp-c company">所属营运公司</text>
+          <text class="dp-c line">线路号</text>
           <text class="dp-c org">自编号</text>
-          <text class="dp-c line">线路</text>
+          <text class="dp-c time">首次上线</text>
+          <text class="dp-c time">最终下线</text>
           <text class="dp-c speed">最高车速</text>
           <text class="dp-c over">超速次数</text>
-          <text class="dp-c">上线</text>
-          <text class="dp-c">下线</text>
-          <text class="dp-c">发车</text>
-          <text class="dp-c">调配</text>
-          <text class="dp-c company">公司</text>
+          <text class="dp-c">发车次数</text>
+          <text class="dp-c trans">车辆调配记录</text>
         </view>
         <view class="dp-row" v-for="r in rows" :key="r.orgId">
+          <text class="dp-c company" :title="r.company">{{ r.company || '—' }}</text>
+          <text class="dp-c line" :title="(r.lines || []).join(' / ')">{{ (r.lines || []).join(' / ') || '—' }}</text>
           <text class="dp-c org" :title="r.orgId">{{ fmtNo(r.orgId) }}</text>
-          <text class="dp-c line" :title="(r.lines || []).join('/')">{{ (r.lines || []).slice(-1)[0] || '—' }}</text>
+          <text class="dp-c time small">{{ r.onlineAt || '—' }}</text>
+          <text class="dp-c time small">{{ r.offlineAt || '—' }}</text>
           <text class="dp-c speed">{{ r.maxSpeed }}<text class="dp-unit">km/h</text></text>
           <text class="dp-c over">
             <text class="dp-badge" :class="{ hot: r.speedCount > 0 }">{{ r.speedCount }}</text>
           </text>
-          <text class="dp-c small">{{ shortTime(r.onlineAt) }}</text>
-          <text class="dp-c small">{{ shortTime(r.offlineAt) }}</text>
           <text class="dp-c">{{ r.departures }}</text>
-          <text class="dp-c small" :title="transferText(r)">{{ (r.transfers || []).length }}</text>
-          <text class="dp-c company" :title="r.company">{{ shortCompany(r.company) }}</text>
+          <text class="dp-c trans small" :title="transferText(r)">{{ transferText(r) }}</text>
         </view>
       </scroll-view>
 
-      <view class="dp-foot">
-        <text>超速阈值 {{ speedLimit }} km/h · 数据每 15 分钟更新 · 自编号首位判定营运公司</text>
-      </view>
-    </view>
+  <view class="dp-foot">
+    <text>超速阈值 {{ speedLimit }} km/h · 数据每 15 分钟更新 · 自编号首位判定营运公司</text>
   </view>
+</view>
 </template>
 
 <script>
 import { copyTable } from '../utils/clipboard.js'
 import { formatBusNo } from '../utils/busNumber.js'
-import { bindFloatDrag } from '../utils/panelPos.js'
 import CopyPill from './CopyPill.vue'
 
 const PROFILE_URL = 'static/vehicle-ops/profile.json'
@@ -88,6 +83,8 @@ const SORTS = [
   { key: 'speedCount', label: '超速' },
   { key: 'departures', label: '发车' },
   { key: 'orgId', label: '编号' },
+  { key: 'onlineAt', label: '上线' },
+  { key: 'offlineAt', label: '下线' },
 ]
 
 export default {
@@ -127,7 +124,6 @@ export default {
     },
   },
   mounted() {
-    bindFloatDrag(this, '.dp-grip', 'data-panel')
     this.load()
   },
   methods: {
@@ -172,17 +168,17 @@ export default {
       else { this.sortKey = key; this.desc = true }
     },
     onCopy() {
-      const columns = ['自编号', '线路', '最高车速', '超速次数', '上线时间', '下线时间', '发车次数', '调配记录', '所属公司']
+      const columns = ['所属营运公司', '线路号', '自编号', '首次上线时间', '最终下线时间', '最高车速', '超速次数', '历史发车次数', '车辆调配记录']
       const rows = this.rows.map((r) => [
+        r.company || '',
+        (r.lines || []).join(' / '),
         this.fmtNo(r.orgId),
-        (r.lines || []).join('/'),
-        String(r.maxSpeed),
-        String(r.speedCount),
         r.onlineAt || '',
         r.offlineAt || '',
+        String(r.maxSpeed),
+        String(r.speedCount),
         String(r.departures),
         this.transferText(r).replace(/\n/g, '; '),
-        r.company || '',
       ])
       copyTable({ title: `武汉公交营运数据 ${this.stamp}`, columns, rows })
     },
@@ -191,30 +187,30 @@ export default {
 </script>
 
 <style scoped>
-.dp-card { width: 1200rpx; max-width: 94vw; background: rgba(16,22,38,0.96); border: 2rpx solid rgba(120,160,220,0.28); border-radius: 20rpx; color: #e8edf6; overflow: hidden; }
-.dp-head { display: flex; align-items: center; padding: 20rpx 24rpx; border-bottom: 2rpx solid rgba(120,160,220,0.16); }
-.dp-grip { color: #7f8aa3; margin-right: 14rpx; cursor: grab; }
-.dp-title-wrap { flex: 1; display: flex; flex-direction: column; }
-.dp-title { font-size: 30rpx; font-weight: 700; }
-.dp-sub { font-size: 20rpx; color: #9aa6bd; margin-top: 4rpx; }
-.dp-head-ops { display: flex; align-items: center; gap: 12rpx; }
-.dp-mini { width: 48rpx; height: 48rpx; line-height: 48rpx; text-align: center; border-radius: 12rpx; background: rgba(120,160,220,0.12); cursor: pointer; }
-.dp-body { padding: 16rpx 20rpx 20rpx; }
+/* 纯内容：不再自绘卡片外壳，由外层 FloatWin 提供标题/边框/拖动/关闭 */
+.dp-body { width: 100%; color: #e8edf6; }
+.dp-actions { display: flex; align-items: center; justify-content: space-between; padding: 4rpx 0 14rpx; }
+.dp-stamp { font-size: 19rpx; color: #9aa6bd; }
+.dp-ops { display: flex; align-items: center; gap: 12rpx; }
+.dp-mini { padding: 8rpx 16rpx; border-radius: 12rpx; background: rgba(120,160,220,0.12); color: #e8edf6; font-size: 20rpx; cursor: pointer; white-space: nowrap; }
 .dp-toolbar { display: flex; flex-direction: column; gap: 12rpx; margin-bottom: 12rpx; }
 .dp-search { width: 100%; box-sizing: border-box; padding: 14rpx 18rpx; border-radius: 12rpx; background: rgba(120,160,220,0.08); color: #e8edf6; font-size: 24rpx; }
 .dp-sorts { display: flex; gap: 10rpx; flex-wrap: wrap; }
 .dp-sort { padding: 8rpx 18rpx; border-radius: 999rpx; background: rgba(120,160,220,0.08); font-size: 22rpx; color: #9aa6bd; cursor: pointer; }
 .dp-sort.on { background: var(--ac, #6366f1); color: #fff; }
 .dp-sort-arrow { margin-left: 6rpx; }
-.dp-table-scroll { max-height: 60vh; overflow-y: auto; }
-.dp-row { display: flex; align-items: center; padding: 12rpx 8rpx; border-bottom: 2rpx solid rgba(120,160,220,0.08); }
+.dp-table-scroll { max-height: 60vh; overflow-y: auto; overflow-x: auto; }
+.dp-row { display: flex; align-items: center; padding: 12rpx 8rpx; border-bottom: 2rpx solid rgba(120,160,220,0.08); min-width: 1500rpx; }
 .dp-thead { position: sticky; top: 0; background: #101a2e; color: #9aa6bd; font-size: 20rpx; z-index: 2; }
-.dp-c { flex: 1; font-size: 22rpx; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.dp-c.org { flex: 1.2; }
-.dp-c.line { flex: 0.8; }
-.dp-c.speed { flex: 1; }
-.dp-c.over { flex: 0.7; }
-.dp-c.company { flex: 1.2; }
+/* 固定列宽而非均分：完整字段（公司全名/多线路/完整时间/调配记录）不被省略号截断，窄屏横向滚动查看 */
+.dp-c { flex: 0 0 auto; font-size: 22rpx; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dp-c.company { width: 240rpx; }
+.dp-c.line { width: 140rpx; }
+.dp-c.org { width: 130rpx; }
+.dp-c.time { width: 220rpx; }
+.dp-c.speed { width: 130rpx; }
+.dp-c.over { width: 110rpx; }
+.dp-c.trans { width: 360rpx; }
 .dp-c.small { font-size: 19rpx; color: #9aa6bd; }
 .dp-unit { font-size: 17rpx; color: #7f8aa3; margin-left: 4rpx; }
 .dp-badge { display: inline-block; min-width: 36rpx; padding: 2rpx 10rpx; border-radius: 999rpx; background: rgba(120,160,220,0.12); text-align: center; }
