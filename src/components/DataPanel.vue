@@ -80,10 +80,11 @@ import CopyPill from './CopyPill.vue'
 const PROFILE_URL = 'static/vehicle-ops/profile.json'
 
 const SORTS = [
+  { key: 'lineNo', label: '线路号' },
+  { key: 'orgId', label: '自编号' },
   { key: 'maxSpeed', label: '车速' },
   { key: 'speedCount', label: '超速' },
   { key: 'departures', label: '发车' },
-  { key: 'orgId', label: '编号' },
   { key: 'onlineAt', label: '上线' },
   { key: 'offlineAt', label: '下线' },
 ]
@@ -118,8 +119,14 @@ export default {
       const key = this.sortKey
       const dir = this.desc ? -1 : 1
       return [...list].sort((a, b) => {
-        const av = a[key] || 0
-        const bv = b[key] || 0
+        const av = a[key] || ''
+        const bv = b[key] || ''
+        // 线路号/自编号等纯数字字段按数值排（337 < 909，而不是字典序 "337" < "909" 恰好也成立，但 "81" 会排到 "337" 后）
+        if (key === 'lineNo' || key === 'orgId') {
+          const na = Number(av) || 0
+          const nb = Number(bv) || 0
+          return (na - nb) * dir
+        }
         if (typeof av === 'number' && typeof bv === 'number') return (av - bv) * dir
         return String(av).localeCompare(String(bv)) * dir
       })
