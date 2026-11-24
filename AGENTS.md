@@ -25,10 +25,12 @@ uni-app（Vue 3 + Vite 5）跨端应用：H5 网页版 + Android App，查询武
 - `src/utils/settings.js` 的 `SKIN_OPTS` 仅含 `{ key: 'dark', label: '黑色' }`；`resolvedSkin()` / `applySkin()` / `watchSystemSkin()` / `setSkin()` 均简化为仅深色逻辑。
 - `src/App.vue` 中 `html[data-skin='light']` 相关 CSS 块全部移除。
 
-### 3. 高德免 Key 采集限流
-- `scripts/scan-routes-amap.mjs` 新增 `--batch-size` 参数（默认 3）：每处理 BATCH_SIZE 条线路后暂停 3×DELAY，降低高德侧限流概率。
-- 高德免 Key 接口对同一 IP 有 QPS 限制，连续请求过密会导致 `/line` 接口返回「未找到」（实际存在）。默认每 3 条线后长暂停，既保证吞吐又避免触发限流。
-- `queryAmap()` 内已有 3 次重试 + 退避逻辑，单条线路获取失败自动重试 3 次。
+### 3. 高德采集：SSR 为主、linename 为辅助（2026-11-24 反转）
+- **主方案 = SSR**（`scan-poi-newbus.mjs`，`ditu.amap.com/ssr/api`，免 Web 服务 Key、仅需 Cookie）：`--overwrite` 覆盖 `route + stops`，是最终落盘权威数据源。覆盖时写 `source:'amap'` + `row.amap.primary='newbus'`，站点 stopId 是高德 POI id（poiid2）而非 BV 前缀。
+- **辅助方案 = linename**（`scan-routes-amap.mjs`，需 AMAP_KEY）：`auto-collect.mjs` 用 `--retry-unmatched`（不带 `--force`），只补台账未完成/SSR 未命中的线路，不再全量覆盖 SSR 数据。
+- **判据兼容**：`scan-routes-amap.mjs` 的 `isAmapStops()` 已认 `primary==='newbus'` 为已转换（不再只看 BV 前缀），避免 `--backfill-stops` 误把 SSR 站点当集团站重采；linename 重采时清掉 `primary` 标记防失真。
+- 前置：SSR 需要资产里有 `amap.id`，由「POI id 回填」步骤（`scan-amap-ids.mjs`，需 Key+Cookie）写入；执行顺序为 ① id 回填 → ② SSR 主方案 → ③ 主链路辅助 → ④ 站点补齐。
+- **限流**：`--batch-size` 默认 3（每 3 条线暂停 3×DELAY）；`queryAmap()` 内 3 次重试 + 退避，防 QPS 过密导致「查无此线」误判。
 
 ### 4. 采集频率
 - 地图站点数据采集 Actions 的触发时间：**每 12 小时一次**（cron `0 */12 * * *`）。
@@ -42,7 +44,7 @@ uni-app（Vue 3 + Vite 5）跨端应用：H5 网页版 + Android App，查询武
 ### 6. 免 Key Cookie（每人用自己的高德账号）
 - 前端：`src/pages/map/map.vue` 设置面板「免 Key Cookie」分区；`settings.js` 的 `getAmapWebCookie`/`setAmapWebCookie` 存 localStorage；`buildAmapCookieConfig` 生成仓库配置文本。
 - 桥梁：`scripts/amap-cookie.json`（cookie 字段），用户填入自己的 Cookie 提交后，Actions `daily-collect.yml`「加载用户免 Key Cookie」步骤优先读该文件注入 `AMAP_WEB_COOKIE`，留空则回退 Secrets。
-- 注意分区键：`ACCT_SECTION_KEYS` 已含 `map` 与 `cookie`（此前漏了 `map` 导致「线路走向」折叠失效，已修复）。
+- 分区键：`ACCT_SECTION_KEYS` 已把「线路走向 map」与「免 Key Cookie cookie」合并为单一 `amap` 分区（标题「高德数据源」，Cookie 主 / KEY 辅）。此前 `map` 曾漏登记导致折叠失效，已一并修复。
 
 ### 7. 面板整合（已完成）
 - 「实时线路面板（stops）」已并入「实时地图（map）」视图：`views` / `VIEW_KEYS` / `LINE_VIEWS` 不再含 `stops`；`LineStops` 浮窗在地图视图渲染，**默认关闭**，由 `LineMap` 底部栏新增的「🚏 站点」按钮显式开合（`stopsWin` 开关）。选线/换线/切视图都不再自动弹出（用户明确要求：每次点开地图就自动弹站点窗体验差）。

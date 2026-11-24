@@ -332,15 +332,43 @@
 
           <view class="acct-div"></view>
 
-          <!-- 高德地图 KEY：自填后拉官方公交真实轨迹 -->
-          <view class="acct-sec-head" @click="toggleAcctSection('map')">
-            <text class="acct-sec-title">线路走向</text>
-            <text class="acct-sec-sum" v-if="!acctSec.map">{{ acctSecSummary.map }}</text>
-            <text class="acct-sec-chev" :class="{ folded: !acctSec.map }">▾</text>
+          <!-- 高德数据源：Cookie（SSR 主方案）+ KEY（linename 辅助方案）合并为同一类 -->
+          <view class="acct-sec-head" @click="toggleAcctSection('amap')">
+            <text class="acct-sec-title">高德数据源</text>
+            <text class="acct-sec-sum" v-if="!acctSec.amap">{{ acctSecSummary.amap }}</text>
+            <text class="acct-sec-chev" :class="{ folded: !acctSec.amap }">▾</text>
           </view>
-          <view v-show="acctSec.map" class="acct-sec-body">
-            <view class="amap-sub-label">高德地图 KEY</view>
-            <view class="amap-sub-hint">官方公交轨迹 · 走向更精确</view>
+          <view v-show="acctSec.amap" class="acct-sec-body">
+            <!-- ① 主方案：免 Key Cookie（SSR） -->
+            <view class="amap-sub-label">高德网页会话 Cookie <text class="amap-role-main">主方案</text></view>
+            <view class="amap-sub-hint">SSR 接口抓站点·走向·换乘，配额独立，每人填自己的账号</view>
+            <view class="amap-field-label">Cookie（从浏览器开发者工具复制）</view>
+            <view class="amap-input-row">
+              <input
+                class="amap-input"
+                v-model="amapCookieInput"
+                type="text"
+                :password="!amapCookieShow"
+                placeholder="粘贴完整 Cookie 字符串"
+                confirm-type="done"
+                @confirm="onAmapCookieSave"
+              />
+              <view class="acct-eye" :class="{ on: amapCookieShow }" @click="amapCookieShow = !amapCookieShow" v-html="amapCookieShow ? svgEyeOn : svgEyeOff" />
+            </view>
+            <view class="amap-btn-row">
+              <view class="amap-btn primary" @click="onAmapCookieSave">保存 Cookie</view>
+              <view class="amap-btn" @click="onAmapCookieCopy">复制仓库配置</view>
+              <view class="amap-btn" v-if="amapCookie" @click="onAmapCookieClear">清空</view>
+            </view>
+            <view class="amap-note">
+              Cookie 是采集主方案：浏览器 F12 → Network → 任意 amap.com 请求 → Request Headers → Cookie 整段复制。「保存」仅存本机；「复制仓库配置」生成 scripts/amap-cookie.json 内容，粘贴到仓库并提交后 Actions 优先读它，留空回退 Secrets。Cookie 与账号绑定，请勿提交他人 Cookie。
+            </view>
+
+            <view class="acct-div"></view>
+
+            <!-- ② 辅助方案：高德 Web 服务 KEY（linename 补漏） -->
+            <view class="amap-sub-label">高德地图 KEY <text class="amap-role-sub">辅助方案</text></view>
+            <view class="amap-sub-hint">Cookie 未命中时由官方接口补漏</view>
             <view class="amap-apply">
               <text class="amap-apply-txt">还没有 KEY？前往高德开放平台免费申请（Web端 JS API 类型）</text>
               <text class="amap-apply-link" @click="openAmapApply">立即申请 ›</text>
@@ -389,41 +417,7 @@
             </view>
 
             <view class="amap-note">
-              填 KEY 后线路走向改用高德官方公交轨迹，通常比免 Key 的 OSRM 贴路更精确。⚠ 必须是高德开放平台创建的「Web端(JS API)」类型 Key（Web服务 / REST Key 会报平台不匹配而不生效）；JS API 2.0 若配了安全密钥，填在下方「安全密钥」框即可。KEY 与高德账号绑定，调用可能按高德规则计费或占用免费配额，费用与额度以高德平台为准。本机计数仅供参考，不代表实际账单。留空则始终走免 Key 方案。
-            </view>
-          </view>
-
-          <view class="acct-div"></view>
-
-          <!-- 免 Key 方案 Cookie：用户自己的高德网页会话 Cookie，不再全员共用一份 -->
-          <view class="acct-sec-head" @click="toggleAcctSection('cookie')">
-            <text class="acct-sec-title">免 Key Cookie</text>
-            <text class="acct-sec-sum" v-if="!acctSec.cookie">{{ acctSecSummary.cookie }}</text>
-            <text class="acct-sec-chev" :class="{ folded: !acctSec.cookie }">▾</text>
-          </view>
-          <view v-show="acctSec.cookie" class="acct-sec-body">
-            <view class="amap-sub-label">高德网页会话 Cookie</view>
-            <view class="amap-sub-hint">免 Key 方案抓取线路站点用 · 每人填自己的账号 Cookie</view>
-            <view class="amap-field-label">Cookie（从浏览器开发者工具复制）</view>
-            <view class="amap-input-row">
-              <input
-                class="amap-input"
-                v-model="amapCookieInput"
-                type="text"
-                :password="!amapCookieShow"
-                placeholder="粘贴完整 Cookie 字符串"
-                confirm-type="done"
-                @confirm="onAmapCookieSave"
-              />
-              <view class="acct-eye" :class="{ on: amapCookieShow }" @click="amapCookieShow = !amapCookieShow" v-html="amapCookieShow ? svgEyeOn : svgEyeOff" />
-            </view>
-            <view class="amap-btn-row">
-              <view class="amap-btn primary" @click="onAmapCookieSave">保存</view>
-              <view class="amap-btn" @click="onAmapCookieCopy">复制仓库配置</view>
-              <view class="amap-btn" v-if="amapCookie" @click="onAmapCookieClear">清空</view>
-            </view>
-            <view class="amap-note">
-              填入你自己的高德网页 Cookie（浏览器 F12 → Network → 任意 amap.com 请求 → Request Headers → Cookie 整段复制）。点「保存」仅存本机；点「复制仓库配置」会生成 scripts/amap-cookie.json 的内容，粘贴到仓库同名文件并提交后，Actions 每次采集优先读该文件里的 Cookie 注入 AMAP_WEB_COOKIE，未配置则回退到仓库 Secrets。Cookie 与你的高德账号绑定，请勿提交他人的 Cookie；失效时重新抓取即可。
+              KEY 为辅助补漏：Cookie 未命中的线路由官方 linename 接口补充，3 条一批 + 失败重试 3 次防限流。⚠ 必须是「Web端(JS API)」类型 Key（Web服务/REST Key 会报平台不匹配）；JS API 2.0 的安全密钥填在上方。KEY 与高德账号绑定，可能按高德规则计费，费用额度以高德平台为准，本机计数仅供参考。留空则完全走 Cookie 主方案。
             </view>
           </view>
 
@@ -528,11 +522,11 @@ const CITY_ACT_KEY = 'whbis:city-activated'
 const CITY_ACT_CODE = 'BOUNDLESS_558'
 // 「账号与设置」各分区的展开态：本机记忆，避免每次开窗都要重新点开
 const ACCT_SECTIONS_KEY = 'whbis:acct-sections'
-const ACCT_SECTION_KEYS = ['session', 'pwd', 'refresh', 'accent', 'font', 'map', 'cookie']
+const ACCT_SECTION_KEYS = ['session', 'pwd', 'refresh', 'accent', 'font', 'amap']
 // 默认：常用的小分区展开，字体（13 档）与密码表单这类长分区默认收起，
 // 让面板首屏就能看到全部设置项，不用一路滚到底
 const ACCT_SECTIONS_DEFAULT = {
-  session: true, pwd: false, refresh: true, accent: true, font: false, map: false, cookie: false,
+  session: true, pwd: false, refresh: true, accent: true, font: false, amap: false,
 }
 
 export default {
@@ -773,9 +767,8 @@ export default {
         refresh: this.refreshDefault === 0 ? '手动刷新' : `${this.refreshDefault} 秒`,
         accent: accent ? accent.label : '自定义',
         font: font ? font.label : '系统默认',
-        // 合并分区摘要：KEY / Cookie 是否已填
-        map: `KEY ${this.amapKey ? '已填' : '未填'}`,
-        cookie: `Cookie ${this.amapCookie ? '已填' : '未填'}`,
+        // 高德数据源合并分区摘要：Cookie（主）/ KEY（辅）填写状态
+        amap: `Cookie ${this.amapCookie ? '已填' : '未填'} · KEY ${this.amapKey ? '已填' : '未填'}`,
       }
     },
     // 是否所有分区都已展开（决定快捷按钮文案与方向）
@@ -1857,6 +1850,18 @@ export default {
   color: rgba(255, 255, 255, 0.85);
   margin: 6rpx 0 8rpx;
 }
+/* 主/辅方案角色标签：醒目区分 SSR 主方案与 KEY 辅助方案 */
+.amap-role-main, .amap-role-sub {
+  display: inline-block;
+  font-size: 17rpx;
+  font-weight: 500;
+  padding: 2rpx 10rpx;
+  border-radius: 999rpx;
+  margin-left: 10rpx;
+  vertical-align: middle;
+}
+.amap-role-main { color: #fff; background: var(--ac); }
+.amap-role-sub { color: rgba(255, 255, 255, 0.65); border: 2rpx solid rgba(255, 255, 255, 0.22); }
 /* Key / 安全密钥两个输入框各自的小标题 */
 .amap-field-label {
   font-size: 19rpx;

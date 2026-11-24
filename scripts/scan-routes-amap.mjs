@@ -153,9 +153,15 @@ function putRow(no, dir, row) {
   shard.lines[k].dirs[String(dir)] = row
   dirty.add(key)
 }
-// 站点是否已是高德（BV... 前缀）：backfill 用它区分「已转换 / 待补」方向
+// 站点是否已是高德来源：backfill 用它区分「已转换 / 待补」方向。
+// 两种来源都算已转换：
+//   ① linename 主链路：stopId 为 BV... 前缀；
+//   ② SSR 主方案（scan-poi-newbus --overwrite）：row.amap.primary === 'newbus'，
+//      stopId 是高德 POI id（poiid2）而非 BV，不能再当成「集团站」重采覆盖。
 function isAmapStops(row) {
-  return !!(row && Array.isArray(row.stops) && row.stops.length >= 2 && /^BV/.test(String(row.stops[0].stopId || '')))
+  if (!row || !Array.isArray(row.stops) || row.stops.length < 2) return false
+  if (row.amap && row.amap.primary === 'newbus') return true
+  return /^BV/.test(String(row.stops[0].stopId || ''))
 }
 // 线路是否有方向「采过高德几何但站点仍是集团站」——这些就是补齐模式要重采的对象
 function needsStopBackfill(no, dirs) {
@@ -639,8 +645,11 @@ for (const l of todoFinal) {
       snapped: true,
       source: 'amap',
       algo: AMAP_ALGO,
-      // 保留上一行 amap 的既有元数据（如 newbus），只刷新会变的字段，避免丢失来源信息
-      amap: { ...((prev && prev.amap) || {}), name: amapName, reversed, id: amapId, ...(prev && prev.amap && prev.amap.newbus ? { newbus: { ...prev.amap.newbus, bounds, length: prev.amap.newbus.length } } : {}) },
+      // 保留上一行 amap 的既有元数据（如 newbus），只刷新会变的字段，避免丢失来源信息。
+      // 但 primary 标记要清掉：本行已由 linename 重采，不再是 SSR 主数据源，
+      // 否则 isAmapStops 会一直认它是 newbus 站点、backfill 永远跳过。
+      amap: { ...((prev && prev.amap) || {}), name: amapName, reversed, id: amapId, primary: undefined,
+        ...(prev && prev.amap && prev.amap.newbus ? { newbus: { ...prev.amap.newbus, bounds, length: prev.amap.newbus.length } } : {}) },
       clean: prev && prev.clean,
     })
     stats.matched++

@@ -269,6 +269,10 @@ for (const t of todo) {
     row.route = route
     row.snapped = true
     row.algo = 100
+    // 标记为主数据源：让辅助链路 scan-routes-amap 识别为「已由高德采集」，
+    // 跳过补漏与 --backfill-stops，避免 linename 反过来覆盖 SSR 写好的站点/走向。
+    row.source = 'amap'
+    row.amap.primary = 'newbus'
     if (Array.isArray(bl.stations)) {
       row.stops = bl.stations.map((st) => {
         const [lng, lat] = String(st.xy_coords || '').split(';').map(Number)

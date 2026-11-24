@@ -5070,15 +5070,17 @@ export default {
   box-sizing: border-box;
   box-shadow: 0 16rpx 48rpx rgba(0, 0, 0, 0.4);
 }
-/* 窄屏（手机）整列回落为底部横栏：时刻表卡仍在车辆面板下方，两块一起贴底 */
+/* 窄屏（手机）整列回落为底部横栏：时刻表卡仍在车辆面板下方，两块一起贴底。
+   bottom 抬到 96rpx，给常驻的底部快捷栏（bottom 12rpx + 高约 60rpx）让位，
+   否则 side-col(z-index 20) 会盖住 bottom-bar(z-index 11)，手机上完全看不到工具按钮。 */
 @media (max-width: 720px) {
   .side-col {
     top: auto;
     left: 20rpx;
     right: 20rpx;
-    bottom: 20rpx;
+    bottom: 96rpx;
     width: auto;
-    max-height: 62vh;
+    max-height: 56vh;
   }
 }
 .panel-header {
@@ -6158,6 +6160,8 @@ export default {
   display: flex;
   align-items: center;
   gap: 0;
+  /* 手机端 10 个按钮横向排列会超出屏幕；限宽后靠 overflow-x:auto 横向滑动 */
+  max-width: calc(100vw - 24rpx);
   padding: 4rpx 4rpx;
   border-radius: 28rpx;
   background: rgba(11, 16, 32, 0.82);

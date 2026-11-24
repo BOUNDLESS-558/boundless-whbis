@@ -209,25 +209,39 @@ if (FULL_SCAN) {
 //   注意顺序：必须在步骤 1 的 scan-lines --merge 之后跑，否则新写 org 可能被那一步的规范化覆盖。
 step('营运公司（在线车辆反推）', ['scripts/scan-org-live.mjs'], { optional: true })
 
-// ── 3~6. 高德相关（有 Key 才跑，失败不阻断）──
-// 高德 Web 服务 Key 相关（需 AMAP_KEY）
-// 每轮高德采集都会重新获取全部线路的站点信息：--force 跳过进度台账，
-// 对整个武汉公交系统的每条线路、每个方向重新拉取高德官方轨迹与站点数据。
+// ── 3~6. 高德相关（主辅链路，失败不阻断）──
+// 主方案 = SSR（ditu.amap.com/ssr/api，免 Web 服务 Key，仅需会话 Cookie）：
+//   返回站点 xy_coords / POI id / 换乘 / 公司 / 长度 / 包围盒，--overwrite 直接覆盖
+//   route + stops，作为最终落盘的权威数据源。配额池与 Key 完全独立。
+// 辅助方案 = linename 主链路（需 AMAP_KEY）：只补 SSR 未命中 / 台账未完成的线路，
+//   用 --retry-unmatched（不带 --force），避免反过来覆盖 SSR 已写好的数据。
+//
+// 依赖说明：SSR 需要资产里已有 amap.id（线路 POI id）。id 由「POI id 回填」步骤
+//   （scan-amap-ids.mjs，需 Key+Cookie）写入；首次全库无 id 时先跑这一步，后续 SSR 自持。
+// 执行顺序：① POI id 回填（前置）→ ② SSR 主方案覆盖 → ③ 主链路辅助补漏 → ④ 站点补齐。
+
+// ① POI id 回填：SSR 的前置，把 amap.id 写进资产（无 Key 时跳过，SSR 用已有 id）
+if (AMAP_KEY) {
+  step('高德 POI id 回填（SSR 前置）', ['scripts/scan-amap-ids.mjs'], { optional: true })
+}
+
+// ② SSR 主方案：--overwrite 让 SSR 的站点/走向成为最终数据；无 Key 也能独立跑
+if (AMAP_COOKIE) {
+  step('高德 SSR 主方案（站点·走向·换乘）', ['scripts/scan-poi-newbus.mjs', '--overwrite', '--delay', '350'], { optional: true })
+} else {
+  console.log('\n（跳过高德 SSR 主方案：未配置 AMAP_WEB_COOKIE，将退回主链路兜底）')
+}
+
+// ③ 主链路辅助补漏 + ④ 站点补齐（需 AMAP_KEY）
 if (AMAP_KEY) {
   step('非集团线路（蔡城/木兰/汉奇）', ['scripts/scan-foreign.mjs', '--delay', '1200'], { optional: true })
-  step('高德官方轨迹（A 源 · 全量重拉）', ['scripts/scan-routes-amap.mjs', '--force', '--delay', '1100', '--ci-log'], { optional: true })
-  // 补齐上一步之后仍残留的半成品线路：source 已是 amap、但站点还是集团 MD5 站号。
-  // --backfill-stops 专门挑这类线路重采站点，已换成高德站的不动；不限量，一轮全部扫完。
+  // 辅助：只处理台账未完成的线路（SSR 覆盖的大多在台账为 done，自动跳过），不再全量覆盖。
+  // --batch-size 3 + queryAmap 内 3 次退避重试，降低限流导致的「查无此线」误判。
+  step('高德主链路（辅助补漏）', ['scripts/scan-routes-amap.mjs', '--retry-unmatched', '--batch-size', '3', '--delay', '1100', '--ci-log'], { optional: true })
+  // 补齐仍残留的半成品：source 已是 amap、但站点还是集团 MD5 站号；已换高德站的不动。
   step('高德站点补齐（集团站 → 高德站）', ['scripts/scan-routes-amap.mjs', '--backfill-stops', '--delay', '1100', '--ci-log'], { optional: true })
-  step('高德 POI id 回填', ['scripts/scan-amap-ids.mjs'], { optional: true })
 } else {
-  console.log('\n（跳过高德 Key 步骤：未配置 AMAP_KEY）')
-}
-// 高德 SSR 补充字段：仅需会话 Cookie，与 Key 互独立（无 Key 也能跑）
-if (AMAP_COOKIE) {
-  step('高德 SSR 补充字段', ['scripts/scan-poi-newbus.mjs', '--delay', '350', ...(OVERWRITE ? ['--overwrite'] : [])], { optional: true })
-} else {
-  console.log('\n（跳过高德 SSR 补充字段：未配置 AMAP_WEB_COOKIE）')
+  console.log('\n（跳过高德主链路辅助步骤：未配置 AMAP_KEY）')
 }
 
 // ── 7. 资产清单 + 线网底图 ──
