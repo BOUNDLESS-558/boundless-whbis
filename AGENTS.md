@@ -44,8 +44,13 @@ uni-app（Vue 3 + Vite 5）跨端应用：H5 网页版 + Android App，查询武
 - 桥梁：`scripts/amap-cookie.json`（cookie 字段），用户填入自己的 Cookie 提交后，Actions `daily-collect.yml`「加载用户免 Key Cookie」步骤优先读该文件注入 `AMAP_WEB_COOKIE`，留空则回退 Secrets。
 - 注意分区键：`ACCT_SECTION_KEYS` 已含 `map` 与 `cookie`（此前漏了 `map` 导致「线路走向」折叠失效，已修复）。
 
-### 7. 面板整合（待完成）
-- 需求：移除独立「线路面板」，把其功能完整整合进地图面板。当前线路库/收藏/站点仍以地图浮窗形态存在，整合工作尚未开始。
+### 7. 面板整合（已完成）
+- 「实时线路面板（stops）」已并入「实时地图（map）」视图：`views` / `VIEW_KEYS` / `LINE_VIEWS` 不再含 `stops`；选线后直接在地图视图开 `LineStops` 浮窗（`stopsWin` 开关控制显隐）。再点「实时地图」Tab = 收起/展开站点窗；换线/切回地图自动打开。
+- 站点序列、在线车辆、营运信息、极简站牌、复制走向图等功能完整保留在地图浮窗内，无缺失。
+
+### 8. 移动端响应式
+- `src/components/LineSearch.vue`：≤720px 时视图分段凹槽横向滚动（`seg-groove` overflow-x auto）、`seg-tab` 不压缩、隐藏 `vr-meta`、缩小 padding；PC 端不受影响。
+- `FloatWin` 已有 `max-width: calc(100vw - 40rpx)`，`.ctrl` 已有 `max-width: calc(100vw - 24rpx)`，小屏不会溢出。
 **本地打包 Pages 不依赖推源码**：`npm run deploy:pages` 只读本地 `src/` 构建后强推 `pages`；推 `main`/`BETA` 只为同步源码与驱动 CI，不是部署前提。
 
 日常验证**不要主动构建**：`build:h5` / `build:app` / `deploy:pages` 只在交付或用户明确要求出包时执行，日常验证用 `dev:h5` + 探针/单测（用户原话：「没有必要每次都构建一下生成的产物」）。

@@ -48,15 +48,16 @@
         </template>
       </LineMap>
 
-      <!-- 实时线路：不整屏换页，改为地图上的可拖动悬浮窗（与车辆详情窗同一套交互） -->
+      <!-- 实时线路：已并入实时地图视图，选线后直接在地图上开这扇窗（不再单列 stops 档）。
+           stopsWin 本地开关控制显隐：关掉只收窗、仍留在地图，重选线路再自动打开。 -->
       <FloatWin
-        v-if="hasLine && view === 'stops'"
+        v-if="hasLine && view === 'map' && stopsWin"
         :title="'实时线路 · ' + displayLineName"
         sub="站点 · 在线车辆 · 营运信息"
         :width-rpx="1120"
         max-height="76vh"
         resize-key="stops"
-        @close="view = 'map'"
+        @close="stopsWin = false"
       >
         <!-- 实时线路窗头工具：极简站牌开关合并成「开启 / 退出」两态（退出入口从面板内
              移到窗头，与其它窗口工具并列，极简面板内只留上下行切换和刷新胶囊） -->
@@ -517,9 +518,9 @@ import { closeAllDropdowns } from '../../utils/dropdown.js'
 // 上次查过的线路：下次进来直接落在地图上，省掉「每次都要搜一遍」
 const HOME_LINE_KEY = 'whbis:home-line'
 // 视图档位：地图是底座，city 是同一张地图的另一种内容，stops / db 是浮在它上面的两扇窗
-const VIEW_KEYS = ['map', 'city', 'stops', 'db', 'fav', 'data']
+const VIEW_KEYS = ['map', 'city', 'db', 'fav', 'data']
 // 没选线路时不可达的档位（无线路 = 无单条线路可画）；city 不在内：全市线网不依赖选线
-const LINE_VIEWS = ['map', 'stops']
+const LINE_VIEWS = ['map']
 // 全市公交激活：输入正确激活码后持久化，之后免再激活
 const CITY_ACT_KEY = 'whbis:city-activated'
 const CITY_ACT_CODE = 'BOUNDLESS_558'
@@ -603,6 +604,8 @@ export default {
       lineCode: '',
       lineName: '',
       lineNo: '',
+      // 实时线路窗（已并入地图视图）的显隐；选线后自动打开，用户关掉后保持，换线再开
+      stopsWin: true,
       direction: 0,
       startStop: '',
       endStop: '',
@@ -611,7 +614,6 @@ export default {
       views: [
         { key: 'map', label: '实时地图', short: '地图' },
         { key: 'city', label: '全市公交', short: '全市' },
-        { key: 'stops', label: '实时线路', short: '线路' },
         { key: 'db', label: '线路库', short: '线路库' },
         { key: 'fav', label: '线路收藏夹', short: '收藏' },
         { key: 'data', label: '数据面板', short: '数据' },
@@ -914,6 +916,7 @@ export default {
       this.applyPick(p)
       // 换线路一律落回地图：窗里的内容会随 lineNo 变化重拉，但用户要看的是新线走向
       this.view = 'map'
+      this.stopsWin = true
       this.writeHomeLine()
       if (sameLine) {
         const c = this.$refs.mapC
@@ -926,7 +929,12 @@ export default {
       if (!VIEW_KEYS.includes(key)) return
       // 再点当前档 = 收回上一档：有线路回到地图，没线路回到线路库落地页
       const home = this.hasLine ? 'map' : 'db'
-      if (key === this.view) { this.view = home; return }
+      if (key === this.view) {
+        // 实时线路已并入地图：选线后再点「实时地图」= 收起 / 展开站点窗
+        if (key === 'map' && this.hasLine) { this.stopsWin = !this.stopsWin; return }
+        this.view = home
+        return
+      }
       // 全市公交需激活：未激活弹窗校验，已激活直接进
       if (key === 'city') { this.enterCity(); return }
       if (!this.hasLine && LINE_VIEWS.includes(key)) {
@@ -934,6 +942,8 @@ export default {
         return
       }
       this.view = key
+      // 从别档切回地图且已选线：站点窗随地图一起回来（实时线路功能的落点）
+      if (key === 'map' && this.hasLine) this.stopsWin = true
     },
     // 全市公交自己交回视图档位（首次进入时用户拒了那笔扫描开销）：档位判据只留在宿主一处
     onExitCity() {
@@ -975,6 +985,7 @@ export default {
       try {
         this.applyPick(typeof saved === 'string' ? JSON.parse(saved) : saved)
         this.view = 'map'
+        this.stopsWin = true
       } catch (e) {
         // 记忆损坏（JSON 解析失败等）：清掉，落回线路库落地页，别让异常打断 onLoad
         try { uni.removeStorageSync(HOME_LINE_KEY) } catch (e2) { /* 忽略 */ }

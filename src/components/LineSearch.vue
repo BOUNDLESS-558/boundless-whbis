@@ -437,8 +437,8 @@ export default {
   border-radius: 16rpx;
 }
 .seg-tab {
-  flex: 1;
-  min-width: 0;
+  flex: 1 0 auto;
+  min-width: 96rpx;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -453,6 +453,22 @@ export default {
   cursor: pointer;
   transition: background 0.18s, color 0.18s;
 }
+/* 移动端（≤720px）：分段凹槽改为横向滚动，5 档不被压扁；隐藏状态文案腾出宽度 */
+/* #ifdef H5 */
+@media (max-width: 720px) {
+  .seg-groove {
+    overflow-x: auto;
+    overflow-y: hidden;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    flex: 1 1 auto;
+  }
+  .seg-groove::-webkit-scrollbar { display: none; }
+  .seg-tab { flex: 0 0 auto; min-width: 100rpx; font-size: 22rpx; padding: 0 12rpx; }
+  .vr-meta { display: none; }
+  .view-row { padding: 12rpx 16rpx; gap: 10rpx; }
+}
+/* #endif */
 .seg-tab:hover {
   color: #fff;
   background: rgba(255, 255, 255, 0.10);
