@@ -15,7 +15,7 @@ import { neon } from '@neondatabase/serverless'
 
 const CORS = {
   'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+  'Access-Control-Allow-Methods': 'GET, POST, DELETE, OPTIONS',
   'Access-Control-Allow-Headers': 'Content-Type, x-api-key',
 }
 
@@ -66,6 +66,17 @@ export default async function handler(req, res) {
           return acc
         }, {}),
       })
+    }
+
+    if (req.method === 'DELETE') {
+      const token = process.env.VEHICLE_OPS_TOKEN
+      if (token && req.headers['x-api-key'] !== token) {
+        return res.status(401).json({ error: 'invalid api key' })
+      }
+      const orgId = String((req.body && req.body.orgId) || req.query?.orgId || '')
+      if (!orgId) return res.status(400).json({ error: 'orgId required' })
+      await sql`DELETE FROM vehicle_ops WHERE org_id = ${orgId}`
+      return res.status(200).json({ ok: true, deleted: orgId })
     }
 
     if (req.method === 'POST') {
