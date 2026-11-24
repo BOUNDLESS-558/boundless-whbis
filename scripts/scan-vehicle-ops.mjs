@@ -153,6 +153,7 @@ const workers = Array.from({ length: Math.min(CONCURRENCY, jobs.length) }, async
         : AT
       const rec = slice[orgId] || (slice[orgId] = {
         orgId,
+        lineNo: j.no,          // 营运线路号（本轮采到的线路，如 337）；跨分片取最后一次
         maxSpeed: 0,
         speedCount: 0,
         onlineAt: AT,
@@ -169,6 +170,7 @@ const workers = Array.from({ length: Math.min(CONCURRENCY, jobs.length) }, async
       if (AT > rec.offlineAt) rec.offlineAt = AT
       rec.departures++
       rec.samples++
+      rec.lineNo = j.no
       if (!rec.lines.includes(j.no)) {
         if (rec.lines.length) rec.transfers.push({ from: rec.lines[rec.lines.length - 1], to: j.no, at: AT })
         rec.lines.push(j.no)
@@ -211,9 +213,10 @@ try {
 
 for (const [orgId, rec] of Object.entries(slice)) {
   const prev = profile.buses[orgId] || (profile.buses[orgId] = {
-    orgId, maxSpeed: 0, speedCount: 0, onlineAt: rec.onlineAt, offlineAt: rec.offlineAt,
+    orgId, lineNo: rec.lineNo, maxSpeed: 0, speedCount: 0, onlineAt: rec.onlineAt, offlineAt: rec.offlineAt,
     departures: 0, transfers: [], company: rec.company, lines: [], samples: 0,
   })
+  prev.lineNo = rec.lineNo || prev.lineNo
   if (rec.maxSpeed > prev.maxSpeed) prev.maxSpeed = rec.maxSpeed
   prev.speedCount += rec.speedCount
   if (rec.onlineAt < prev.onlineAt) prev.onlineAt = rec.onlineAt

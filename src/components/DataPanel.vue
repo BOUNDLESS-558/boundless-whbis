@@ -17,7 +17,8 @@
         class="dp-search"
         v-model="keyword"
         type="text"
-        placeholder="筛选自编号 / 线路 / 公司"
+        placeholder="筛选自编号 / 营运线路号 / 公司"
+        placeholder-class="dp-search-ph"
         confirm-type="search"
       />
       <view class="dp-sorts">
@@ -41,7 +42,7 @@
              超速次数 / 发车次数 / 调配记录 全部完整展示，长行可横向滚动 -->
         <view class="dp-row dp-thead">
           <text class="dp-c company">所属营运公司</text>
-          <text class="dp-c line">线路号</text>
+          <text class="dp-c line">营运线路号</text>
           <text class="dp-c org">自编号</text>
           <text class="dp-c time">首次上线</text>
           <text class="dp-c time">最终下线</text>
@@ -52,7 +53,7 @@
         </view>
         <view class="dp-row" v-for="r in rows" :key="r.orgId">
           <text class="dp-c company" :title="r.company">{{ r.company || '—' }}</text>
-          <text class="dp-c line" :title="(r.lines || []).join(' / ')">{{ (r.lines || []).join(' / ') || '—' }}</text>
+          <text class="dp-c line" :title="'历史线路：' + (r.lines || []).join(' / ')">{{ r.lineNo || (r.lines || [])[0] || '—' }}</text>
           <text class="dp-c org" :title="r.orgId">{{ fmtNo(r.orgId) }}</text>
           <text class="dp-c time small">{{ r.onlineAt || '—' }}</text>
           <text class="dp-c time small">{{ r.offlineAt || '—' }}</text>
@@ -109,6 +110,7 @@ export default {
       if (kw) {
         list = list.filter((r) => {
           return String(r.orgId).includes(kw)
+            || String(r.lineNo || '').includes(kw)
             || (r.lines || []).some((l) => String(l).includes(kw))
             || String(r.company || '').toLowerCase().includes(kw)
         })
@@ -168,10 +170,10 @@ export default {
       else { this.sortKey = key; this.desc = true }
     },
     onCopy() {
-      const columns = ['所属营运公司', '线路号', '自编号', '首次上线时间', '最终下线时间', '最高车速', '超速次数', '历史发车次数', '车辆调配记录']
+      const columns = ['所属营运公司', '营运线路号', '自编号', '首次上线时间', '最终下线时间', '最高车速', '超速次数', '历史发车次数', '车辆调配记录']
       const rows = this.rows.map((r) => [
         r.company || '',
-        (r.lines || []).join(' / '),
+        r.lineNo || (r.lines || [])[0] || '',
         this.fmtNo(r.orgId),
         r.onlineAt || '',
         r.offlineAt || '',
@@ -194,7 +196,9 @@ export default {
 .dp-ops { display: flex; align-items: center; gap: 12rpx; }
 .dp-mini { padding: 8rpx 16rpx; border-radius: 12rpx; background: rgba(120,160,220,0.12); color: #e8edf6; font-size: 20rpx; cursor: pointer; white-space: nowrap; }
 .dp-toolbar { display: flex; flex-direction: column; gap: 12rpx; margin-bottom: 12rpx; }
-.dp-search { width: 100%; box-sizing: border-box; padding: 14rpx 18rpx; border-radius: 12rpx; background: rgba(120,160,220,0.08); color: #e8edf6; font-size: 24rpx; }
+/* 搜索框：给足高度与行高，避免自定义字体下中文被裁切；placeholder 单独设色，确保完整可见 */
+.dp-search { width: 100%; box-sizing: border-box; height: 68rpx; line-height: 68rpx; padding: 0 18rpx; border-radius: 12rpx; background: rgba(120,160,220,0.08); color: #e8edf6; font-size: 24rpx; }
+.dp-search-ph { color: rgba(232, 237, 246, 0.45); font-size: 24rpx; line-height: 68rpx; }
 .dp-sorts { display: flex; gap: 10rpx; flex-wrap: wrap; }
 .dp-sort { padding: 8rpx 18rpx; border-radius: 999rpx; background: rgba(120,160,220,0.08); font-size: 22rpx; color: #9aa6bd; cursor: pointer; }
 .dp-sort.on { background: var(--ac, #6366f1); color: #fff; }
