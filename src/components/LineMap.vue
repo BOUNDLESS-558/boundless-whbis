@@ -5071,16 +5071,16 @@ export default {
   box-shadow: 0 16rpx 48rpx rgba(0, 0, 0, 0.4);
 }
 /* 窄屏（手机）整列回落为底部横栏：时刻表卡仍在车辆面板下方，两块一起贴底。
-   bottom 抬到 96rpx，给常驻的底部快捷栏（bottom 12rpx + 高约 60rpx）让位，
+   bottom 抬到 120rpx，给放大后的底部快捷栏（bottom 12rpx + 高约 90rpx）让位，
    否则 side-col(z-index 20) 会盖住 bottom-bar(z-index 11)，手机上完全看不到工具按钮。 */
 @media (max-width: 720px) {
   .side-col {
     top: auto;
     left: 20rpx;
     right: 20rpx;
-    bottom: 96rpx;
+    bottom: 120rpx;
     width: auto;
-    max-height: 56vh;
+    max-height: 54vh;
   }
 }
 .panel-header {
@@ -6162,8 +6162,8 @@ export default {
   gap: 0;
   /* 手机端 10 个按钮横向排列会超出屏幕；限宽后靠 overflow-x:auto 横向滑动 */
   max-width: calc(100vw - 24rpx);
-  padding: 4rpx 4rpx;
-  border-radius: 28rpx;
+  padding: 8rpx 8rpx;
+  border-radius: 32rpx;
   background: rgba(11, 16, 32, 0.82);
   backdrop-filter: blur(20px) saturate(160%);
   -webkit-backdrop-filter: blur(20px) saturate(160%);
@@ -6176,10 +6176,10 @@ export default {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  min-width: 52rpx;
-  height: 48rpx;
-  padding: 2rpx 6rpx;
-  border-radius: 14rpx;
+  min-width: 68rpx;
+  height: 62rpx;
+  padding: 4rpx 10rpx;
+  border-radius: 18rpx;
   cursor: pointer;
   transition: background 0.16s, color 0.16s;
   flex-shrink: 0;
@@ -6188,9 +6188,9 @@ export default {
 .bb-item.on { background: rgba(var(--ac-rgb), 0.28); }
 .bb-item.on .bb-label { color: var(--ac-text); }
 .bb-ico {
-  font-size: 24rpx;
+  font-size: 32rpx;
   line-height: 1;
-  margin-bottom: 0;
+  margin-bottom: 2rpx;
   color: rgba(255, 255, 255, 0.72);
 }
 .bb-ico.up   { color: #22D3EE; }
@@ -6198,7 +6198,7 @@ export default {
 .bb-ico.all  { color: #A78BFA; }
 .bb-ico.spin { animation: rp-spin 0.9s linear infinite; }
 .bb-label {
-  font-size: 14rpx;
+  font-size: 18rpx;
   color: rgba(255, 255, 255, 0.55);
   white-space: nowrap;
   letter-spacing: 0.03em;
@@ -6216,19 +6216,19 @@ export default {
   border-left: 2rpx solid rgba(255, 255, 255, 0.18);
 }
 .bb-stops {
-  min-width: 78rpx;
-  padding: 2rpx 10rpx;
+  min-width: 104rpx;
+  padding: 4rpx 12rpx;
   background: rgba(var(--ac-rgb), 0.16);
   border: 2rpx solid rgba(var(--ac-rgb), 0.4);
 }
-.bb-stops .bb-label { font-size: 12rpx; letter-spacing: 0; }
+.bb-stops .bb-label { font-size: 16rpx; letter-spacing: 0; }
 .bb-stops.on { background: var(--ac); border-color: var(--ac); }
 .bb-stops.on .bb-ico, .bb-stops.on .bb-label { color: #fff; }
 .bb-sep {
   flex: 0 0 1rpx;
   width: 1rpx;
-  height: 28rpx;
-  margin: 0 2rpx;
+  height: 36rpx;
+  margin: 0 4rpx;
   background: rgba(255, 255, 255, 0.12);
   border-radius: 1rpx;
   flex-shrink: 0;
