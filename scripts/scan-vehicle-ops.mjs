@@ -244,3 +244,27 @@ profile.updated = AT
 profile.speedLimit = SPEED_LIMIT
 fs.writeFileSync(PROFILE_FILE, JSON.stringify(profile, null, 2) + '\n', 'utf8')
 console.log(`√ 已写累计档案 ${path.relative(ROOT, PROFILE_FILE)}（${Object.keys(profile.buses).length} 辆车）`)
+
+// ── 同步到 Vercel 数据库（通过 Serverless Function）──
+// 环境变量 VEHICLE_OPS_API = https://<你的vercel域>/api/vehicle-ops
+//           VEHICLE_OPS_TOKEN = 与 Vercel 环境变量同名同值（POST 鉴权）
+// 缺任一则跳过（静态 JSON 仍落盘，向后兼容）。
+const OPS_API = process.env.VEHICLE_OPS_API || ''
+const OPS_TOKEN = process.env.VEHICLE_OPS_TOKEN || ''
+if (OPS_API && OPS_TOKEN) {
+  try {
+    const res = await fetch(OPS_API, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-api-key': OPS_TOKEN },
+      body: JSON.stringify({ at: AT, buses: Object.values(slice) }),
+      signal: AbortSignal.timeout(30000),
+    })
+    const j = await res.json()
+    if (res.ok) console.log(`√ 已同步到 Vercel 数据库：${j.upserted} 辆车`)
+    else console.log(`× Vercel API 返回 ${res.status}：${JSON.stringify(j)}`)
+  } catch (e) {
+    console.log(`× 同步 Vercel 数据库失败（不影响本地落盘）：${e.message}`)
+  }
+} else {
+  console.log('（未配 VEHICLE_OPS_API / VEHICLE_OPS_TOKEN，跳过数据库同步）')
+}

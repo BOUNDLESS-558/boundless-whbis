@@ -150,12 +150,25 @@ export default {
       return (r.transfers || []).map((t) => `${t.from}→${t.to} ${t.at}`).join('\n') || '无调配'
     },
     load() {
-      // 从项目内静态资产读取（H5 子路径部署用 asset() 解析基址）
-      import('../utils/asset.js').then(({ assetUrl }) => {
-        fetch(assetUrl(PROFILE_URL), { cache: 'no-store' })
+      // 优先读 Vercel 数据库 API（实时）；失败回退静态 profile.json（兼容本地 dev / 未配库环境）
+      import('../config.js').then(({ APP_CONFIG }) => {
+        const api = APP_CONFIG.vehicleOpsApi
+        const tryStatic = () => {
+          import('../utils/asset.js').then(({ assetUrl }) => {
+            fetch(assetUrl(PROFILE_URL), { cache: 'no-store' })
+              .then((r) => (r.ok ? r.json() : Promise.reject(new Error('HTTP ' + r.status))))
+              .then((j) => this.apply(j))
+              .catch((e) => console.warn('[DataPanel] 静态读取失败', e))
+          })
+        }
+        if (!api) return tryStatic()
+        fetch(api, { cache: 'no-store' })
           .then((r) => (r.ok ? r.json() : Promise.reject(new Error('HTTP ' + r.status))))
           .then((j) => this.apply(j))
-          .catch((e) => console.warn('[DataPanel] 读取失败', e))
+          .catch((e) => {
+            console.warn('[DataPanel] API 读取失败，回退静态资产', e)
+            tryStatic()
+          })
       })
     },
     apply(j) {

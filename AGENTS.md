@@ -39,9 +39,11 @@ uni-app（Vue 3 + Vite 5）跨端应用：H5 网页版 + Android App，查询武
 - 车辆营运信息采集 Actions（`.github/workflows/vehicle-ops.yml`）：**每 15 分钟一次**（cron `*/15 * * * *`），全库线路×方向拉 `detailData`，按日期时间分片落盘 `src/static/vehicle-ops/YYYY-MM-DD/HHMM.json`，累计档案写 `src/static/vehicle-ops/profile.json`。
 
 ### 5. 数据面板（`src/components/DataPanel.vue`）
-- 视图档 `data`，不依赖选线（地图常驻底座上开浮窗）。读 `profile.json` 展示每车：自编号 / 最高车速 / 超速次数（徽标）/ 上下线时间 / 发车次数 / 调配记录 / 营运公司。
-- 支持关键词筛选（编号/线路/公司）+ 车速/超速/发车/编号排序；导出走全站 CopyPill（文本/Excel/图片三档统一 `copyTable`）。
-- 超速阈值来自 `profile.json.speedLimit`（默认 60 km/h）；公司按自编号首位数字判定，与 `speedRank.orgCompanyOf` 口径一致。
+- 视图档 `data`，不依赖选线（地图常驻底座上开浮窗）。展示每车：所属公司 / 营运线路号 / 自编号 / 首次上线 / 最终下线 / 最高车速 / 超速次数（徽标）/ 历史发车次数 / 调配记录。
+- 数据源优先级：`/api/vehicle-ops`（Vercel Serverless Function + Neon 数据库，实时）→ 失败回退静态 `src/static/vehicle-ops/profile.json`（本地 dev / 未配库）。API 地址在 `config.js` 的 `APP_CONFIG.vehicleOpsApi`。
+- 支持关键词筛选 + 车速/超速/发车/编号/线路号/上下线排序；导出走全站 CopyPill（文本/Excel/图片三档统一 `copyTable`）。
+- 数据库：`api/vehicle-ops.js`（GET 读 / POST 写，`x-api-key` 鉴权）、`api/init.sql`（建表）；写库环境变量 `VEHICLE_OPS_API` / `VEHICLE_OPS_TOKEN`（GitHub Secrets）；读库靠 Vercel 注入的 `DATABASE_URL`。
+- **CI 套娃防护**：所有采集 commit 都带 `[skip ci]`，避免数据 push main 反触发 daily-collect 全量采集循环。
 
 ### 6. 免 Key Cookie（每人用自己的高德账号）
 - 前端：`src/pages/map/map.vue` 设置面板「免 Key Cookie」分区；`settings.js` 的 `getAmapWebCookie`/`setAmapWebCookie` 存 localStorage；`buildAmapCookieConfig` 生成仓库配置文本。

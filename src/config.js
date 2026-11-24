@@ -30,6 +30,10 @@ export const APP_CONFIG = {
   // 部署 Worker 后填入其地址（如 https://whbis-proxy.xxx.workers.dev，末尾不带斜杠）。
   // 留空时回退直连真实域名（仅对无 CORS 限制的环境——如本地预览其他代理源——有用）。
   apiProxy: 'https://whbis-proxy.lwu584742.workers.dev',
+
+  // 车辆营运信息 API（Vercel Serverless Function + Neon 数据库）。
+  // Vercel 部署下同源 /api/vehicle-ops；本地 dev 无此路由，自动回退静态 profile.json。
+  vehicleOpsApi: '/api/vehicle-ops',
 }
 
 // 线路 ID 编码规则：{cityCode}-{线路号}-{方向}，方向 0/1 表示上下行

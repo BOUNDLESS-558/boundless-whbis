@@ -36,6 +36,7 @@
 
 ### 2026-11-24（最新）
 
+- **CI 套娃修复 + 数据面板迁 Vercel 数据库**：给 `auto-collect.mjs` 与 `vehicle-ops.yml` 的采集 commit 加 `[skip ci]`，避免数据 push main 反触发 daily-collect 全量采集形成循环。新增 `api/vehicle-ops.js`（Vercel Serverless Function：GET 读库 / POST 写库，`x-api-key` 鉴权，Neon serverless driver）与 `api/init.sql`（建表 + 索引）。`scan-vehicle-ops.mjs` 采集后把本轮数据 POST 到 `VEHICLE_OPS_API`（配 `VEHICLE_OPS_TOKEN`），静态 JSON 仍落盘作备份。`DataPanel.vue` 优先读 `/api/vehicle-ops`，失败回退静态 `profile.json`。`config.js` 新增 `APP_CONFIG.vehicleOpsApi`。新增依赖 `@neondatabase/serverless`。
 - **GitHub Pages 下线，全面迁移 Vercel**：新增 `vercel.json`（buildCommand 先切 base 为 `/` 再 `npm run build:h5`，产物 `dist/build/h5`，hash 路由配 rewrites 兜底）与 `scripts/set-h5-base.mjs`（构建时切换 `h5.router.base`，不污染仓库 manifest）。`auto-collect.mjs` 移除「构建 H5 + 强推 pages 分支」步骤（Vercel 靠 main push 自动部署），删除 `deploy:pages` 脚本与 `deploy-pages.mjs`，远端 `pages` 分支已删除。AGENTS.md / README 同步更新分支约定与部署模型，主站为 `https://boundless-whbis.vercel.app/`。
 - **主题色扩至 999 种 + 圆体扩充**：`ACCENT_PRESETS` 保留 537 条手工精选，模块加载时用 HSL 色环生成器补足 462 条（`x001`~`x462`，运行时实测总数 999）；设置面板新增「扩展 462」分类按 `xNNN` 前缀筛选。`FONT_OPTS` 新增 10 款圆体（中文：优设圆体/阿里妈妈方圆/汉字圆体/站酷圆体；英文：Quicksand/Nunito Sans/Muli/Sniglet/Baloo 2/Hind），归入「sans-cn / sans-en」分类。
 - **数据面板加营运线路号 + 搜索框字体修复**：`scan-vehicle-ops.mjs` 每车档案新增 `lineNo`（营运线路号，如 337，跨分片取最后一次），面板表格/筛选/导出均加入该字段；搜索框加明确高度 68rpx + 行高 + placeholder 独立配色，避免自定义字体下中文显示不全。
@@ -472,6 +473,14 @@ Worker 会为预检直接应答 `204`，转发 POST 时补全 `Access-Control-Al
 - 源码分支 `main` / `BETA` 都推远端；`main` push 触发 Vercel 构建部署到 `https://boundless-whbis.vercel.app/`
 - 构建命令 `node scripts/set-h5-base.mjs / && npm run build:h5`，产物 `dist/build/h5`；构建时把 `h5.router.base` 切为根域 `/`
 - GitHub Pages 已关闭、`pages` 分支已删除
+
+**车辆营运数据库（Neon + Serverless Function）配置**：
+
+1. Vercel 项目 → Storage → Marketplace → 安装 **Neon**（Postgres），会自动注入 `DATABASE_URL`
+2. 在 Neon 控制台 SQL Editor 执行 `api/init.sql` 建表
+3. Vercel 项目 → Settings → Environment Variables 添加 `VEHICLE_OPS_TOKEN`（自设随机串，用于 API 写鉴权）
+4. GitHub 仓库 → Settings → Secrets 添加 `VEHICLE_OPS_API`（= `https://boundless-whbis.vercel.app/api/vehicle-ops`）与 `VEHICLE_OPS_TOKEN`（与上一步同值）
+5. 前端数据面板自动优先读 API，未配库时回退静态 `profile.json`，不会白屏
 
 ---
 
