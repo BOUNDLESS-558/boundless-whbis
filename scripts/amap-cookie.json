@@ -1,0 +1,4 @@
+{
+  "cookie": "",
+  "note": "免 Key 方案的高德网页会话 Cookie。Actions 每次采集优先读本文件的 cookie 字段注入 AMAP_WEB_COOKIE；留空则回退到仓库 Secrets。请用你自己的高德账号 Cookie（浏览器 F12 → Network → 任意 amap.com 请求 → Request Headers → Cookie 整段复制），不要提交他人的 Cookie。注意：本文件会随仓库公开，填入真实 Cookie 前请确认你接受该 Cookie 可被他人读取；更安全的做法是用仓库 Secrets.AMAP_WEB_COOKIE。"
+}

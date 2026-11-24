@@ -1420,3 +1420,31 @@ export function bumpAmapUsage() {
   writeRaw(AMAP_USAGE_KEY, { date: todayStr(), count: n })
   return n
 }
+
+// 免 Key 方案的高德网页会话 Cookie：用户自己的账号 Cookie，不再全员共用一份。
+// 本机存一份供前端参考；Actions 侧从仓库 scripts/amap-cookie.json 读取（见 workflow）。
+const AMAP_WEB_COOKIE_KEY = 'whbis:amap-web-cookie'
+
+/** 读取本机保存的免 Key Cookie（trim 后返回） */
+export function getAmapWebCookie() {
+  return String(readRaw(AMAP_WEB_COOKIE_KEY, '') || '').trim()
+}
+
+/** 保存免 Key Cookie；传空串即清空 */
+export function setAmapWebCookie(cookie) {
+  const v = String(cookie == null ? '' : cookie).trim()
+  writeRaw(AMAP_WEB_COOKIE_KEY, v)
+  return v
+}
+
+/**
+ * 生成可提交到仓库的 scripts/amap-cookie.json 内容。
+ * Actions checkout 仓库后读该文件注入 AMAP_WEB_COOKIE，实现「每人用自己的 Cookie」。
+ * 返回 JSON 字符串（带缩进，便于人工核对 / 粘贴）。
+ */
+export function buildAmapCookieConfig(cookie) {
+  return JSON.stringify({
+    cookie: String(cookie == null ? '' : cookie).trim(),
+    note: '免 Key 方案的高德网页会话 Cookie。Actions 读取此文件的 cookie 字段注入 AMAP_WEB_COOKIE；留空则回退到仓库 Secrets。请勿提交他人 Cookie。',
+  }, null, 2)
+}

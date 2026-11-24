@@ -110,6 +110,19 @@
         <FavPanel plain @pick="onPickLine" />
       </FloatWin>
 
+      <!-- 数据面板：不依赖选线，地图常驻底座上开一扇窗读项目内采集数据 -->
+      <FloatWin
+        v-if="view === 'data'"
+        title="数据面板"
+        sub="每车营运档案 · 15 分钟更新"
+        :width-rpx="1200"
+        max-height="80vh"
+        resize-key="data"
+        @close="view = hasLine ? 'map' : 'db'"
+      >
+        <DataPanel />
+      </FloatWin>
+
       <!-- 账号与设置窗：登录身份（头像/用户名）+ 登录有效期 + 全局默认刷新 + 皮肤 + 注销入口。
            注销二次确认在窗内切态完成，不用 uni.showModal（白底系统框与全局玻璃风不符，同激活弹窗的否决理由） -->
       <FloatWin
@@ -379,6 +392,40 @@
 
           <view class="acct-div"></view>
 
+          <!-- 免 Key 方案 Cookie：用户自己的高德网页会话 Cookie，不再全员共用一份 -->
+          <view class="acct-sec-head" @click="toggleAcctSection('cookie')">
+            <text class="acct-sec-title">免 Key Cookie</text>
+            <text class="acct-sec-sum" v-if="!acctSec.cookie">{{ acctSecSummary.cookie }}</text>
+            <text class="acct-sec-chev" :class="{ folded: !acctSec.cookie }">▾</text>
+          </view>
+          <view v-show="acctSec.cookie" class="acct-sec-body">
+            <view class="amap-sub-label">高德网页会话 Cookie</view>
+            <view class="amap-sub-hint">免 Key 方案抓取线路站点用 · 每人填自己的账号 Cookie</view>
+            <view class="amap-field-label">Cookie（从浏览器开发者工具复制）</view>
+            <view class="amap-input-row">
+              <input
+                class="amap-input"
+                v-model="amapCookieInput"
+                type="text"
+                :password="!amapCookieShow"
+                placeholder="粘贴完整 Cookie 字符串"
+                confirm-type="done"
+                @confirm="onAmapCookieSave"
+              />
+              <view class="acct-eye" :class="{ on: amapCookieShow }" @click="amapCookieShow = !amapCookieShow" v-html="amapCookieShow ? svgEyeOn : svgEyeOff" />
+            </view>
+            <view class="amap-btn-row">
+              <view class="amap-btn primary" @click="onAmapCookieSave">保存</view>
+              <view class="amap-btn" @click="onAmapCookieCopy">复制仓库配置</view>
+              <view class="amap-btn" v-if="amapCookie" @click="onAmapCookieClear">清空</view>
+            </view>
+            <view class="amap-note">
+              填入你自己的高德网页 Cookie（浏览器 F12 → Network → 任意 amap.com 请求 → Request Headers → Cookie 整段复制）。点「保存」仅存本机；点「复制仓库配置」会生成 scripts/amap-cookie.json 的内容，粘贴到仓库同名文件并提交后，Actions 每次采集优先读该文件里的 Cookie 注入 AMAP_WEB_COOKIE，未配置则回退到仓库 Secrets。Cookie 与你的高德账号绑定，请勿提交他人的 Cookie；失效时重新抓取即可。
+            </view>
+          </view>
+
+          <view class="acct-div"></view>
+
           <view class="acct-tip">注销后回到登录页，本机账号保留，下次可直接登录</view>
           <view class="acct-logout" @click="acctConfirm = true">注销登录</view>
         </view>
@@ -457,16 +504,20 @@ import {
   getAmapKeyPair,
   setAmapKeyPair,
   getAmapUsageToday,
+  getAmapWebCookie,
+  setAmapWebCookie,
+  buildAmapCookieConfig,
 } from '../../utils/settings.js'
 import { getAvatar, removeAvatar, pickAvatar } from '../../utils/avatar.js'
 import { getMinStopsMode, setMinStopsMode } from '../../utils/settings.js'
 import FavPanel from '../../components/FavPanel.vue'
+import DataPanel from '../../components/DataPanel.vue'
 import { closeAllDropdowns } from '../../utils/dropdown.js'
 
 // 上次查过的线路：下次进来直接落在地图上，省掉「每次都要搜一遍」
 const HOME_LINE_KEY = 'whbis:home-line'
 // 视图档位：地图是底座，city 是同一张地图的另一种内容，stops / db 是浮在它上面的两扇窗
-const VIEW_KEYS = ['map', 'city', 'stops', 'db', 'fav']
+const VIEW_KEYS = ['map', 'city', 'stops', 'db', 'fav', 'data']
 // 没选线路时不可达的档位（无线路 = 无单条线路可画）；city 不在内：全市线网不依赖选线
 const LINE_VIEWS = ['map', 'stops']
 // 全市公交激活：输入正确激活码后持久化，之后免再激活
@@ -474,16 +525,16 @@ const CITY_ACT_KEY = 'whbis:city-activated'
 const CITY_ACT_CODE = 'BOUNDLESS_558'
 // 「账号与设置」各分区的展开态：本机记忆，避免每次开窗都要重新点开
 const ACCT_SECTIONS_KEY = 'whbis:acct-sections'
-const ACCT_SECTION_KEYS = ['session', 'pwd', 'refresh', 'accent', 'font']
+const ACCT_SECTION_KEYS = ['session', 'pwd', 'refresh', 'accent', 'font', 'map', 'cookie']
 // 默认：常用的小分区展开，字体（13 档）与密码表单这类长分区默认收起，
 // 让面板首屏就能看到全部设置项，不用一路滚到底
 const ACCT_SECTIONS_DEFAULT = {
-  session: true, pwd: false, refresh: true, accent: true, font: false,
+  session: true, pwd: false, refresh: true, accent: true, font: false, map: false, cookie: false,
 }
 
 export default {
   name: 'HomePage',
-  components: { LineMap, LineSearch, LineStops, LineDb, FloatWin, FavPanel },
+  components: { LineMap, LineSearch, LineStops, LineDb, FloatWin, FavPanel, DataPanel },
   data() {
     return {
       view: 'db',
@@ -521,6 +572,10 @@ export default {
       amapUsageToday: 0,
       amapApplyUrl: 'https://console.amap.com/dev/key/app',
       amapQuotaUrl: 'https://console.amap.com/dev/statistic',
+      // 免 Key 方案：用户自己的高德网页会话 Cookie（本机记忆 + 可导出仓库配置供 Actions 读取）
+      amapCookie: '',
+      amapCookieInput: '',
+      amapCookieShow: false,
       // 仿真站牌设计：实时线路走向改用站牌风格（本机记忆）
       simSignboard: false,
       // 界面字体：当前生效档 + 档位列表（preview = 选项卡预览用的 family 串）
@@ -559,6 +614,7 @@ export default {
         { key: 'stops', label: '实时线路', short: '线路' },
         { key: 'db', label: '线路库', short: '线路库' },
         { key: 'fav', label: '线路收藏夹', short: '收藏' },
+        { key: 'data', label: '数据面板', short: '数据' },
       ],
     }
   },
@@ -567,9 +623,9 @@ export default {
     hasLine() {
       return !!this.lineNo
     },
-    // 地图要不要挂载：选了线路，或进入不依赖选线的全市公交视图
+    // 地图要不要挂载：选了线路，或进入不依赖选线的全市公交 / 数据面板视图
     mapMount() {
-      return this.hasLine || this.view === 'city'
+      return this.hasLine || this.view === 'city' || this.view === 'data'
     },
     // 线路展示名（带「路」单位，环线不追加）：顶栏 meta 与浮窗标题共用
     displayLineName() {
@@ -713,8 +769,9 @@ export default {
         refresh: this.refreshDefault === 0 ? '手动刷新' : `${this.refreshDefault} 秒`,
         accent: accent ? accent.label : '自定义',
         font: font ? font.label : '系统默认',
-        // 合并分区摘要：KEY 是否已填
+        // 合并分区摘要：KEY / Cookie 是否已填
         map: `KEY ${this.amapKey ? '已填' : '未填'}`,
+        cookie: `Cookie ${this.amapCookie ? '已填' : '未填'}`,
       }
     },
     // 是否所有分区都已展开（决定快捷按钮文案与方向）
@@ -729,6 +786,9 @@ export default {
     // 主题色：页面加载时立即读回并挂载 CSS 变量族，否则 F5 后主题色丢失
     this.accent = getAccent()
     applyAccent(this.accent)
+    // 免 Key Cookie：读回本机保存值（输入框与展示态一致）
+    this.amapCookie = getAmapWebCookie()
+    this.amapCookieInput = this.amapCookie
     // 刷新间隔全站统一：任一控件改动时，反向同步设置面板里的选中态
     this.refreshDefault = getRefreshSec()
     this._offRefresh = onRefreshSecChange((sec) => { this.refreshDefault = sec })
@@ -1069,6 +1129,25 @@ export default {
       this.amapKeyInput = ''
       this.amapSecretInput = ''
       this.onAmapKeySave()
+    },
+    // 免 Key Cookie：仅存本机（前端自己抓取用）；Actions 侧另从仓库 scripts/amap-cookie.json 读取
+    onAmapCookieSave() {
+      this.amapCookie = setAmapWebCookie(this.amapCookieInput)
+      this.amapCookieInput = this.amapCookie
+      uni.showToast({ title: this.amapCookie ? 'Cookie 已存本机' : '已清空', icon: 'none' })
+    },
+    onAmapCookieClear() {
+      this.amapCookieInput = ''
+      this.onAmapCookieSave()
+    },
+    // 复制仓库配置：生成 scripts/amap-cookie.json 的内容，用户粘贴到仓库同名文件后 Actions 即可读取
+    onAmapCookieCopy() {
+      const cfg = buildAmapCookieConfig(this.amapCookieInput || this.amapCookie)
+      uni.setClipboardData({
+        data: cfg,
+        success: () => uni.showToast({ title: '仓库配置已复制，粘贴到 scripts/amap-cookie.json', icon: 'none' }),
+        fail: () => uni.showToast({ title: '复制失败，请手动复制', icon: 'none' }),
+      })
     },
     // 仿真站牌设计：纯展示开关，落库后由 prop 下发给 LineMap 即时切换
     onSimSignboard(on) {

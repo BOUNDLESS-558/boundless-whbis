@@ -36,6 +36,8 @@
 
 ### 2026-11-24（最新）
 
+- **数据面板 + 车辆营运信息 15 分钟采集**：新增 `src/components/DataPanel.vue`（视图档 `data`），展示每辆车的自编号 / 最高车速 / 超速次数（红色徽标）/ 上下线时间 / 发车次数 / 调配记录 / 营运公司，支持关键词筛选（编号/线路/公司）、车速/超速/发车/编号排序，导出走全站 CopyPill 三档。新增 `.github/workflows/vehicle-ops.yml`（cron `*/15 * * * *`）与 `scripts/scan-vehicle-ops.mjs`：全库线路×方向拉 `detailData`，按北京时间日期时间分片落盘 `src/static/vehicle-ops/YYYY-MM-DD/HHMM.json`，累计档案 `profile.json` 供面板「↻ 同步」读取。超速阈值默认 60 km/h，公司按自编号首位数字判定。
+- **免 Key Cookie 改为每人自己的账号**：设置面板新增「免 Key Cookie」分区（`settings.js` 的 `get/setAmapWebCookie` 存本机，`buildAmapCookieConfig` 生成仓库配置）。新建 `scripts/amap-cookie.json`，用户填自己的高德网页 Cookie 提交后，Actions 新增「加载用户免 Key Cookie」步骤优先读该文件注入 `AMAP_WEB_COOKIE`，留空回退 Secrets。顺带修复 `ACCT_SECTION_KEYS` 漏 `map` 导致「线路走向」分区折叠失效的 bug。
 - **采集频率改为每 12 小时 + 高德采集新增批量限流**：`.github/workflows/daily-collect.yml` cron 从 `0 */2 * * *`（每 2 小时）改为 `0 */12 * * *`（每天 00:00 / 12:00 触发）。`scripts/scan-routes-amap.mjs` 新增 `--batch-size` 参数（默认 3）：每处理 3 条线路后暂停 3×DELAY，降低高德免 Key 接口的 QPS 限流概率——连续请求过密会导致 `/line` 接口返回「未找到」（实际存在，如 1 路）。`queryAmap()` 内已有 3 次重试 + 退避逻辑，单条失败自动重试 3 次。同步更新 AGENTS.md 开发规范章节。
 - **皮肤简化为仅黑色**：`src/utils/settings.js` 的 `SKIN_OPTS` 仅保留 `{ key: 'dark', label: '黑色' }`；`resolvedSkin()` / `applySkin()` / `watchSystemSkin()` / `setSkin()` 均简化为仅深色逻辑。`src/pages/map/map.vue` 移除「皮肤」分区 UI、相关 data / computed / method / 生命周期钩子。`src/App.vue` 移除全部 `html[data-skin='light']` CSS 块（约 51 行反色滤镜逻辑）。用户要求：以后设计开发的新功能必须同步考虑 PC + 移动端双端兼容性，PC 端功能需在移动端完整呈现且操作流畅。
 

@@ -32,6 +32,20 @@ uni-app（Vue 3 + Vite 5）跨端应用：H5 网页版 + Android App，查询武
 
 ### 4. 采集频率
 - 地图站点数据采集 Actions 的触发时间：**每 12 小时一次**（cron `0 */12 * * *`）。
+- 车辆营运信息采集 Actions（`.github/workflows/vehicle-ops.yml`）：**每 15 分钟一次**（cron `*/15 * * * *`），全库线路×方向拉 `detailData`，按日期时间分片落盘 `src/static/vehicle-ops/YYYY-MM-DD/HHMM.json`，累计档案写 `src/static/vehicle-ops/profile.json`。
+
+### 5. 数据面板（`src/components/DataPanel.vue`）
+- 视图档 `data`，不依赖选线（地图常驻底座上开浮窗）。读 `profile.json` 展示每车：自编号 / 最高车速 / 超速次数（徽标）/ 上下线时间 / 发车次数 / 调配记录 / 营运公司。
+- 支持关键词筛选（编号/线路/公司）+ 车速/超速/发车/编号排序；导出走全站 CopyPill（文本/Excel/图片三档统一 `copyTable`）。
+- 超速阈值来自 `profile.json.speedLimit`（默认 60 km/h）；公司按自编号首位数字判定，与 `speedRank.orgCompanyOf` 口径一致。
+
+### 6. 免 Key Cookie（每人用自己的高德账号）
+- 前端：`src/pages/map/map.vue` 设置面板「免 Key Cookie」分区；`settings.js` 的 `getAmapWebCookie`/`setAmapWebCookie` 存 localStorage；`buildAmapCookieConfig` 生成仓库配置文本。
+- 桥梁：`scripts/amap-cookie.json`（cookie 字段），用户填入自己的 Cookie 提交后，Actions `daily-collect.yml`「加载用户免 Key Cookie」步骤优先读该文件注入 `AMAP_WEB_COOKIE`，留空则回退 Secrets。
+- 注意分区键：`ACCT_SECTION_KEYS` 已含 `map` 与 `cookie`（此前漏了 `map` 导致「线路走向」折叠失效，已修复）。
+
+### 7. 面板整合（待完成）
+- 需求：移除独立「线路面板」，把其功能完整整合进地图面板。当前线路库/收藏/站点仍以地图浮窗形态存在，整合工作尚未开始。
 **本地打包 Pages 不依赖推源码**：`npm run deploy:pages` 只读本地 `src/` 构建后强推 `pages`；推 `main`/`BETA` 只为同步源码与驱动 CI，不是部署前提。
 
 日常验证**不要主动构建**：`build:h5` / `build:app` / `deploy:pages` 只在交付或用户明确要求出包时执行，日常验证用 `dev:h5` + 探针/单测（用户原话：「没有必要每次都构建一下生成的产物」）。

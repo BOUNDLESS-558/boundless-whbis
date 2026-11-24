@@ -67,6 +67,22 @@ jobs:
         with:
           fetch-depth: 0
 
+      # 免 Key Cookie：优先读仓库 scripts/amap-cookie.json 的 cookie 字段（用户各自的账号），
+      # 留空/文件缺失则沿用上面 env 里的 Secrets.AMAP_WEB_COOKIE（向后兼容）。
+      - name: 加载用户免 Key Cookie
+        run: |
+          if [ -f scripts/amap-cookie.json ]; then
+            USER_CK=$(node -e "try{const j=require('./scripts/amap-cookie.json');process.stdout.write(String(j.cookie||'').trim())}catch(e){}")
+            if [ -n "$USER_CK" ]; then
+              echo "AMAP_WEB_COOKIE=$USER_CK" >> "$GITHUB_ENV"
+              echo "已使用仓库 scripts/amap-cookie.json 中的用户 Cookie"
+            else
+              echo "仓库 Cookie 为空，沿用 Secrets.AMAP_WEB_COOKIE"
+            fi
+          else
+            echo "未找到 scripts/amap-cookie.json，沿用 Secrets.AMAP_WEB_COOKIE"
+          fi
+
       - name: 准备 Node
         uses: actions/setup-node@v4
         with:
