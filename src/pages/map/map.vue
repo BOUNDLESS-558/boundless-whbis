@@ -672,7 +672,6 @@ export default {
         { key: 'teal', label: '青蓝' },
         { key: 'plum', label: '梅紫' },
         { key: 'brown', label: '棕褐' },
-        { key: 'more', label: '扩展 462' },
       ]
     },
     fontCatOptions() {
@@ -722,10 +721,9 @@ export default {
         plum: ['plum-deep2', 'violet-deep2', 'indigo-deep3', 'purple-deep', 'magenta-deep', 'rosewood', 'wine-deep', 'berry-deep', 'orchid-deep2', 'lavender-deep2', 'plum-deep3', 'violet-deep3', 'indigo-deep5', 'purple-deep2', 'magenta-deep2', 'rosewood2', 'wine-deep2', 'berry-deep2', 'orchid-deep3', 'lavender-deep3'],
         brown: ['brown', 'saddle', 'sienna', 'chocolate-brown', 'peru-brown', 'burlywood', 'tan', 'roan', 'coffe', 'espresso', 'sandstone', 'clay', 'ochre', 'umber2', 'raw-umber', 'desert', 'dune', 'driftwood', 'weathered', 'dust'],
       }
-      // 扩展色 462 条用 xNNN 前缀，不逐一枚举白名单
-      if (this.accentCat === 'more') return this.accentPresets.filter((p) => /^x\d{3}$/.test(p.key))
       const keys = map[this.accentCat] || []
-      return this.accentPresets.filter((p) => keys.includes(p.key))
+      // 扩展色带 cat 标签（按 HSL 自动归类），与手工白名单合并过滤，融入各颜色分类
+      return this.accentPresets.filter((p) => keys.includes(p.key) || p.cat === this.accentCat)
     },
     filteredFontOpts() {
       if (this.fontCat === 'all') return this.fontOpts
