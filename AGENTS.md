@@ -45,7 +45,7 @@ uni-app（Vue 3 + Vite 5）跨端应用：H5 网页版 + Android App，查询武
 - 注意分区键：`ACCT_SECTION_KEYS` 已含 `map` 与 `cookie`（此前漏了 `map` 导致「线路走向」折叠失效，已修复）。
 
 ### 7. 面板整合（已完成）
-- 「实时线路面板（stops）」已并入「实时地图（map）」视图：`views` / `VIEW_KEYS` / `LINE_VIEWS` 不再含 `stops`；选线后直接在地图视图开 `LineStops` 浮窗（`stopsWin` 开关控制显隐）。再点「实时地图」Tab = 收起/展开站点窗；换线/切回地图自动打开。
+- 「实时线路面板（stops）」已并入「实时地图（map）」视图：`views` / `VIEW_KEYS` / `LINE_VIEWS` 不再含 `stops`；`LineStops` 浮窗在地图视图渲染，**默认关闭**，由 `LineMap` 底部栏新增的「🚏 站点」按钮显式开合（`stopsWin` 开关）。选线/换线/切视图都不再自动弹出（用户明确要求：每次点开地图就自动弹站点窗体验差）。
 - 站点序列、在线车辆、营运信息、极简站牌、复制走向图等功能完整保留在地图浮窗内，无缺失。
 
 ### 8. 移动端响应式

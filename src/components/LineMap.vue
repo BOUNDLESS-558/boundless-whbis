@@ -319,6 +319,11 @@
       <!-- 方向分组：仅线路态显示，全市态不显示 -->
       <template v-if="!cityOn">
         <view class="bb-sep"></view>
+        <!-- 实时线路站点窗：改由按钮触发，不再选线自动弹出 -->
+        <view class="bb-item" :class="{ on: stopsOpen }" @click="$emit('toggle-stops')" title="打开/关闭实时线路站点窗（站点·在线车辆·营运信息）">
+          <text class="bb-ico">🚏</text>
+          <text class="bb-label">站点</text>
+        </view>
         <view class="bb-item" :class="{ on: dirFilter === 0 }" @click="setDirView(0)" title="仅显示上行车辆">
           <text class="bb-ico up">↑</text>
           <text class="bb-label">上行</text>
@@ -994,6 +999,8 @@ export default {
     cityMode: { type: Boolean, default: false },
     // 仿真站牌设计：为真时线路走向改用站牌风格呈现（只影响自绘画布）
     simSignboard: { type: Boolean, default: false },
+    // 实时线路站点窗是否打开（窗本身由宿主渲染）：仅用于底部栏按钮高亮
+    stopsOpen: { type: Boolean, default: false },
   },
   data() {
     return {

@@ -36,7 +36,7 @@
 
 ### 2026-11-24（最新）
 
-- **实时线路面板并入实时地图 + 移动端响应式适配**：移除独立「实时线路（stops）」视图档（`views`/`VIEW_KEYS`/`LINE_VIEWS` 均不含 stops），选线后直接在地图视图开 `LineStops` 浮窗（站点/在线车辆/营运信息/极简站牌/复制走向图全部保留），`stopsWin` 开关控制显隐——再点「实时地图」Tab = 收起/展开站点窗，换线或切回地图自动打开。`LineSearch.vue` 在 ≤720px 下视图分段改为横向滚动、标签不压缩、隐藏状态文案、收紧内边距；PC 端不受影响。
+- **实时线路面板并入实时地图 + 移动端响应式适配**：移除独立「实时线路（stops）」视图档（`views`/`VIEW_KEYS`/`LINE_VIEWS` 均不含 stops），`LineStops` 浮窗（站点/在线车辆/营运信息/极简站牌/复制走向图全部保留）在地图视图渲染但**默认不弹出**——选线/换线/切视图都不再自动打开，改由底部快捷栏新增「🚏 站点」按钮显式开合（`stopsWin`）。`LineSearch.vue` 在 ≤720px 下视图分段改为横向滚动、标签不压缩、隐藏状态文案、收紧内边距；PC 端不受影响。
 - **数据面板 + 车辆营运信息 15 分钟采集**：新增 `src/components/DataPanel.vue`（视图档 `data`），展示每辆车的自编号 / 最高车速 / 超速次数（红色徽标）/ 上下线时间 / 发车次数 / 调配记录 / 营运公司，支持关键词筛选（编号/线路/公司）、车速/超速/发车/编号排序，导出走全站 CopyPill 三档。新增 `.github/workflows/vehicle-ops.yml`（cron `*/15 * * * *`）与 `scripts/scan-vehicle-ops.mjs`：全库线路×方向拉 `detailData`，按北京时间日期时间分片落盘 `src/static/vehicle-ops/YYYY-MM-DD/HHMM.json`，累计档案 `profile.json` 供面板「↻ 同步」读取。超速阈值默认 60 km/h，公司按自编号首位数字判定。
 - **免 Key Cookie 改为每人自己的账号**：设置面板新增「免 Key Cookie」分区（`settings.js` 的 `get/setAmapWebCookie` 存本机，`buildAmapCookieConfig` 生成仓库配置）。新建 `scripts/amap-cookie.json`，用户填自己的高德网页 Cookie 提交后，Actions 新增「加载用户免 Key Cookie」步骤优先读该文件注入 `AMAP_WEB_COOKIE`，留空回退 Secrets。顺带修复 `ACCT_SECTION_KEYS` 漏 `map` 导致「线路走向」分区折叠失效的 bug。
 - **采集频率改为每 12 小时 + 高德采集新增批量限流**：`.github/workflows/daily-collect.yml` cron 从 `0 */2 * * *`（每 2 小时）改为 `0 */12 * * *`（每天 00:00 / 12:00 触发）。`scripts/scan-routes-amap.mjs` 新增 `--batch-size` 参数（默认 3）：每处理 3 条线路后暂停 3×DELAY，降低高德免 Key 接口的 QPS 限流概率——连续请求过密会导致 `/line` 接口返回「未找到」（实际存在，如 1 路）。`queryAmap()` 内已有 3 次重试 + 退避逻辑，单条失败自动重试 3 次。同步更新 AGENTS.md 开发规范章节。

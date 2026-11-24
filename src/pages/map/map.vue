@@ -26,10 +26,12 @@
         :init-direction="direction"
         :city-mode="view === 'city'"
         :sim-signboard="simSignboard"
+        :stops-open="stopsWin"
         :embedded="true"
         :fs-enabled="false"
         @pick-line="onPickLine"
         @exit-city="onExitCity"
+        @toggle-stops="onToggleStops"
       >
         <!-- 裸形态顶栏：视图分段 + 搜索联想并入地图左上控制卡 .ctrl，不再浮在地图外面 -->
         <template #top>
@@ -604,8 +606,8 @@ export default {
       lineCode: '',
       lineName: '',
       lineNo: '',
-      // 实时线路窗（已并入地图视图）的显隐；选线后自动打开，用户关掉后保持，换线再开
-      stopsWin: true,
+      // 实时线路窗（已并入地图视图）的显隐；默认关闭，由底部栏「站点」按钮触发
+      stopsWin: false,
       direction: 0,
       startStop: '',
       endStop: '',
@@ -916,7 +918,6 @@ export default {
       this.applyPick(p)
       // 换线路一律落回地图：窗里的内容会随 lineNo 变化重拉，但用户要看的是新线走向
       this.view = 'map'
-      this.stopsWin = true
       this.writeHomeLine()
       if (sameLine) {
         const c = this.$refs.mapC
@@ -929,12 +930,7 @@ export default {
       if (!VIEW_KEYS.includes(key)) return
       // 再点当前档 = 收回上一档：有线路回到地图，没线路回到线路库落地页
       const home = this.hasLine ? 'map' : 'db'
-      if (key === this.view) {
-        // 实时线路已并入地图：选线后再点「实时地图」= 收起 / 展开站点窗
-        if (key === 'map' && this.hasLine) { this.stopsWin = !this.stopsWin; return }
-        this.view = home
-        return
-      }
+      if (key === this.view) { this.view = home; return }
       // 全市公交需激活：未激活弹窗校验，已激活直接进
       if (key === 'city') { this.enterCity(); return }
       if (!this.hasLine && LINE_VIEWS.includes(key)) {
@@ -942,8 +938,11 @@ export default {
         return
       }
       this.view = key
-      // 从别档切回地图且已选线：站点窗随地图一起回来（实时线路功能的落点）
-      if (key === 'map' && this.hasLine) this.stopsWin = true
+    },
+    // 底部栏「站点」按钮：显式开合实时线路窗，不再随选线/切视图自动弹出
+    onToggleStops() {
+      if (!this.hasLine) return
+      this.stopsWin = !this.stopsWin
     },
     // 全市公交自己交回视图档位（首次进入时用户拒了那笔扫描开销）：档位判据只留在宿主一处
     onExitCity() {
@@ -985,7 +984,6 @@ export default {
       try {
         this.applyPick(typeof saved === 'string' ? JSON.parse(saved) : saved)
         this.view = 'map'
-        this.stopsWin = true
       } catch (e) {
         // 记忆损坏（JSON 解析失败等）：清掉，落回线路库落地页，别让异常打断 onLoad
         try { uni.removeStorageSync(HOME_LINE_KEY) } catch (e2) { /* 忽略 */ }
