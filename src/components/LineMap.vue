@@ -288,76 +288,84 @@
       @move="onRankMove"
     />
 
-    <!-- 底部快捷操作栏：常驻贴底，所有高频操作合一，不再分两处。
-         线路态 = 重扫 + 视图工具 + 三向切换（共 9 个）；全市态 = 重扫 + 视图工具 + 车速榜 / 查车 / 跟随 / 编号标签 / 线网模式（共 13 个，不显示方向分组） -->
+    <!-- 底部快捷操作栏：常驻贴底，分两组。
+         组一「地图工具」：重扫 + 缩放 + 全览/站名/底图 + 方向（线路态）或全市功能（全市态）；
+         组二「实时线路」：仅线路态，单独一组并突出，点按开合实时线路窗（不再选线自动弹出）。 -->
     <view class="bottom-bar" v-if="lineNo || cityOn">
-      <!-- 通用：重扫（线路态=刷新线路，全市态=重扫全网） -->
-      <view class="bb-item" @click="bottomRescan" :title="cityOn ? (cityBusy ? '中止本轮拉取' : '重新拉取全网在运车辆') : (loading ? '刷新中…' : '立即刷新线路')">
-        <text class="bb-ico" :class="{ spin: cityBusy || loading }">↻</text>
-        <text class="bb-label">重扫</text>
-      </view>
-      <!-- 视图工具：缩放 / 全览 / 站名 / 底图 -->
-      <view class="bb-sep"></view>
-      <view class="bb-item" @click="zoomBy(0.6)" title="放大">
-        <text class="bb-ico">＋</text>
-      </view>
-      <view class="bb-item" @click="zoomBy(-0.6)" title="缩小">
-        <text class="bb-ico">－</text>
-      </view>
-      <view class="bb-item" :class="{ on: cityOn ? false : true }" @click="resetView" :title="cityOn ? '全览全市在运车辆' : '全览整条线路'">
-        <text class="bb-ico">⊞</text>
-        <text class="bb-label">全览</text>
-      </view>
-      <view class="bb-item" :class="{ on: showStopLabels }" @click="toggleLabels" title="显示/隐藏站名">
-        <text class="bb-ico">📍</text>
-        <text class="bb-label">站名</text>
-      </view>
-      <view class="bb-item" v-if="!useMap" :class="{ on: showBaseMap }" @click="toggleBaseMap" title="显示/隐藏底图">
-        <text class="bb-ico">🗺</text>
-        <text class="bb-label">底图</text>
-      </view>
-      <!-- 方向分组：仅线路态显示，全市态不显示 -->
-      <template v-if="!cityOn">
+      <view class="bb-group">
+        <!-- 通用：重扫（线路态=刷新线路，全市态=重扫全网） -->
+        <view class="bb-item" @click="bottomRescan" :title="cityOn ? (cityBusy ? '中止本轮拉取' : '重新拉取全网在运车辆') : (loading ? '刷新中…' : '立即刷新线路')">
+          <text class="bb-ico" :class="{ spin: cityBusy || loading }">↻</text>
+          <text class="bb-label">重扫</text>
+        </view>
         <view class="bb-sep"></view>
-        <!-- 实时线路窗：改由按钮触发，不再选线自动弹出 -->
+        <!-- 视图工具：缩放 / 全览 / 站名 / 底图 -->
+        <view class="bb-item" @click="zoomBy(0.6)" title="放大">
+          <text class="bb-ico">＋</text>
+        </view>
+        <view class="bb-item" @click="zoomBy(-0.6)" title="缩小">
+          <text class="bb-ico">－</text>
+        </view>
+        <view class="bb-item" :class="{ on: cityOn ? false : true }" @click="resetView" :title="cityOn ? '全览全市在运车辆' : '全览整条线路'">
+          <text class="bb-ico">⊞</text>
+          <text class="bb-label">全览</text>
+        </view>
+        <view class="bb-item" :class="{ on: showStopLabels }" @click="toggleLabels" title="显示/隐藏站名">
+          <text class="bb-ico">📍</text>
+          <text class="bb-label">站名</text>
+        </view>
+        <view class="bb-item" v-if="!useMap" :class="{ on: showBaseMap }" @click="toggleBaseMap" title="显示/隐藏底图">
+          <text class="bb-ico">🗺</text>
+          <text class="bb-label">底图</text>
+        </view>
+        <!-- 方向分组：仅线路态显示，全市态不显示 -->
+        <template v-if="!cityOn">
+          <view class="bb-sep"></view>
+          <view class="bb-item" :class="{ on: dirFilter === 0 }" @click="setDirView(0)" title="仅显示上行车辆">
+            <text class="bb-ico up">↑</text>
+            <text class="bb-label">上行</text>
+          </view>
+          <view class="bb-item" :class="{ on: dirFilter === 1 }" @click="setDirView(1)" title="仅显示下行车辆">
+            <text class="bb-ico down">↓</text>
+            <text class="bb-label">下行</text>
+          </view>
+          <view class="bb-item" :class="{ on: dirFilter === 2 }" @click="setDirView(2)" title="上下行同时显示">
+            <text class="bb-ico all">⇄</text>
+            <text class="bb-label">全部</text>
+          </view>
+        </template>
+        <!-- 仅全市模式：车速榜 + 查车 + 跟随 + 编号标签 + 线网模式 -->
+        <template v-else>
+          <view class="bb-sep"></view>
+          <view class="bb-item" :class="{ on: rankOpen }" @click="toggleRank" title="全局快照车速榜">
+            <text class="bb-ico">🏁</text>
+            <text class="bb-label">车速榜</text>
+          </view>
+          <view class="bb-item" :class="{ on: orgSearchOpen }" @click="toggleOrgSearch" title="按自编号查车">
+            <text class="bb-ico">🔍</text>
+            <text class="bb-label">查车</text>
+          </view>
+          <view class="bb-item" :class="{ on: cityFollow > 0 }" :title="cityFollowTitle" @click="cycleCityFollow">
+            <text class="bb-ico">🔄</text>
+            <text class="bb-label">{{ cityFollowLabel }}</text>
+          </view>
+          <view class="bb-item" :class="{ on: cityTagMode > 0 }" :title="'编号标签：' + cityTagModeLabel + '（点击切换）'" @click="toggleCityTags">
+            <text class="bb-ico">🏷</text>
+            <text class="bb-label">{{ cityTagModeLabel }}</text>
+          </view>
+          <view class="bb-item" :class="{ on: cityNetMode !== 'off' }" :title="'线网显示：' + cityNetModeLabel + '（点击切换 精简/全部/关闭）'" @click="cycleCityNetMode">
+            <text class="bb-ico">🕷</text>
+            <text class="bb-label">{{ cityNetModeLabel }}</text>
+          </view>
+        </template>
+      </view>
+
+      <!-- 组二：实时线路（仅线路态，单独一组、视觉突出） -->
+      <view class="bb-group bb-group-stops" v-if="!cityOn">
         <view class="bb-item bb-stops" :class="{ on: stopsOpen }" @click="$emit('toggle-stops')" title="打开/关闭实时线路窗（站点·在线车辆·营运信息）">
           <text class="bb-ico">🚏</text>
           <text class="bb-label">实时线路</text>
         </view>
-        <view class="bb-item" :class="{ on: dirFilter === 0 }" @click="setDirView(0)" title="仅显示上行车辆">
-          <text class="bb-ico up">↑</text>
-          <text class="bb-label">上行</text>
-        </view>
-        <view class="bb-item" :class="{ on: dirFilter === 1 }" @click="setDirView(1)" title="仅显示下行车辆">
-          <text class="bb-ico down">↓</text>
-          <text class="bb-label">下行</text>
-        </view>
-        <view class="bb-item" :class="{ on: dirFilter === 2 }" @click="setDirView(2)" title="上下行同时显示">
-          <text class="bb-ico all">⇄</text>
-          <text class="bb-label">全部</text>
-        </view>
-      </template>
-      <!-- 仅全市模式：车速榜 + 查车 + 跟随 + 编号标签 + 线网模式 -->
-      <view class="bb-sep" v-if="cityOn"></view>
-      <view class="bb-item" v-if="cityOn" :class="{ on: rankOpen }" @click="toggleRank" title="全局快照车速榜">
-        <text class="bb-ico">🏁</text>
-        <text class="bb-label">车速榜</text>
-      </view>
-      <view class="bb-item" v-if="cityOn" :class="{ on: orgSearchOpen }" @click="toggleOrgSearch" title="按自编号查车">
-        <text class="bb-ico">🔍</text>
-        <text class="bb-label">查车</text>
-      </view>
-      <view class="bb-item" v-if="cityOn" :class="{ on: cityFollow > 0 }" :title="cityFollowTitle" @click="cycleCityFollow">
-        <text class="bb-ico">🔄</text>
-        <text class="bb-label">{{ cityFollowLabel }}</text>
-      </view>
-      <view class="bb-item" v-if="cityOn" :class="{ on: cityTagMode > 0 }" :title="'编号标签：' + cityTagModeLabel + '（点击切换）'" @click="toggleCityTags">
-        <text class="bb-ico">🏷</text>
-        <text class="bb-label">{{ cityTagModeLabel }}</text>
-      </view>
-      <view class="bb-item" v-if="cityOn" :class="{ on: cityNetMode !== 'off' }" :title="'线网显示：' + cityNetModeLabel + '（点击切换 精简/全部/关闭）'" @click="cycleCityNetMode">
-        <text class="bb-ico">🕷</text>
-        <text class="bb-label">{{ cityNetModeLabel }}</text>
       </view>
     </view>
 
@@ -6191,9 +6199,27 @@ export default {
   white-space: nowrap;
   letter-spacing: 0.03em;
 }
-/* 实时线路按钮：四字文案，单独放宽并缩字号，避免与其它两字档位挤在一起 */
-.bb-stops { min-width: 76rpx; padding: 2rpx 8rpx; }
+/* 分组：组内紧贴、组间用间距 + 竖线区分 */
+.bb-group {
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+}
+/* 实时线路：独立一组，浅色描边胶囊背景突出，与其它工具键拉开 */
+.bb-group-stops {
+  margin-left: 8rpx;
+  padding-left: 8rpx;
+  border-left: 2rpx solid rgba(255, 255, 255, 0.18);
+}
+.bb-stops {
+  min-width: 78rpx;
+  padding: 2rpx 10rpx;
+  background: rgba(var(--ac-rgb), 0.16);
+  border: 2rpx solid rgba(var(--ac-rgb), 0.4);
+}
 .bb-stops .bb-label { font-size: 12rpx; letter-spacing: 0; }
+.bb-stops.on { background: var(--ac); border-color: var(--ac); }
+.bb-stops.on .bb-ico, .bb-stops.on .bb-label { color: #fff; }
 .bb-sep {
   flex: 0 0 1rpx;
   width: 1rpx;
