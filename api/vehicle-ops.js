@@ -8,21 +8,8 @@
  *   DATABASE_URL       Neon Postgres 连接串（Marketplace 集成自动注入）
  *   VEHICLE_OPS_TOKEN  自定义 API 密钥（POST 鉴权用；你自己设一个随机串）
  *
- * 数据库表（首次部署后在 Neon SQL Editor 执行一次 init.sql）：
- *   CREATE TABLE vehicle_ops (
- *     org_id TEXT PRIMARY KEY,
- *     line_no TEXT,
- *     company TEXT,
- *     max_speed NUMERIC DEFAULT 0,
- *     speed_count INTEGER DEFAULT 0,
- *     online_at TEXT,
- *     offline_at TEXT,
- *     departures INTEGER DEFAULT 0,
- *     transfers JSONB DEFAULT '[]'::jsonb,
- *     lines JSONB DEFAULT '[]'::jsonb,
- *     samples INTEGER DEFAULT 0,
- *     updated_at TIMESTAMPTZ DEFAULT now()
- *   );
+ * 数据库表：首次请求时自动 CREATE TABLE IF NOT EXISTS（无需手动去 Neon SQL Editor 执行）。
+ * api/init.sql 仅作留档参考。
  */
 import { neon } from '@neondatabase/serverless'
 
@@ -32,12 +19,38 @@ const CORS = {
   'Access-Control-Allow-Headers': 'Content-Type, x-api-key',
 }
 
+let _ensureTable = null
+function ensureTable(sql) {
+  if (!_ensureTable) {
+    _ensureTable = (async () => {
+      await sql`CREATE TABLE IF NOT EXISTS vehicle_ops (
+        org_id TEXT PRIMARY KEY,
+        line_no TEXT,
+        company TEXT,
+        max_speed NUMERIC DEFAULT 0,
+        speed_count INTEGER DEFAULT 0,
+        online_at TEXT,
+        offline_at TEXT,
+        departures INTEGER DEFAULT 0,
+        transfers JSONB DEFAULT '[]'::jsonb,
+        lines JSONB DEFAULT '[]'::jsonb,
+        samples INTEGER DEFAULT 0,
+        updated_at TIMESTAMPTZ DEFAULT now()
+      )`
+      await sql`CREATE INDEX IF NOT EXISTS idx_vehicle_ops_line_no ON vehicle_ops (line_no)`
+      await sql`CREATE INDEX IF NOT EXISTS idx_vehicle_ops_updated ON vehicle_ops (updated_at DESC)`
+    })().catch((e) => { _ensureTable = null; throw e })
+  }
+  return _ensureTable
+}
+
 export default async function handler(req, res) {
   for (const [k, v] of Object.entries(CORS)) res.setHeader(k, v)
   if (req.method === 'OPTIONS') return res.status(204).end()
 
   const sql = neon(process.env.DATABASE_URL)
   try {
+    await ensureTable(sql)
     if (req.method === 'GET') {
       const rows = await sql`SELECT * FROM vehicle_ops ORDER BY updated_at DESC`
       return res.status(200).json({
