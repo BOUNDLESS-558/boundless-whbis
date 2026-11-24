@@ -75,6 +75,8 @@
 <script>
 import { copyTable } from '../utils/clipboard.js'
 import { formatBusNo } from '../utils/busNumber.js'
+import { APP_CONFIG } from '../config.js'
+import { assetUrl } from '../utils/asset.js'
 import CopyPill from './CopyPill.vue'
 
 const PROFILE_URL = 'static/vehicle-ops/profile.json'
@@ -151,25 +153,21 @@ export default {
     },
     load() {
       // 优先读 Vercel 数据库 API（实时）；失败回退静态 profile.json（兼容本地 dev / 未配库环境）
-      import('../config.js').then(({ APP_CONFIG }) => {
-        const api = APP_CONFIG.vehicleOpsApi
-        const tryStatic = () => {
-          import('../utils/asset.js').then(({ assetUrl }) => {
-            fetch(assetUrl(PROFILE_URL), { cache: 'no-store' })
-              .then((r) => (r.ok ? r.json() : Promise.reject(new Error('HTTP ' + r.status))))
-              .then((j) => this.apply(j))
-              .catch((e) => console.warn('[DataPanel] 静态读取失败', e))
-          })
-        }
-        if (!api) return tryStatic()
-        fetch(api, { cache: 'no-store' })
+      const api = APP_CONFIG.vehicleOpsApi
+      const tryStatic = () => {
+        fetch(assetUrl(PROFILE_URL), { cache: 'no-store' })
           .then((r) => (r.ok ? r.json() : Promise.reject(new Error('HTTP ' + r.status))))
           .then((j) => this.apply(j))
-          .catch((e) => {
-            console.warn('[DataPanel] API 读取失败，回退静态资产', e)
-            tryStatic()
-          })
-      })
+          .catch((e) => console.warn('[DataPanel] 静态读取失败', e))
+      }
+      if (!api) return tryStatic()
+      fetch(api, { cache: 'no-store' })
+        .then((r) => (r.ok ? r.json() : Promise.reject(new Error('HTTP ' + r.status))))
+        .then((j) => this.apply(j))
+        .catch((e) => {
+          console.warn('[DataPanel] API 读取失败，回退静态资产', e)
+          tryStatic()
+        })
     },
     apply(j) {
       if (!j || !j.buses) return
