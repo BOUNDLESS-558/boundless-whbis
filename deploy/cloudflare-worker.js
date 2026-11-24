@@ -10,7 +10,7 @@
  *   2. 控制台 → Workers 与 Pages → 创建 → 创建 Worker，起个名字（如 whbis-proxy）
  *   3. 把本文件全部内容粘贴进代码编辑器 → 保存并部署
  *   4. 拿到形如 https://whbis-proxy.<你的子域>.workers.dev 的地址
- *   5. 填入 src/config.js 的 APP_CONFIG.apiProxy → npm run deploy:pages
+ *   5. 填入 src/config.js 的 APP_CONFIG.apiProxy → push main，Vercel 自动部署
  *
  * 说明：上游路径写死为 /gps-resapi/wechat/bus/*，只转发 POST，不代理任何其他域名，
  * 无日志收集，请求体原样透传。

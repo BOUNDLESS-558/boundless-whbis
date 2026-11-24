@@ -4,7 +4,7 @@
  *
  * 串联整条流水线：
  *   线路枚举 → 走向几何(OSRM 兜底) → 高德(foreign / routes-amap / poi-newbus / amap-ids)
- *   → 资产清单 + 线网底图 → 交叉验证报告 → 提交数据到当前分支 → 构建 H5 → 部署 Pages
+ *   → 资产清单 + 线网底图 → 交叉验证报告 → 提交数据到当前分支 → Vercel 自动构建部署
  *
  * 设计原则（对应需求 2/3/5「自动化、减人力、不漏数据」）：
  *   - 缺密钥的步骤自动跳过，保证「免 Key 部分（官方 /line + OSRM）」始终可跑；
@@ -16,7 +16,7 @@
  *   SCAN_BASE        上游 /line 反代（默认脚本内无则走官方域名）
  *   AMAP_KEY/AMAP_SECRET/AMAP_WEB_COOKIE  高德相关步骤用，缺则跳过
  *   FULL_SCAN=1      全量重枚举线路（含环线），否则仅 normalize-only + 增量刷新
- *   SKIP_DEPLOY=1    只采集不构建/部署（本地自测用）
+ *   SKIP_DEPLOY=1    已废弃（部署已迁移到 Vercel，本脚本不再构建/部署）
  */
 import { execFileSync } from 'node:child_process'
 import fs from 'node:fs'
@@ -27,9 +27,7 @@ const has = (k) => process.env[k] && String(process.env[k]).length > 0
 const AMAP_KEY = has('AMAP_KEY')
 const AMAP_COOKIE = has('AMAP_WEB_COOKIE')
 const FULL_SCAN = has('FULL_SCAN')
-const SKIP_DEPLOY = has('SKIP_DEPLOY')
 const OVERWRITE = has('OVERWRITE')
-const NPM = process.platform === 'win32' ? 'npm.cmd' : 'npm'
 
 // 采集器统一透传的环境变量
 const SCAN_ENV = {}
@@ -308,25 +306,7 @@ if (hasStagedChanges()) {
   console.log('\n· 数据无变化，跳过提交')
 }
 
-// ── 10. 构建 + 部署 Pages ──
-if (SKIP_DEPLOY) {
-  console.log('\n· SKIP_DEPLOY：跳过构建与部署')
-} else {
-  // 注意：NPM（npm / npm.cmd）应作为可执行文件直接运行，不能走 step()——
-  // step() 会强制用 `node` 作前缀，变成 `node npm run build:h5`，node 会把 npm 当成模块路径去找而报
-  // "Cannot find module …/npm"。这里直接 execFileSync(NPM, …)。
-  console.log('\n=== 构建 H5 ===')
-  try {
-    execFileSync(NPM, ['run', 'build:h5'], { cwd: ROOT, stdio: 'inherit' })
-  } catch (e) {
-    console.error('× 步骤「构建 H5」退出码 ' + (e.status ?? '?'))
-    throw e
-  }
-  console.log('\n=== 部署 Pages ===')
-  // 清空 GIT_HTTP_PROXY：Actions runner 无本地代理，让 deploy-pages.mjs 直连推送 pages
-  execFileSync('node', ['scripts/deploy-pages.mjs'], {
-    cwd: ROOT,
-    stdio: 'inherit',
-    env: { ...process.env, GIT_HTTP_PROXY: '' },
-  })
-}
+// ── 10. 部署：已迁移到 Vercel（main push 自动构建部署）──
+// 原「构建 H5 + 强推 pages 分支」已移除：GitHub Pages 已关闭、pages 分支已删除。
+// CI 只需把采集数据提交到 main，Vercel 会自动触发构建部署，无需在此重复构建。
+console.log('\n· 部署交由 Vercel：数据已提交到 main，Vercel 会自动构建部署')

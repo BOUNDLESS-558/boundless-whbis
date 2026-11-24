@@ -26,9 +26,9 @@
 
 - **`main`**：当前维护分支（仓库当前分支），日常改动提交在这里，不直接新开功能分支。
 - **`BETA`**：开发分支，改动提交到 `main` 后合并进 `BETA`，保持两者同步。
-- **`pages`**：GitHub Pages 部署产物分支（孤立提交，由 `npm run deploy:pages` 自动维护），不用于开发。
+- **`pages`**：已删除（GitHub Pages 已关闭）。H5 主站部署在 **Vercel**（`https://boundless-whbis.vercel.app/`）。
 
-工作流（按用户要求，三分支都推远端）：在 `main` 上提交改动 → 合并到 `BETA` → `git push origin main` 与 `git push origin BETA` → 需要发布网站时用 `npm run deploy:pages`（构建 + 强推 `origin/pages`）。远端 `origin/main`、`origin/BETA`、`origin/pages` 三个分支都保持存在并同步。
+工作流（按用户要求）：在 `main` 上提交改动 → 合并到 `BETA` → `git push origin main` 与 `git push origin BETA`。**推送 `main` 即触发 Vercel 自动构建部署**，无需手动构建或推送产物分支。
 
 ---
 
@@ -36,6 +36,7 @@
 
 ### 2026-11-24（最新）
 
+- **GitHub Pages 下线，全面迁移 Vercel**：新增 `vercel.json`（buildCommand 先切 base 为 `/` 再 `npm run build:h5`，产物 `dist/build/h5`，hash 路由配 rewrites 兜底）与 `scripts/set-h5-base.mjs`（构建时切换 `h5.router.base`，不污染仓库 manifest）。`auto-collect.mjs` 移除「构建 H5 + 强推 pages 分支」步骤（Vercel 靠 main push 自动部署），删除 `deploy:pages` 脚本与 `deploy-pages.mjs`，远端 `pages` 分支已删除。AGENTS.md / README 同步更新分支约定与部署模型，主站为 `https://boundless-whbis.vercel.app/`。
 - **主题色扩至 999 种 + 圆体扩充**：`ACCENT_PRESETS` 保留 537 条手工精选，模块加载时用 HSL 色环生成器补足 462 条（`x001`~`x462`，运行时实测总数 999）；设置面板新增「扩展 462」分类按 `xNNN` 前缀筛选。`FONT_OPTS` 新增 10 款圆体（中文：优设圆体/阿里妈妈方圆/汉字圆体/站酷圆体；英文：Quicksand/Nunito Sans/Muli/Sniglet/Baloo 2/Hind），归入「sans-cn / sans-en」分类。
 - **数据面板加营运线路号 + 搜索框字体修复**：`scan-vehicle-ops.mjs` 每车档案新增 `lineNo`（营运线路号，如 337，跨分片取最后一次），面板表格/筛选/导出均加入该字段；搜索框加明确高度 68rpx + 行高 + placeholder 独立配色，避免自定义字体下中文显示不全。
 - **数据面板字段补全 + UI 重叠修复**：面板表格改为完整展示所属营运公司（全名）/ 线路号（全部）/ 自编号 / 首次上线时间 / 最终下线时间 / 最高车速 / 超速次数 / 历史发车次数 / 车辆调配记录，固定列宽 + 横向滚动避免省略号；排序新增上线/下线维度，导出列同步对齐。修复「双重窗口」：DataPanel 原本自带卡片头（标题/关闭/导出），与外层 FloatWin 重复导致 UI 重叠——改为纯内容组件，操作行（时次/导出/同步）移到内部工具条，拖动与关闭交由外层 FloatWin。
@@ -197,7 +198,7 @@ npm run test:routeclean # 站点序列清洗回归（离线读 network.json，�
 | `npm run dev:h5` | 启动网页版开发服务器 | 内存（热更新） |
 | `npm run build:h5` | 构建网页版 | `dist/build/h5` |
 | `npm run build:app` | 构建 Android App 资源 | `dist/build/app` |
-| `npm run deploy:pages` | 构建 H5 并推送到远端 `pages` 分支（GitHub Pages） | — |
+| （Vercel 自动） | `main` push 触发构建部署到 `boundless-whbis.vercel.app` | — |
 | `npm run test:routeclean` | 站点序列清洗回归（离线读 network.json，不发请求不写盘） | — |
 | `npm run scan:lines` | 枚举探测线路网，合并写线路库（只补强不降级） | `src/static/lines/lines.json` |
 | `npm run scan:org` | buspedia 采集营运公司写 `org`（含手动核实映射） | `src/static/lines/lines.json` |
@@ -221,7 +222,8 @@ boundless-whbis/
 │   ├── test-md5.mjs           # MD5 单元测试（RFC 1321 向量 + 实测数据）
 │   ├── test-busid.mjs         # 车辆编号还原测试（终止性 + 正确性 + 性能）
 │   ├── test-route-clean.mjs   # 走向清洗回归测试（离线读 network.json）
-│   ├── deploy-pages.mjs       # GitHub Pages 一键部署（孤立提交强推 pages 分支）
+│   ├── set-h5-base.mjs        # 构建时切换 h5.router.base（Vercel 根域用 /）
+│   ├── vercel.json            # Vercel 部署配置（buildCommand / outputDirectory）
 │   ├── auto-collect.mjs       # 自动采集入口（scan-org 累积回填）
 │   ├── scan-lines.mjs         # 枚举探测线路网 → src/static/lines/lines.json（只补强不降级）
 │   ├── scan-org.mjs           # buspedia 采集线路 org 字段（只补强不降级，--force 覆盖）
@@ -454,21 +456,22 @@ busId = MD5( orgBusId )
 
 - **H5 开发环境**：`vite.config.js` 配置 `/api` 代理转发到武汉公交接口，规避浏览器跨域。
 - **App 端**：直连真实域名，无需代理。
-- **H5 生产环境**：`build:h5` 产物**没有代理**，且纯静态托管（GitHub Pages）直连会被浏览器 **CORS 预检拦截**（上游 `OPTIONS` 响应不含 CORS 头）。
+- **H5 生产环境**：`build:h5` 产物**没有代理**，纯静态托管直连会被浏览器 **CORS 预检拦截**（上游 `OPTIONS` 响应不含 CORS 头）。
 
 **解决方案：Cloudflare Worker 反向代理**（`deploy/cloudflare-worker.js`）：
 
 1. 在 Cloudflare 创建 Worker，把 `deploy/cloudflare-worker.js` 内容粘贴部署（免费额度 10 万请求/天）。
 2. 拿到 `https://whbis-proxy.<你的子域>.workers.dev` 地址。
 3. 填入 `src/config.js` 的 `APP_CONFIG.apiProxy`（末尾不带斜杠）。
-4. 执行 `npm run deploy:pages` 部署到 GitHub Pages。
+4. 推送 `main`，Vercel 自动构建部署。
 
 Worker 会为预检直接应答 `204`，转发 POST 时补全 `Access-Control-Allow-Origin`，并透传 `openId` 请求头。`apiProxy` 留空时 H5 生产回退直连真实域名（仅对无 CORS 限制的环境有用）。
 
-**GitHub Pages 分支模型**（见 `scripts/deploy-pages.mjs`）：
+**Vercel 部署模型**（见 `vercel.json`）：
 
-- 源码分支（`main` / `BETA`）—— 仅本地维护，**严禁推送远端**
-- `pages` —— 远端 `origin` 唯一接收的分支，仅存放 H5 构建产物，Pages 从该分支根目录发布；用孤立提交强推，产物不含源码历史
+- 源码分支 `main` / `BETA` 都推远端；`main` push 触发 Vercel 构建部署到 `https://boundless-whbis.vercel.app/`
+- 构建命令 `node scripts/set-h5-base.mjs / && npm run build:h5`，产物 `dist/build/h5`；构建时把 `h5.router.base` 切为根域 `/`
+- GitHub Pages 已关闭、`pages` 分支已删除
 
 ---
 
@@ -478,7 +481,7 @@ Worker 会为预检直接应答 `204`，转发 POST 时补全 `Access-Control-Al
 - [x] 接口协议破解（POST + header openId）
 - [x] MD5 车辆编号还原 + 完整自编号补全（buspedia 映射）
 - [x] 真实数据联调：线路 / 站点 / 时刻表 / 实时车辆 / 地图
-- [x] H5 生产部署：Cloudflare Worker 反代 + GitHub Pages 一键部署
+- [x] H5 生产部署：Cloudflare Worker 反代 + Vercel 自动部署
 - [x] 线路收藏（`whbis:fav-lines:v1`，上限 10 条）+ 文本/Excel/图片三档复制
 - [x] 蔡城 / 木兰 / 汉奇非集团线路统一纳入检索与全市线网
 - [x] 本地账号制（预置账号 + 可选改密）

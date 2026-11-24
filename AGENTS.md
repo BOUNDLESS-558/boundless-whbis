@@ -1,17 +1,19 @@
 # AGENTS.md — 武汉公交信息实时查询（WuhanBus）
 
 uni-app（Vue 3 + Vite 5）跨端应用：H5 网页版 + Android App，查询武汉公交线路、站点、时刻表、实时车辆。
-远端 `origin` = `BOUNDLESS-558/boundless-whbis`，三个分支：`main`（源码主干）、`BETA`（开发分支）、`pages`（仅 H5 构建产物）。
+远端 `origin` = `BOUNDLESS-558/boundless-whbis`，分支：`main`（源码主干）、`BETA`（开发分支）。**GitHub Pages 已关闭、`pages` 分支已删除**；H5 主站部署在 Vercel（`https://boundless-whbis.vercel.app/`），`main` push 自动构建部署。
 
 ## 交付约定（★ 用户明确要求，每次改完自动执行，不要再问）
 
 每次完成功能改动后，**主动**做完整交付，不等用户逐条要求：
 1. **同步 `README.md`**：在「更新日志」顶部新增当天日期条目（当天已有就合并），写明本次改动要点。README 与代码冲突时以代码为准，但 README 不能落后。
-2. **提交并推送三分支**：`main` 提交 → 合并到 `BETA` → `git push origin main` 和 `git push origin BETA` → 有前端产物变化时 `npm run deploy:pages`（构建 + 强推 `origin/pages`）。**只改 workflow / 文档 / 不影响前端的文件时可跳过 pages 部署**。
+2. **提交并推送两分支**：`main` 提交 → 合并到 `BETA` → `git push origin main` 和 `git push origin BETA`。**不再需要手动部署**：Vercel 监听 `main` push 自动构建部署（配置见 `vercel.json`）。
 3. **推送前处理 CI 采集分叉**：`git fetch origin`，若 `origin/main` 有新的「数据: 自动采集更新」提交，先 `git merge origin/main`；资产文件冲突一律保留本地手工修复版本（用 `git checkout --ours -- <file>` 后 `git add`），再推送。`README.md` / 代码文件一般无冲突。
-4. **收尾验证**：三分支 `git rev-parse` 与 `origin/<branch>` 一致、工作区干净；临时探针 / `%TEMP%` 下的 Edge profile 全部清理。
+4. **收尾验证**：`main`/`BETA` 的 `git rev-parse` 与 `origin/<branch>` 一致、工作区干净；临时探针 / `%TEMP%` 下的 Edge profile 全部清理。
 
-**GitHub Actions 自动采集部署**：`.github/workflows/daily-collect.yml`（标题「自动采集+自动发布」）每 12 小时跑 `scripts/auto-collect.mjs`：采集 → 提交数据到 `origin/main` → 构建 → 部署 `pages`。所以远端 `main` 会持续有新提交，推送前必须 merge。workflow 只认默认分支（main）上的文件；`schedule`/`workflow_dispatch` 依赖它。
+**部署（Vercel）**：`vercel.json` 指定构建命令 `node scripts/set-h5-base.mjs / && npm run build:h5`、产物 `dist/build/h5`。`main` push 自动触发部署；`set-h5-base.mjs` 把 `manifest.json` 的 `h5.router.base` 切为 `/`（根域），无需服务端重写（hash 路由）。GitHub Pages 已关闭。
+
+**GitHub Actions 自动采集**：`.github/workflows/daily-collect.yml`（标题「自动采集+自动发布」）每 12 小时跑 `scripts/auto-collect.mjs`：采集 → 提交数据到 `origin/main`（Vercel 随之自动重建部署）。所以远端 `main` 会持续有新提交，推送前必须 merge。workflow 只认默认分支（main）上的文件；`schedule`/`workflow_dispatch` 依赖它。
 
 ## ★ 开发规范（2026-11-24 起，用户明确要求，后续不再反复强调）
 
@@ -53,9 +55,9 @@ uni-app（Vue 3 + Vite 5）跨端应用：H5 网页版 + Android App，查询武
 ### 8. 移动端响应式
 - `src/components/LineSearch.vue`：≤720px 时视图分段凹槽横向滚动（`seg-groove` overflow-x auto）、`seg-tab` 不压缩、隐藏 `vr-meta`、缩小 padding；PC 端不受影响。
 - `FloatWin` 已有 `max-width: calc(100vw - 40rpx)`，`.ctrl` 已有 `max-width: calc(100vw - 24rpx)`，小屏不会溢出。
-**本地打包 Pages 不依赖推源码**：`npm run deploy:pages` 只读本地 `src/` 构建后强推 `pages`；推 `main`/`BETA` 只为同步源码与驱动 CI，不是部署前提。
+**部署不依赖本地构建**：推 `main` 即触发 Vercel 构建部署；本地 `build:h5` 只用于验证产物能否编译。
 
-日常验证**不要主动构建**：`build:h5` / `build:app` / `deploy:pages` 只在交付或用户明确要求出包时执行，日常验证用 `dev:h5` + 探针/单测（用户原话：「没有必要每次都构建一下生成的产物」）。
+日常验证**不要主动构建**：`build:h5` / `build:app` 只在交付或用户明确要求出包时执行，日常验证用 `dev:h5` + 探针/单测（用户原话：「没有必要每次都构建一下生成的产物」）。
 
 提交前注意：`src/config.js` 的 openId 是占位值、`apiProxy`（Cloudflare Worker 地址）不涉密，可入库；用户自填的高德 KEY/安全密钥只存浏览器 localStorage（`whbis:amap-key`），不入源码。
 
@@ -92,12 +94,12 @@ npm run scan:routes:stops # 只拉站点→清洗→落 lines/（不调 OSRM，�
 npm run scan:routes  # 补算 OSRM 贴路几何（免 Key，慢，可断点续跑）
 npm run scan:foreign # 高德采集非集团线路，需 AMAP_KEY
 npm run build:foreign-net # 由非集团资产生成 network-foreign.json
-npm run deploy:pages # 构建 + 强推 origin/pages（交付时按「交付约定」执行）
+npm run build:h5       # 本地构建验证（部署由 Vercel 自动完成）
 ```
 
 - 三个测试都是 `node scripts/*.mjs`，失败退出码非 0，可当 CI。改 `md5.js` / `busId.js` 必跑；改走向清洗规则必跑 `test:routeclean`。
 - `MODULE_TYPELESS_PACKAGE_JSON` 警告无害。**别给 package.json 加 `"type":"module"`**，会破坏 uni-app 工具链。
-- `deploy:pages` 走代理 `GIT_HTTP_PROXY=http://127.0.0.1:7890`（置空直连），细节见 `scripts/deploy-pages.mjs` 头注释。强推大对象偶发 408/curl 22/55，直连与代理都可能失败，**切换另一条重试**即可，没有唯一可靠链路。
+- Vercel 部署配置见 `vercel.json`（buildCommand / outputDirectory / rewrites）；H5 根域 base 由 `scripts/set-h5-base.mjs /` 在构建时切换，不改动仓库里的 `manifest.json`（保持 `/boundless-whbis/` 以兼容历史）。
 
 ### 地图回归探针（先 `npm run dev:h5`，端口可能顺延 5174/5175）
 
