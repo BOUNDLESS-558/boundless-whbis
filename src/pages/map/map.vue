@@ -672,6 +672,7 @@ export default {
         { key: 'teal', label: '青蓝' },
         { key: 'plum', label: '梅紫' },
         { key: 'brown', label: '棕褐' },
+        { key: 'more', label: '扩展 462' },
       ]
     },
     fontCatOptions() {
@@ -721,6 +722,8 @@ export default {
         plum: ['plum-deep2', 'violet-deep2', 'indigo-deep3', 'purple-deep', 'magenta-deep', 'rosewood', 'wine-deep', 'berry-deep', 'orchid-deep2', 'lavender-deep2', 'plum-deep3', 'violet-deep3', 'indigo-deep5', 'purple-deep2', 'magenta-deep2', 'rosewood2', 'wine-deep2', 'berry-deep2', 'orchid-deep3', 'lavender-deep3'],
         brown: ['brown', 'saddle', 'sienna', 'chocolate-brown', 'peru-brown', 'burlywood', 'tan', 'roan', 'coffe', 'espresso', 'sandstone', 'clay', 'ochre', 'umber2', 'raw-umber', 'desert', 'dune', 'driftwood', 'weathered', 'dust'],
       }
+      // 扩展色 462 条用 xNNN 前缀，不逐一枚举白名单
+      if (this.accentCat === 'more') return this.accentPresets.filter((p) => /^x\d{3}$/.test(p.key))
       const keys = map[this.accentCat] || []
       return this.accentPresets.filter((p) => keys.includes(p.key))
     },
@@ -730,9 +733,9 @@ export default {
         system: ['system'],
         cursive: ['wenkai', 'wenkai-screen', 'wenkai-lite', 'mashan', 'longcang', 'zhimang', 'liujian', 'caomengyingti', 'chen-changqing', 'ma-shan-zheng-cursive', 'dancing-script', 'indie-flower', 'permanent-marker', 'special-elite', 'great-vibes', 'lobster', 'lobster-two'],
         'serif-cn': ['noto-serif', 'noto-serif-lacuna', 'noto-serif-cafeteria', 'xiaowei'],
-        'sans-cn': ['noto-sans', 'noto-sans-hinted', 'noto-sans-rounded', 'misans', 'harmony', 'neo-xihei', 'zcool-round', 'dingtalk', 'zcool-jingnv', 'zcool-wenyi', 'zcool-gaoduanhei', 'zcool-wenyihei', 'qingke', 'kuaile', 'smiley'],
+        'sans-cn': ['noto-sans', 'noto-sans-hinted', 'noto-sans-rounded', 'misans', 'harmony', 'neo-xihei', 'zcool-round', 'dingtalk', 'zcool-jingnv', 'zcool-wenyi', 'zcool-gaoduanhei', 'zcool-wenyihei', 'qingke', 'kuaile', 'smiley', 'cn-round-youshe', 'cn-round-alimama', 'cn-round-hanzi', 'cn-round-zcool'],
         'serif-en': ['roboto-slab', 'playfair', 'pt-serif'],
-        'sans-en': ['rubik', 'montserrat', 'lato', 'bebas-neue', 'raleway', 'oswald', 'pt-sans', 'fira-code', 'doto-mono'],
+        'sans-en': ['rubik', 'montserrat', 'lato', 'bebas-neue', 'raleway', 'oswald', 'pt-sans', 'fira-code', 'doto-mono', 'en-round-quicksand', 'en-round-nunito-sans', 'en-round-muli', 'en-round-sniglet', 'en-round-baloo', 'en-round-hind'],
         mono: ['fira-code', 'doto-mono', 'special-elite'],
         display: ['pacifico', 'amatic', 'caveat', 'great-vibes', 'bebas-neue', 'lobster', 'permanent-marker'],
         rounded: ['nunito', 'nunito-sans', 'quicksand', 'varela-round', 'comfortaa', 'baloo-2', 'fredoka-one', 'bubblegum-sans', 'chewy', 'chakra-petch', 'hind', 'mada', 'tajawal', 'almarai', 'boogaloo', 'bungee', 'passion-one', 'cabin-sketch', 'patrick-hand', 'jua', 'single-day', 'do-hyeon'],

@@ -36,6 +36,7 @@
 
 ### 2026-11-24（最新）
 
+- **主题色扩至 999 种 + 圆体扩充**：`ACCENT_PRESETS` 保留 537 条手工精选，模块加载时用 HSL 色环生成器补足 462 条（`x001`~`x462`，运行时实测总数 999）；设置面板新增「扩展 462」分类按 `xNNN` 前缀筛选。`FONT_OPTS` 新增 10 款圆体（中文：优设圆体/阿里妈妈方圆/汉字圆体/站酷圆体；英文：Quicksand/Nunito Sans/Muli/Sniglet/Baloo 2/Hind），归入「sans-cn / sans-en」分类。
 - **数据面板加营运线路号 + 搜索框字体修复**：`scan-vehicle-ops.mjs` 每车档案新增 `lineNo`（营运线路号，如 337，跨分片取最后一次），面板表格/筛选/导出均加入该字段；搜索框加明确高度 68rpx + 行高 + placeholder 独立配色，避免自定义字体下中文显示不全。
 - **数据面板字段补全 + UI 重叠修复**：面板表格改为完整展示所属营运公司（全名）/ 线路号（全部）/ 自编号 / 首次上线时间 / 最终下线时间 / 最高车速 / 超速次数 / 历史发车次数 / 车辆调配记录，固定列宽 + 横向滚动避免省略号；排序新增上线/下线维度，导出列同步对齐。修复「双重窗口」：DataPanel 原本自带卡片头（标题/关闭/导出），与外层 FloatWin 重复导致 UI 重叠——改为纯内容组件，操作行（时次/导出/同步）移到内部工具条，拖动与关闭交由外层 FloatWin。
 - **高德采集主辅链路反转 + 设置分区合并 + 手机端底部栏遮挡修复**：SSR（`scan-poi-newbus.mjs`，免 Key、Cookie）改为主方案，`--overwrite` 覆盖站点/走向并写 `source:'amap'` + `amap.primary='newbus'`；linename 主链路（`scan-routes-amap.mjs`，需 Key）降为辅助，`auto-collect.mjs` 改用 `--retry-unmatched` 只补漏、不再 `--force` 全量覆盖。`isAmapStops()` 兼容 `primary==='newbus'` 站点（POI id 非 BV 前缀），避免 `--backfill-stops` 误把 SSR 站点当集团站重采；主链路重采时清掉该标记。设置面板「线路走向」「免 Key Cookie」合并为一个「高德数据源」分区（Cookie 主 / KEY 辅，带角色标签）。手机端 `.side-col` 从 `bottom:20rpx` 抬到 `96rpx` 给底部快捷栏让位（此前 z-index 20 盖住 z-index 11 的底部栏导致不可见），底部栏加 `max-width: calc(100vw - 24rpx)` 支持横向滑动。

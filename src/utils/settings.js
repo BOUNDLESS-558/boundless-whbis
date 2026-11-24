@@ -634,6 +634,45 @@ export const ACCENT_PRESETS = [
   { key: 'lilac2', hex: '#c8a2c8', label: '丁香' },
 ]
 
+/**
+ * 扩展色：程序化铺满 HSL 色环，补足到总数 999 种。
+ * 手工精选项（上面 537 条）全部保留在前；扩展项 key 为 xNNN、label「扩展 NNN」，
+ * 统一归入设置面板的「扩展」分类（见 map.vue 的 accentCatOptions / filteredAccentPresets）。
+ * 生成在模块加载时完成（462 次简单 HSL→RGB，耗时可忽略），不写死进源码。
+ */
+;(function fillAccentTo999() {
+  const TARGET = 999
+  // hsl → hex：h 0~360、s/l 0~100
+  const hslHex = (h, s, l) => {
+    s /= 100; l /= 100
+    const k = (n) => (n + h / 30) % 12
+    const a = s * Math.min(l, 1 - l)
+    const f = (n) => l - a * Math.max(-1, Math.min(k(n) - 3, Math.min(9 - k(n), 1)))
+    const to = (x) => Math.round(x * 255).toString(16).padStart(2, '0')
+    return `#${to(f(0))}${to(f(8))}${to(f(4))}`
+  }
+  const seenHex = new Set(ACCENT_PRESETS.map((p) => p.hex.toLowerCase()))
+  let i = 0
+  // 12 个色相 × 多档饱和度/明度，循环直到补满；跳过与手工项重复的 hex
+  const LIGHTS = [88, 76, 64, 52, 40, 28]
+  const SATS = [95, 78, 60, 42]
+  outer: for (let round = 0; round < 12; round++) {
+    for (const l of LIGHTS) {
+      for (const s of SATS) {
+        for (let hue = 0; hue < 360; hue += 30) {
+          if (ACCENT_PRESETS.length >= TARGET) break outer
+          const h = (hue + round * 7) % 360
+          const hex = hslHex(h, s, l)
+          if (seenHex.has(hex)) continue
+          seenHex.add(hex)
+          i++
+          ACCENT_PRESETS.push({ key: `x${String(i).padStart(3, '0')}`, hex, label: `扩展 ${String(i).padStart(3, '0')}` })
+        }
+      }
+    }
+  }
+})()
+
 /** 规范成 #rrggbb 小写；非法输入返回 null */
 function normHex(v) {
   let s = String(v == null ? '' : v).trim().toLowerCase()
@@ -1252,6 +1291,50 @@ export const FONT_OPTS = [
   {
     key: 'do-hyeon', label: 'Do Hyeon', note: '韩文圆体 · 现代有力', family: "'Do Hyeon'",
     css: [FS5 + 'do-hyeon@4.0.0/400.css'],
+  },
+
+  // ── 圆体扩充（2026-11-24）──
+  // 中文圆体：cn-fontsource 分片的免费商用圆体，字形圆润、适合屏幕正文与标题
+  {
+    key: 'cn-round-youshe', label: '优设圆体', note: '中文圆体 · 现代圆润', family: "'Youshe Round'",
+    css: [CNFS + 'cn-fontsource-youshe-round-tianti@1.0.1/font.css'],
+  },
+  {
+    key: 'cn-round-alimama', label: '阿里妈妈方圆', note: '中文圆体 · 几何方正', family: "'Alimama FangYuanTi VF'",
+    css: [CNFS + 'cn-fontsource-alimama-fangyuan-ti-vf@1.0.1/font.css'],
+  },
+  {
+    key: 'cn-round-hanzi', label: '汉字圆体', note: '中文圆体 · 温润饱满', family: "'Hanzi Round SC'",
+    css: [CNFS + 'cn-fontsource-hanzi-round-sc@1.0.1/font.css'],
+  },
+  {
+    key: 'cn-round-zcool', label: '站酷圆体', note: '中文圆体 · 圆润活泼', family: "'ZCOOL KuaiLe'",
+    css: [FS5 + 'zcool-kuaile@5.1.0/400.css'],
+  },
+  // 英文圆体：fontsource 几何/柔和圆体，补足多语言混排场景
+  {
+    key: 'en-round-quicksand', label: 'Quicksand', note: '英文圆体 · 轻盈几何', family: "'Quicksand'",
+    css: [FS5 + 'quicksand@5.2.0/400.css', FS5 + 'quicksand@5.2.0/700.css'],
+  },
+  {
+    key: 'en-round-nunito-sans', label: 'Nunito Sans', note: '英文圆体 · 易读正文', family: "'Nunito Sans'",
+    css: [FS5 + 'nunito-sans@5.1.0/400.css', FS5 + 'nunito-sans@5.1.0/700.css'],
+  },
+  {
+    key: 'en-round-muli', label: 'Muli', note: '英文圆体 · 简洁圆润', family: "'Muli'",
+    css: [FS5 + 'muli@4.0.0/400.css', FS5 + 'muli@4.0.0/700.css'],
+  },
+  {
+    key: 'en-round-sniglet', label: 'Sniglet', note: '英文圆体 · 圆润可爱', family: "'Sniglet'",
+    css: [FS5 + 'sniglet@4.0.0/400.css'],
+  },
+  {
+    key: 'en-round-baloo', label: 'Baloo 2', note: '英文圆体 · 饱满友好', family: "'Baloo 2'",
+    css: [FS5 + 'baloo-2@5.1.0/400.css', FS5 + 'baloo-2@5.1.0/700.css'],
+  },
+  {
+    key: 'en-round-hind', label: 'Hind', note: '英文圆体 · 柔和现代', family: "'Hind'",
+    css: [FS5 + 'hind@5.1.0/400.css', FS5 + 'hind@5.1.0/700.css'],
   },
 ]
 
