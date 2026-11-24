@@ -319,10 +319,10 @@
       <!-- 方向分组：仅线路态显示，全市态不显示 -->
       <template v-if="!cityOn">
         <view class="bb-sep"></view>
-        <!-- 实时线路站点窗：改由按钮触发，不再选线自动弹出 -->
-        <view class="bb-item" :class="{ on: stopsOpen }" @click="$emit('toggle-stops')" title="打开/关闭实时线路站点窗（站点·在线车辆·营运信息）">
+        <!-- 实时线路窗：改由按钮触发，不再选线自动弹出 -->
+        <view class="bb-item bb-stops" :class="{ on: stopsOpen }" @click="$emit('toggle-stops')" title="打开/关闭实时线路窗（站点·在线车辆·营运信息）">
           <text class="bb-ico">🚏</text>
-          <text class="bb-label">站点</text>
+          <text class="bb-label">实时线路</text>
         </view>
         <view class="bb-item" :class="{ on: dirFilter === 0 }" @click="setDirView(0)" title="仅显示上行车辆">
           <text class="bb-ico up">↑</text>
@@ -6191,6 +6191,9 @@ export default {
   white-space: nowrap;
   letter-spacing: 0.03em;
 }
+/* 实时线路按钮：四字文案，单独放宽并缩字号，避免与其它两字档位挤在一起 */
+.bb-stops { min-width: 76rpx; padding: 2rpx 8rpx; }
+.bb-stops .bb-label { font-size: 12rpx; letter-spacing: 0; }
 .bb-sep {
   flex: 0 0 1rpx;
   width: 1rpx;
