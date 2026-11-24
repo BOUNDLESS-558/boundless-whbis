@@ -20,11 +20,12 @@
  *   node scripts/scan-routes-amap.mjs --city 武汉 --delay 1100 # 控制 QPS（免费 1000~5000/日）
  *   node scripts/scan-routes-amap.mjs --retry-unmatched         # 只重试未命中的线，done 的不动
  *   node scripts/scan-routes-amap.mjs --force                   # 全量强制重拉（跳过进度台账，每线每方向重新获取）
+ *   node scripts/scan-routes-amap.mjs --batch-size 3            # 每 3 条线后暂停 3×DELAY，防高德限流
  *   node scripts/scan-routes-amap.mjs --only-changed scripts/.changed-lines.txt
  *        # 增量重拉：仅对 scan-routes.mjs --detect-changes 登记的「站点变化的线路」刷新高德走向
  *        # （本地调试用；CI 下 auto-collect 已改为 --force 全量重拉，不再走此增量模式）
  *
- * 全量重拉说明：auto-collect 每 2h 跑一次，高德步骤使用 --force 跳过进度台账，
+ * 全量重拉说明：auto-collect 每 12h 跑一次，高德步骤使用 --force 跳过进度台账，
  * 对整个武汉公交系统的每条线路、每个方向重新拉取高德官方轨迹与站点数据，
  * 确保站点信息始终与上游保持一致。高德日配额（1000~5000/日）是主要约束：
  * 全量约 1000+ 条线 × 2 方向 ≈ 2000 次请求，配额耗尽时自动切备用链路
@@ -94,6 +95,10 @@ const CITYNAME = argOf('city', '武汉')
 const DELAY = Math.max(0, Number(argOf('delay', 1100)))
 // 0 = 不限；CI 里可分批跑，避免单次 job 过长。只统计「实际处理」的线路，跳过的不算。
 const MAX_LINES = Math.max(0, Number(argOf('max-lines', 0)))
+// 批量大小：每处理 BATCH_SIZE 条线路后插入一次长延迟（3×DELAY），降低高德侧限流概率。
+// 高德免 Key 接口对同一 IP 有 QPS 限制，连续请求过密会导致 /line 接口返回「未找到」（实际存在）。
+// 默认 3 条一批，每批后暂停 3×DELAY，既保证吞吐又避免触发限流。
+const BATCH_SIZE = Math.max(1, Number(argOf('batch-size', 3)))
 // GitHub Actions 日志是行缓冲，\r 刷新进度会糊成一长行；CI 下改用逐行输出
 const CI_LOG = has('ci-log') || !!process.env.GITHUB_ACTIONS
 const FORCE = has('force')
@@ -512,6 +517,7 @@ if (VALIDATE_DONE || VALIDATE_ONLY) {
 }
 
 let doneCount = 0
+let batchCount = 0
 for (const l of todoFinal) {
   if (FALLBACK_EXHAUSTED) break
   if (MAX_LINES && doneCount >= MAX_LINES) {
@@ -671,7 +677,13 @@ for (const l of todoFinal) {
     await requestFlush()
     saveProgress()
   }
-  if (DELAY) await sleep(DELAY)
+  // 每 BATCH_SIZE 条线后插入一次长延迟（3×DELAY），降低高德侧限流概率；
+// 高德免 Key 接口对同一 IP 有 QPS 限制，连续请求过密会导致 /line 接口返回「未找到」（实际存在）。
+batchCount++
+if (DELAY) {
+  const batchDelay = (batchCount % BATCH_SIZE === 0) ? DELAY * 3 : DELAY
+  await sleep(batchDelay)
+}
 }
 await flushTail
 flushDirty()

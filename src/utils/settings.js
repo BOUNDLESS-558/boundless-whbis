@@ -1,8 +1,7 @@
 /**
  * 全局设置中心（纯本地存储 · 按设备生效，不依赖后端）
  *
- * - 皮肤：黑色 / 白色 / 跟随系统。H5 下把解析结果写到 <html data-skin="…">，
- *   全局 CSS（App.vue）据此换肤；「跟随系统」监听 prefers-color-scheme 变化即时跟随。
+ * - 皮肤：仅黑色。H5 下把结果写到 <html data-skin="dark">，全局 CSS 统一深色。
  * - 刷新间隔：手动(0) / 15 / 20 / 30 秒，全站唯一真源（whbis:refresh-default）。
  *   实时线路、地图页、极简站牌、账号与设置里的刷新控件都读写这一份值，
  *   任意一处改动经 onRefreshSecChange 订阅即时同步到其余控件。
@@ -29,8 +28,6 @@ const COPY_MODE_KEY = 'whbis:copy-mode'
 
 export const SKIN_OPTS = [
   { key: 'dark', label: '黑色' },
-  { key: 'light', label: '白色' },
-  { key: 'auto', label: '跟随系统' },
 ]
 // 0 = 手动刷新（不自动轮询，仅用户下拉/点刷新时拉取）
 // 全站统一档位：设置面板分段 + 各视图下拉共用，避免各存一份造成「设置不同步」
@@ -772,49 +769,26 @@ export function getSkin() {
   return SKIN_OPTS.some((o) => o.key === v) ? v : 'dark'
 }
 
-/** 解析后的实际皮肤：auto 按 prefers-color-scheme 落到 dark/light */
+/** 当前皮肤：仅黑色，直接返回存储值（默认 dark） */
 export function resolvedSkin() {
-  const s = getSkin()
-  if (s !== 'auto') return s
-  // #ifdef H5
-  try {
-    return window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark'
-  } catch (e) { /* 匹配不了就按深色 */ }
-  // #endif
-  return 'dark'
+  return getSkin()
 }
 
 /** 把当前皮肤应用到文档根节点（App.vue 的全局 CSS 据此换肤） */
 export function applySkin() {
   // #ifdef H5
   try {
-    document.documentElement.dataset.skin = resolvedSkin()
+    document.documentElement.dataset.skin = 'dark'
   } catch (e) { /* 忽略 */ }
   // #endif
 }
 
-let _watching = false
-/** 「跟随系统」：监听系统深浅色切换，auto 档下即时重应用（整个生命周期只挂一次） */
-export function watchSystemSkin() {
-  // #ifdef H5
-  if (_watching || typeof window === 'undefined' || !window.matchMedia) return
-  _watching = true
-  try {
-    const mq = window.matchMedia('(prefers-color-scheme: light)')
-    const h = () => {
-      if (getSkin() === 'auto') applySkin()
-    }
-    if (mq.addEventListener) mq.addEventListener('change', h)
-    else if (mq.addListener) mq.addListener(h)
-  } catch (e) { /* 忽略 */ }
-  // #endif
-}
+/** 皮肤仅黑色，无需监听系统深浅色切换 */
+export function watchSystemSkin() {}
 
 export function setSkin(skin) {
-  if (SKIN_OPTS.some((o) => o.key === skin)) {
-    writeRaw(SKIN_KEY, skin)
-    applySkin()
-  }
+  writeRaw(SKIN_KEY, 'dark')
+  applySkin()
   return getSkin()
 }
 

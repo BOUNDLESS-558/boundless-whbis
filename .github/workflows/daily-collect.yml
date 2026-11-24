@@ -17,9 +17,9 @@ on:
   push:
     branches: [main]
   schedule:
-    # 每 2 小时一次（cron 分钟字段固定 0，每小时的 00 分触发）。
+    # 每 12 小时一次（cron 分钟字段固定 0，每天 00:00 / 12:00 触发）。
     # 采集器并发+断点续跑，靠 concurrency 排队不重叠。
-    - cron: '0 */2 * * *'
+    - cron: '0 */12 * * *'
     # 周日补充全量重枚举（FULL_SCAN=1），UTC 04:23 = 北京时间 12:23
     - cron: '23 4 * * 0'
   workflow_dispatch:
