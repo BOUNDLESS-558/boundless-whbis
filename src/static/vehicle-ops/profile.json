@@ -1,5 +1,5 @@
 {
-  "updated": "2026-11-25 13:04",
+  "updated": "2026-11-25 23:38",
   "speedLimit": 60,
   "days": [
     "2026-11-25"
@@ -2408,17 +2408,17 @@
     "3176": {
       "orgId": "3176",
       "lineNo": "707",
-      "maxSpeed": 17,
+      "maxSpeed": 24,
       "speedCount": 0,
       "onlineAt": "2026-11-25 06:41",
-      "offlineAt": "2026-11-25 06:41",
-      "departures": 1,
+      "offlineAt": "2026-11-25 23:38",
+      "departures": 2,
       "transfers": [],
       "company": "武汉市公共交通集团有限责任公司三营运公司",
       "lines": [
         "707"
       ],
-      "samples": 1
+      "samples": 2
     },
     "3177": {
       "orgId": "3177",
@@ -2573,17 +2573,17 @@
     "3193": {
       "orgId": "3193",
       "lineNo": "707",
-      "maxSpeed": 0,
+      "maxSpeed": 30,
       "speedCount": 0,
       "onlineAt": "2026-11-25 06:41",
-      "offlineAt": "2026-11-25 13:04",
-      "departures": 2,
+      "offlineAt": "2026-11-25 23:38",
+      "departures": 3,
       "transfers": [],
       "company": "武汉市公共交通集团有限责任公司三营运公司",
       "lines": [
         "707"
       ],
-      "samples": 2
+      "samples": 3
     },
     "3196": {
       "orgId": "3196",
@@ -7392,6 +7392,21 @@
       ],
       "samples": 1
     },
+    "12380": {
+      "orgId": "12380",
+      "lineNo": "716",
+      "maxSpeed": 0,
+      "speedCount": 0,
+      "onlineAt": "2026-11-25 23:38",
+      "offlineAt": "2026-11-25 23:38",
+      "departures": 1,
+      "transfers": [],
+      "company": "武汉市公共交通集团有限责任公司一营运公司",
+      "lines": [
+        "716"
+      ],
+      "samples": 1
+    },
     "12381": {
       "orgId": "12381",
       "lineNo": "790",
@@ -8448,14 +8463,14 @@
       "maxSpeed": 38,
       "speedCount": 0,
       "onlineAt": "2026-11-25 06:41",
-      "offlineAt": "2026-11-25 13:04",
-      "departures": 2,
+      "offlineAt": "2026-11-25 23:38",
+      "departures": 3,
       "transfers": [],
       "company": "武汉市公共交通集团有限责任公司一营运公司",
       "lines": [
         "508"
       ],
-      "samples": 2
+      "samples": 3
     },
     "12516": {
       "orgId": "12516",
@@ -12829,6 +12844,21 @@
       ],
       "samples": 1
     },
+    "13233": {
+      "orgId": "13233",
+      "lineNo": "295",
+      "maxSpeed": 38,
+      "speedCount": 0,
+      "onlineAt": "2026-11-25 23:38",
+      "offlineAt": "2026-11-25 23:38",
+      "departures": 1,
+      "transfers": [],
+      "company": "武汉市公共交通集团有限责任公司一营运公司",
+      "lines": [
+        "295"
+      ],
+      "samples": 1
+    },
     "13234": {
       "orgId": "13234",
       "lineNo": "790",
@@ -14077,17 +14107,17 @@
     "22301": {
       "orgId": "22301",
       "lineNo": "9",
-      "maxSpeed": 34,
+      "maxSpeed": 40,
       "speedCount": 0,
       "onlineAt": "2026-11-25 06:41",
-      "offlineAt": "2026-11-25 13:04",
-      "departures": 2,
+      "offlineAt": "2026-11-25 23:38",
+      "departures": 3,
       "transfers": [],
       "company": "武汉市公共交通集团有限责任公司二营运公司",
       "lines": [
         "9"
       ],
-      "samples": 2
+      "samples": 3
     },
     "22302": {
       "orgId": "22302",
@@ -16660,14 +16690,14 @@
       "maxSpeed": 0,
       "speedCount": 0,
       "onlineAt": "2026-11-25 06:41",
-      "offlineAt": "2026-11-25 06:41",
-      "departures": 1,
+      "offlineAt": "2026-11-25 23:38",
+      "departures": 2,
       "transfers": [],
       "company": "武汉市公共交通集团有限责任公司二营运公司",
       "lines": [
         "741"
       ],
-      "samples": 1
+      "samples": 2
     },
     "22667": {
       "orgId": "22667",
@@ -17104,6 +17134,21 @@
       ],
       "samples": 2
     },
+    "22732": {
+      "orgId": "22732",
+      "lineNo": "703",
+      "maxSpeed": 0,
+      "speedCount": 0,
+      "onlineAt": "2026-11-25 23:38",
+      "offlineAt": "2026-11-25 23:38",
+      "departures": 1,
+      "transfers": [],
+      "company": "武汉市公共交通集团有限责任公司二营运公司",
+      "lines": [
+        "703"
+      ],
+      "samples": 1
+    },
     "22733": {
       "orgId": "22733",
       "lineNo": "703",
@@ -17419,6 +17464,21 @@
       ],
       "samples": 1
     },
+    "22769": {
+      "orgId": "22769",
+      "lineNo": "1",
+      "maxSpeed": 33,
+      "speedCount": 0,
+      "onlineAt": "2026-11-25 23:38",
+      "offlineAt": "2026-11-25 23:38",
+      "departures": 1,
+      "transfers": [],
+      "company": "武汉市公共交通集团有限责任公司二营运公司",
+      "lines": [
+        "1"
+      ],
+      "samples": 1
+    },
     "22773": {
       "orgId": "22773",
       "lineNo": "9",
@@ -17431,6 +17491,21 @@
       "company": "武汉市公共交通集团有限责任公司二营运公司",
       "lines": [
         "9"
+      ],
+      "samples": 1
+    },
+    "22775": {
+      "orgId": "22775",
+      "lineNo": "294",
+      "maxSpeed": 35,
+      "speedCount": 0,
+      "onlineAt": "2026-11-25 23:38",
+      "offlineAt": "2026-11-25 23:38",
+      "departures": 1,
+      "transfers": [],
+      "company": "武汉市公共交通集团有限责任公司二营运公司",
+      "lines": [
+        "294"
       ],
       "samples": 1
     },
@@ -18707,14 +18782,14 @@
       "maxSpeed": 0,
       "speedCount": 0,
       "onlineAt": "2026-11-25 06:41",
-      "offlineAt": "2026-11-25 06:41",
-      "departures": 1,
+      "offlineAt": "2026-11-25 23:38",
+      "departures": 2,
       "transfers": [],
       "company": "武汉市公共交通集团有限责任公司二营运公司",
       "lines": [
         "703"
       ],
-      "samples": 1
+      "samples": 2
     },
     "23296": {
       "orgId": "23296",
@@ -19157,14 +19232,14 @@
       "maxSpeed": 35,
       "speedCount": 0,
       "onlineAt": "2026-11-25 06:41",
-      "offlineAt": "2026-11-25 13:04",
-      "departures": 2,
+      "offlineAt": "2026-11-25 23:38",
+      "departures": 3,
       "transfers": [],
       "company": "武汉市公共交通集团有限责任公司二营运公司",
       "lines": [
         "701"
       ],
-      "samples": 2
+      "samples": 3
     },
     "23366": {
       "orgId": "23366",
@@ -20858,6 +20933,21 @@
       "company": "武汉市公共交通集团有限责任公司二营运公司",
       "lines": [
         "701"
+      ],
+      "samples": 1
+    },
+    "23576": {
+      "orgId": "23576",
+      "lineNo": "703",
+      "maxSpeed": 33,
+      "speedCount": 0,
+      "onlineAt": "2026-11-25 23:38",
+      "offlineAt": "2026-11-25 23:38",
+      "departures": 1,
+      "transfers": [],
+      "company": "武汉市公共交通集团有限责任公司二营运公司",
+      "lines": [
+        "703"
       ],
       "samples": 1
     },
@@ -36433,14 +36523,14 @@
       "maxSpeed": 28,
       "speedCount": 0,
       "onlineAt": "2026-11-25 06:41",
-      "offlineAt": "2026-11-25 06:41",
-      "departures": 1,
+      "offlineAt": "2026-11-25 23:38",
+      "departures": 2,
       "transfers": [],
       "company": "武汉市公共交通集团有限责任公司六营运公司",
       "lines": [
         "514"
       ],
-      "samples": 1
+      "samples": 2
     },
     "61492": {
       "orgId": "61492",
@@ -36469,6 +36559,21 @@
       "company": "武汉市公共交通集团有限责任公司六营运公司",
       "lines": [
         "782"
+      ],
+      "samples": 1
+    },
+    "61496": {
+      "orgId": "61496",
+      "lineNo": "514",
+      "maxSpeed": 35,
+      "speedCount": 0,
+      "onlineAt": "2026-11-25 23:38",
+      "offlineAt": "2026-11-25 23:38",
+      "departures": 1,
+      "transfers": [],
+      "company": "武汉市公共交通集团有限责任公司六营运公司",
+      "lines": [
+        "514"
       ],
       "samples": 1
     },
@@ -36516,6 +36621,21 @@
         "514"
       ],
       "samples": 2
+    },
+    "61503": {
+      "orgId": "61503",
+      "lineNo": "514",
+      "maxSpeed": 0,
+      "speedCount": 0,
+      "onlineAt": "2026-11-25 23:38",
+      "offlineAt": "2026-11-25 23:38",
+      "departures": 1,
+      "transfers": [],
+      "company": "武汉市公共交通集团有限责任公司六营运公司",
+      "lines": [
+        "514"
+      ],
+      "samples": 1
     },
     "61508": {
       "orgId": "61508",
