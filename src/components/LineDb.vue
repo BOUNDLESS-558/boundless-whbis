@@ -728,14 +728,17 @@ export default {
 /* 分页条：左右翻页 + 页码（当前页高亮），替代原来的「加载更多」 */
 .db-pager {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  gap: 10rpx;
+  justify-content: center;
+  gap: 12rpx;
   margin: 8rpx 26rpx 26rpx;
 }
 .db-pg-size {
-  flex: 0 0 auto;
+  flex: 1 1 100%;
   display: flex;
   align-items: center;
+  justify-content: center;
   gap: 6rpx;
   font-size: 20rpx;
   color: #9aa6bd;
@@ -752,13 +755,12 @@ export default {
 .db-pg-size-opt.on { background: var(--ac, #6366f1); color: #fff; }
 .db-pg-arrow {
   flex: 0 0 auto;
-  min-width: 64rpx;
-  height: 64rpx;
-  padding: 0 12rpx;
-  line-height: 60rpx;
-  font-size: 22rpx;
+  height: 60rpx;
+  padding: 0 16rpx;
+  line-height: 54rpx;
+  font-size: 24rpx;
+  white-space: nowrap;
   text-align: center;
-  font-size: 34rpx;
   color: var(--ac-hi);
   border-radius: 14rpx;
   background: rgba(var(--ac-rgb), 0.12);
@@ -767,12 +769,13 @@ export default {
 }
 .db-pg-arrow.dis { opacity: 0.3; pointer-events: none; }
 .db-pg-nums {
-  flex: 1 1 auto;
+  flex: 1 1 200rpx;
   min-width: 0;
   display: flex;
   align-items: center;
   justify-content: center;
   gap: 6rpx;
+  overflow-x: auto;
 }
 .db-pg-num {
   min-width: 56rpx;
@@ -793,6 +796,12 @@ export default {
   box-shadow: 0 4rpx 12rpx rgba(var(--ac-rgb), 0.35);
 }
 .db-pg-num.gap { color: rgba(255, 255, 255, 0.3); cursor: default; background: none; }
+/* 窄屏收紧页码，保证左右翻页按钮始终完整可见 */
+@media (max-width: 720px) {
+  .db-pg-arrow { padding: 0 12rpx; font-size: 22rpx; }
+  .db-pg-nums { gap: 4rpx; }
+  .db-pg-num { min-width: 44rpx; height: 48rpx; line-height: 44rpx; padding: 0 4rpx; font-size: 20rpx; }
+}
 /* 状态徽标：营运中翠绿 / 已收班琥珀 / 已停运石板灰（避开上下行方向色） */
 .db-badge {
   flex: 0 0 auto;
