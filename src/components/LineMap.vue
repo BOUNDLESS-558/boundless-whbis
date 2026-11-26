@@ -1,5 +1,5 @@
 <template>
-  <view class="lmap-page" :class="{ fs: isFullscreen }">
+  <view class="lmap-page" :class="{ fs: isFullscreen }" :style="panelFlowStyle">
     <!-- 有地图 Key：渲染原生地图；:key 变化时整体重建，杜绝旧 callout 浮层残留 -->
     <map
       v-if="useMap"
@@ -1081,7 +1081,7 @@ export default {
       cam: { u: 0.5, v: 0.4, zoom: 13 },
       projCenter: { x: 187, y: 333 },
       // UI 占位（控制卡 / 右侧面板 / 车速榜 / 图例），用于计算路线可绘制区域
-      uiRects: { ctrl: null, side: null, legend: null, rank: null },
+      uiRects: { ctrl: null, side: null, legend: null, rank: null, stage: null },
       // 相机是否已按线路自适应过一次（避免 15s 刷新时视图乱跳）
       camInited: false,
       showStopLabels: true,
@@ -1610,6 +1610,15 @@ export default {
         bottom: 'auto',
         transform: 'none',
       }
+    },
+    // 移动端浮窗统一下移到控制卡下方：控制卡在窄屏是通栏，固定 top:24rpx 会盖住输入面板。
+    // 用实测高度算出相对本组件根节点的偏移，写成 CSS 变量供车速榜 / 查车窗共用；
+    // 用户手动拖过位置的窗由各自内联 style 优先，不受影响。
+    panelFlowStyle() {
+      const c = this.uiRects.ctrl
+      const stage = this.uiRects.stage
+      if (!c || !stage) return null
+      return { '--whbis-float-top': Math.max(12, Math.round(c.bottom - stage.top + 12)) + 'px' }
     },
     // 自编号查车浮窗拖动后的位置；未拖动走 CSS 默认定位（与车速榜上下错开）
     orgStyle() {
@@ -3208,6 +3217,7 @@ export default {
       q.select('.schematic').boundingClientRect()
       q.select('.city-legend').boundingClientRect()
       q.select('.rank-card').boundingClientRect()
+      q.select('.lmap-page').boundingClientRect()
       q.exec((res) => {
         const arr = res || []
         const prevCtrl = this.uiRects.ctrl
@@ -3218,6 +3228,11 @@ export default {
           side: arr[1] || null,
           legend: arr[2] || arr[4] || null,
           rank: arr[5] || null,
+          // 根节点选择器在部分端查不到时退回 $el，保证 CSS 变量始终能算出来
+          stage: arr[6] || (() => {
+            const el = this.$el && (this.$el.$el || this.$el)
+            return el && el.getBoundingClientRect ? el.getBoundingClientRect() : null
+          })(),
         }
         // H5 有原生标题栏（--window-top），窗口高度不等于画布高度，以实际画布矩形为准
         const box = arr[3]
@@ -6439,6 +6454,11 @@ export default {
 .org-search.with-rank {
   top: calc(34vh + 44rpx);
   max-height: calc(58vh - 20rpx);
+}
+/* 窄屏：控制卡通栏，两个浮窗统一从控制卡下沿开始，避免盖住线路号输入框 */
+@media (max-width: 720px) {
+  .org-search { top: var(--whbis-float-top, 24rpx); }
+  .org-search.with-rank { top: calc(var(--whbis-float-top, 24rpx) + 34vh + 20rpx); }
 }
 .org-search.with-rank .os-body {
   flex: 1;

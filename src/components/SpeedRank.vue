@@ -417,6 +417,10 @@ export default {
 .rank-card.stacked.folded {
   max-height: none;
 }
+/* 窄屏下全市输入卡是通栏，榜单改由 LineMap 实测的控制卡下沿定位，不再盖住输入框 */
+@media (max-width: 720px) {
+  .rank-card { top: var(--whbis-float-top, 24rpx); }
+}
 .rank-head {
   flex: 0 0 auto;
   display: flex;
