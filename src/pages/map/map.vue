@@ -13,6 +13,7 @@
         @pick="onPickLine"
         @view-change="switchView"
         @account="onAccount"
+        @suggest-change="onSuggestChange"
       />
     </view>
 
@@ -27,6 +28,7 @@
         :city-mode="view === 'city'"
         :sim-signboard="simSignboard"
         :stops-open="stopsWin"
+        :hide-panels="suggesting"
         :embedded="true"
         :fs-enabled="false"
         @pick-line="onPickLine"
@@ -46,6 +48,7 @@
             @pick="onPickLine"
             @view-change="switchView"
             @account="onAccount"
+            @suggest-change="onSuggestChange"
           />
         </template>
       </LineMap>
@@ -53,7 +56,7 @@
       <!-- 实时线路：已并入实时地图视图，选线后直接在地图上开这扇窗（不再单列 stops 档）。
            stopsWin 本地开关控制显隐：关掉只收窗、仍留在地图，重选线路再自动打开。 -->
       <FloatWin
-        v-if="hasLine && view === 'map' && stopsWin"
+        v-if="hasLine && view === 'map' && stopsWin && !suggesting"
         :title="'实时线路 · ' + displayLineName"
         sub="站点 · 在线车辆 · 营运信息"
         :width-rpx="1120"
@@ -117,9 +120,9 @@
       <FloatWin
         v-if="view === 'data'"
         title="数据面板"
-        sub="每车营运档案 · 15 分钟更新"
+        sub="每车营运档案 · 实时更新"
         :width-rpx="1200"
-        max-height="80vh"
+        max-height="62vh"
         resize-key="data"
         @close="view = 'map'"
       >
@@ -572,6 +575,8 @@ export default {
       lineNo: '',
       // 实时线路窗（已并入地图视图）的显隐；默认关闭，由底部栏「站点」按钮触发
       stopsWin: false,
+      // 搜索联想下拉展开中：隐藏实时线路/车辆面板，避免遮挡候选列表
+      suggesting: false,
       direction: 0,
       startStop: '',
       endStop: '',
@@ -893,6 +898,10 @@ export default {
     onToggleStops() {
       if (!this.hasLine) return
       this.stopsWin = !this.stopsWin
+    },
+    // 搜索联想下拉开合：展开时收起实时线路与车辆面板，收起后恢复
+    onSuggestChange(open) {
+      this.suggesting = !!open
     },
     // 全市公交自己交回视图档位（首次进入时用户拒了那笔扫描开销）：档位判据只留在宿主一处
     onExitCity() {

@@ -38,6 +38,8 @@
 
 ### 2026-11-27（最新）
 
+- **精准定时方案（Cloudflare Worker Cron → GitHub Actions API）**：GitHub Actions schedule 高峰可延迟数小时且丢任务，Vercel Hobby cron 每天仅 1 次，改用 Cloudflare Workers 免费 Cron（每分钟准时）调 GitHub Actions `workflow_dispatch` API（即时启动，不走 schedule 队列）触发采集直写 Neon。新增 `deploy/cloudflare-cron-worker.js` + `deploy/wrangler.toml` + `deploy/CLOUDFLARE-CRON.md`（含 PAT 创建 / wrangler deploy / secret 配置步骤）。`vehicle-ops.yml` 停用 schedule 只留 workflow_dispatch。
+- **UI 调整**：数据面板高度从 80vh/60vh 缩到 62vh/42vh；搜索联想下拉展开时自动隐藏「实时线路」浮窗与 LineMap 右侧栏（实时车辆 + 发车时刻），搜索完毕自动恢复（LineSearch 上抛 `suggest-change`，map.vue 传给 LineMap 的 `hide-panels`）。
 - **车辆营运采集提到每 1 分钟**：`vehicle-ops.yml` cron 从 `*/15 * * * *` 改为 `*/1 * * * *`（GitHub Actions 最小粒度，45 秒需用常驻 daemon `npm run daemon:ops`），并发提到 16 确保单轮 1 分钟内完成；`concurrency.cancel-in-progress: false` 排队不取消，避免采集被中途掐断。**不再 git commit 静态 JSON**（数据直写 Neon，避免 main 历史爆炸与 Vercel 每天 1440 次重建），`src/static/vehicle-ops/` 加入 .gitignore 并从 git 追踪移除（磁盘文件保留作本机备份）。
 
 ### 2026-11-26
