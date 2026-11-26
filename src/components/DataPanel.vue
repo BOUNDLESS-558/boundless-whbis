@@ -127,12 +127,15 @@
           <text class="dp-cell arrow">{{ expanded[rowKey(r)] ? '▴' : '▾' }}</text>
         </view>
         <view class="dp-item-detail" v-if="expanded[rowKey(r)]">
-          <view class="dp-dcell"><text class="dp-dk">记录时间</text><text class="dp-dv">{{ recordText(r) }}</text></view>
-          <view class="dp-dcell"><text class="dp-dk">首次上线</text><text class="dp-dv">{{ r.onlineAt || '—' }}</text></view>
-          <view class="dp-dcell"><text class="dp-dk">最终下线</text><text class="dp-dv">{{ r.offlineAt || '—' }}</text></view>
-          <view class="dp-dcell"><text class="dp-dk">发车 / 超速</text><text class="dp-dv">{{ r.departures }} 次 / {{ r.speedCount }} 次</text></view>
-          <view class="dp-dcell"><text class="dp-dk">超速评价</text><text class="dp-dv" :style="{ color: tierOf(r).color }">{{ tierOf(r).emoji }} {{ tierOf(r).label }}</text></view>
-          <view class="dp-dcell full"><text class="dp-dk">车辆调配</text><text class="dp-dv">{{ transferText(r) }}</text></view>
+          <view
+            class="dp-dcell"
+            v-for="(c, i) in detailCells(r)"
+            :key="i"
+            :class="{ full: c.full }"
+          >
+            <text class="dp-dk">{{ c.k }}</text>
+            <text class="dp-dv" :style="c.color ? { color: c.color } : null">{{ c.v }}</text>
+          </view>
         </view>
       </view>
     </scroll-view>
@@ -199,7 +202,6 @@ const SORTS = [
   { key: 'recordedAt', label: '记录时间' },
   { key: 'maxSpeed', label: '车速' },
   { key: 'speedCount', label: '超速' },
-  { key: 'departures', label: '发车' },
   { key: 'onlineAt', label: '上线' },
   { key: 'offlineAt', label: '下线' },
 ]
@@ -322,6 +324,22 @@ export default {
     recordText(r) { return r.date ? `${r.date} ${r.recordedAt || ''}`.trim() : (r.recordedAt || '—') },
     transferText(r) {
       return (r.transfers || []).map((t) => `${t.from}→${t.to} ${t.at}`).join('\n') || '无调配'
+    },
+    // 详情只渲染有内容的项：空值不再显示「—」占位置。
+    // 首次/最后下线时间实际是采集窗口内的首末次见到时刻，合并为「在运区间」一行。
+    detailCells(r) {
+      const out = []
+      const record = this.recordText(r)
+      if (record && record !== '—') out.push({ k: '记录时间', v: record })
+      const on = String(r.onlineAt || ''), off = String(r.offlineAt || '')
+      if (on || off) {
+        out.push({ k: '在运区间', v: `${on ? this.shortTime(on) : '?'} → ${off ? this.shortTime(off) : '?'}` })
+      }
+      out.push({ k: '超速次数', v: `${r.speedCount} 次` })
+      const t = this.tierOf(r)
+      out.push({ k: '超速评价', v: `${t.emoji} ${t.label}`, color: t.color })
+      out.push({ k: '车辆调配', v: this.transferText(r), full: true })
+      return out
     },
     speedColor(v) { return SPEED_BANDS[speedBandOf(v)].color },
     speedStyle(v) {
@@ -448,11 +466,11 @@ export default {
       return [
         r.company || '', r.lineNo || (r.lines || [])[0] || '', this.fmtNo(r.orgId),
         this.recordText(r), r.onlineAt || '', r.offlineAt || '', String(r.maxSpeed),
-        String(r.speedCount), String(r.departures), this.transferText(r).replace(/\n/g, '; '),
+        String(r.speedCount), this.transferText(r).replace(/\n/g, '; '),
       ]
     },
     async onCopy() {
-      const columns = ['所属营运公司', '营运线路号', '自编号', '记录时间', '首次上线时间', '最终下线时间', '最高车速', '超速次数', '历史发车次数', '车辆调配记录']
+      const columns = ['所属营运公司', '营运线路号', '自编号', '记录时间', '首次上线时间', '最终下线时间', '最高车速', '超速次数', '车辆调配记录']
       let list = []
       if (this.apiMode) {
         const q = this.queryParams({ all: '1' })
