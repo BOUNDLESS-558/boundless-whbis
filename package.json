@@ -19,6 +19,7 @@
     "build:foreign-net": "node scripts/build-foreign-net.mjs",
     "build:net": "node scripts/build-net-from-assets.mjs",
     "backfill:ops": "node scripts/backfill-vehicle-ops.mjs",
+    "daemon:ops": "node scripts/daemon-vehicle-ops.mjs",
     "backfill:ops:dry": "node scripts/backfill-vehicle-ops.mjs --dry",
     "scan:manifest": "node scripts/build-manifest.mjs",
     "probe:suggest": "node scripts/probe-line-suggest.mjs",

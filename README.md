@@ -48,6 +48,7 @@
 - **线路库翻页修复**：分页条改两行布局（每页选项独占一行），翻页按钮去掉重复字号并加 `white-space: nowrap`，窄屏收紧页码，避免「上一页 / 下一页」被挤压换行而显示不全。
 - **数据面板重构**：筛选区改「汇总条 + 四组独立折叠」（窄屏默认收起，先看数据）；10 列横滚表格改为紧凑概览行 + 点按展开详情，PC / 移动端同一套 flex-wrap 结构自适应；分页重做为两行（条数 / 每页 / 跳页 + 翻页按钮 / 可横滑页码）。保留原筛选、排序、导出与 API 兜底逻辑。
 - **面板徽标与超速标签**：营运公司由集团 logo 图改为实时车辆面板同款金色圆形序号徽标（非集团走各自公司标）；超速次数分七档标签（守规标兵 → 偶尔飘一下 → 有点上头 → 风驰电掣 → 秋名山车神 → 狂飙选手 → ≥50 次「暴躁车神」），颜色随档位变化并写入展开详情。
+- **常驻采集守护进程**：新增 `scripts/daemon-vehicle-ops.mjs` 与 `npm run daemon:ops`，在常驻机器上每 45 秒（`OPS_INTERVAL_MS` 可调）跑一轮全市采集并直写 Neon 数据表，不触发 GitHub Actions；并发默认 32、轮次不叠加，需配 `VEHICLE_OPS_API` / `VEHICLE_OPS_TOKEN`。Vercel / Cloudflare Serverless 与浏览器后台均无法常驻，故必须跑在常驻主机上。
 
 ### 2026-11-24
 
@@ -171,6 +172,21 @@ npm run test:routeclean # 站点序列清洗回归（离线读 network.json，�
 
 三个测试都是 `node scripts/*.mjs`，失败时退出码非 0，可直接当 CI 用。改完 `md5.js` / `busId.js` / `routeClean.js` 必须跑对应测试。
 
+### 方式 D：常驻后台采集（45 秒直写数据库，不使用 GitHub Actions）
+
+`npm run daemon:ops` 会常驻循环，每 **45 秒**跑一轮全市车辆采集，采集结果经 `/api/vehicle-ops` 直接写入 Neon 数据表（`vehicle_ops` 累计表 + `vehicle_ops_daily` 按日表），不再触发 GitHub Actions。
+
+```bash
+# 在一台常驻在线、能访问外网的机器上运行（VPS / NAS / 旧手机 Termux / 家用小主机）
+export VEHICLE_OPS_API=https://boundless-whbis.vercel.app/api/vehicle-ops
+export VEHICLE_OPS_TOKEN='与 Vercel 环境变量中同名的值保持一致'
+export OPS_INTERVAL_MS=45000     # 可选，默认 45 秒
+export OPS_CONCURRENCY=32        # 可选，默认 32（45 秒窗口需高于 Actions 的 6）
+npm run daemon:ops
+```
+
+注意：**Vercel / Cloudflare 的 Serverless 函数无法常驻后台**（按请求触发、执行完即销毁），浏览器后台定时器也会被节流冻结，所以这个守护进程必须跑在一台常驻机器上。若单轮超过 45 秒则结束后立即开下一轮、不叠加并发。上游接口本身有频率限制，并发不宜再往上加。
+
 ### 常用命令速查
 
 | 命令 | 作用 | 产物位置 |
@@ -179,6 +195,7 @@ npm run test:routeclean # 站点序列清洗回归（离线读 network.json，�
 | `npm run build:h5` | 构建网页版 | `dist/build/h5` |
 | `npm run build:app` | 构建 Android App 资源 | `dist/build/app` |
 | （Vercel 自动） | `main` push 触发构建部署到 `boundless-whbis.vercel.app` | — |
+| `npm run daemon:ops` | 常驻循环，每 45 秒抓全市车辆并直写数据库（替代 Actions） | Neon 数据表 + 静态快照 |
 | `npm run test:routeclean` | 站点序列清洗回归（离线读 network.json，不发请求不写盘） | — |
 | `npm run scan:lines` | 枚举探测线路网，合并写线路库（只补强不降级） | `src/static/lines/lines.json` |
 | `npm run scan:org` | buspedia 采集营运公司写 `org`（含手动核实映射） | `src/static/lines/lines.json` |
