@@ -662,6 +662,7 @@ export default {
         { key: 'mono', label: '等宽' },
         { key: 'display', label: '标题' },
         { key: 'rounded', label: '圆融' },
+        { key: 'jp', label: '日文' },
       ]
     },
     filteredAccentPresets() {
@@ -705,13 +706,14 @@ export default {
       if (this.fontCat === 'all') return this.fontOpts
       const map = {
         system: ['system'],
-        cursive: ['wenkai', 'wenkai-screen', 'wenkai-lite', 'mashan', 'longcang', 'zhimang', 'liujian', 'caomengyingti', 'chen-changqing', 'ma-shan-zheng-cursive', 'dancing-script', 'indie-flower', 'permanent-marker', 'special-elite', 'great-vibes', 'lobster', 'lobster-two'],
+        cursive: ['wenkai', 'wenkai-screen', 'wenkai-lite', 'mashan', 'longcang', 'zhimang', 'liujian', 'caomengyingti', 'chen-changqing', 'ma-shan-zheng-cursive', 'dancing-script', 'indie-flower', 'permanent-marker', 'special-elite', 'great-vibes', 'lobster', 'lobster-two', 'cn-title-ma-shan', 'cn-title-zhi-mang', 'cn-title-liu-jian', 'cn-title-long-cang'],
         'serif-cn': ['noto-serif', 'noto-serif-lacuna', 'noto-serif-cafeteria', 'xiaowei'],
         'sans-cn': ['noto-sans', 'noto-sans-hinted', 'noto-sans-rounded', 'misans', 'harmony', 'neo-xihei', 'zcool-round', 'dingtalk', 'zcool-jingnv', 'zcool-wenyi', 'zcool-gaoduanhei', 'zcool-wenyihei', 'qingke', 'kuaile', 'smiley', 'cn-round-youshe', 'cn-round-alimama', 'cn-round-hanzi', 'cn-round-zcool'],
-        'serif-en': ['roboto-slab', 'playfair', 'pt-serif'],
-        'sans-en': ['rubik', 'montserrat', 'lato', 'bebas-neue', 'raleway', 'oswald', 'pt-sans', 'fira-code', 'doto-mono', 'en-round-quicksand', 'en-round-nunito-sans', 'en-round-muli', 'en-round-sniglet', 'en-round-baloo', 'en-round-hind'],
-        mono: ['fira-code', 'doto-mono', 'special-elite'],
-        display: ['pacifico', 'amatic', 'caveat', 'great-vibes', 'bebas-neue', 'lobster', 'permanent-marker'],
+        'serif-en': ['roboto-slab', 'playfair', 'pt-serif', 'en-lora', 'en-merriweather', 'en-source-serif'],
+        'sans-en': ['rubik', 'montserrat', 'lato', 'bebas-neue', 'raleway', 'oswald', 'pt-sans', 'fira-code', 'doto-mono', 'en-round-quicksand', 'en-round-nunito-sans', 'en-round-muli', 'en-round-sniglet', 'en-round-baloo', 'en-round-hind', 'en-outfit', 'en-urbanist', 'en-manrope', 'en-dm-sans', 'en-plus-jakarta'],
+        mono: ['fira-code', 'doto-mono', 'special-elite', 'en-jetbrains', 'en-ibm-plex', 'en-source-code'],
+        display: ['pacifico', 'amatic', 'caveat', 'great-vibes', 'bebas-neue', 'lobster', 'permanent-marker', 'en-fredoka', 'en-righteous', 'en-bungee-shade', 'cn-title-zcool', 'cn-title-ma-shan', 'cn-title-zhi-mang', 'cn-title-liu-jian', 'cn-title-long-cang'],
+        jp: ['jp-noto-sans', 'jp-noto-serif'],
         rounded: ['nunito', 'nunito-sans', 'quicksand', 'varela-round', 'comfortaa', 'baloo-2', 'fredoka-one', 'bubblegum-sans', 'chewy', 'chakra-petch', 'hind', 'mada', 'tajawal', 'almarai', 'boogaloo', 'bungee', 'passion-one', 'cabin-sketch', 'patrick-hand', 'jua', 'single-day', 'do-hyeon'],
       }
       const keys = map[this.fontCat] || []
