@@ -28,7 +28,7 @@
       <!-- 环形线没有上下行：不再拆上/下行计数，只报总班次 + 环形提示 -->
       <text class="ph-hint" v-if="isLoop">{{ totalCount }} 班 · 环形</text>
       <text class="ph-hint" v-else>{{ sortedByDir[0].length }} 上行 · {{ sortedByDir[1].length }} 下行</text>
-      <CopyPill label="复制" :disabled="!totalCount" @copy="copyPlans" />
+      <CopyPill label="导出" :disabled="!totalCount" @copy="copyPlans" />
     </view>
 
     <view class="plan-body" v-show="!collapsed">
@@ -285,8 +285,8 @@ export default {
         columns: ['方向', '发车时间', '车辆'],
         rows,
         toast: `已复制 ${rows.length} 班时刻`,
-        imageToast: `已复制 ${rows.length} 班时刻为图片`,
-        excelToast: `已复制 ${rows.length} 班时刻为 Excel 表格`,
+        imageToast: `已导出 ${rows.length} 班时刻图片`,
+        excelToast: `已导出 ${rows.length} 班时刻 Excel 文件`,
       })
     },
   },

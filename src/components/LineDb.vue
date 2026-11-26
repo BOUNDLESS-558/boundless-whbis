@@ -91,7 +91,7 @@
     <view class="db-mod db-list" :class="{ plain: plain }" ref="listRoot">
       <view class="db-row db-lhead">
         <text class="db-lh-t">匹配 {{ filtered.length }} 条</text>
-        <CopyPill v-if="filtered.length" label="复制" @copy="copyFiltered" />
+        <CopyPill v-if="filtered.length" label="导出" @copy="copyFiltered" />
         <text class="db-lh-s" v-if="filtered.length">按线路号排序</text>
       </view>
       <view class="db-div"></view>
@@ -119,7 +119,17 @@
       </view>
       <!-- 分页：替代「加载更多」；页码记忆到本机，下次打开回到同一页 -->
       <view class="db-pager" v-if="pageCount > 1">
-        <view class="db-pg-arrow" :class="{ dis: page <= 1 }" @click="gotoPage(page - 1)">‹</view>
+        <view class="db-pg-size">
+          <text class="db-pg-size-label">📄 每页</text>
+          <view
+            v-for="n in pageSizeOpts"
+            :key="n"
+            class="db-pg-size-opt"
+            :class="{ on: pageSize === n }"
+            @click="setSize(n)"
+          >{{ n }}</view>
+        </view>
+        <view class="db-pg-arrow" :class="{ dis: page <= 1 }" @click="gotoPage(page - 1)">⬅️ 上一页</view>
         <view class="db-pg-nums">
           <view
             v-for="(p, i) in pageList"
@@ -129,7 +139,7 @@
             @click="gotoPage(p)"
           >{{ p }}</view>
         </view>
-        <view class="db-pg-arrow" :class="{ dis: page >= pageCount }" @click="gotoPage(page + 1)">›</view>
+        <view class="db-pg-arrow" :class="{ dis: page >= pageCount }" @click="gotoPage(page + 1)">下一页 ➡️</view>
       </view>
     </view>
 
@@ -181,9 +191,7 @@ import { assetUrl } from '../utils/asset.js'
 import FavStar from './FavStar.vue'
 import CopyPill from './CopyPill.vue'
 import { closeAllDropdowns } from '../utils/dropdown.js'
-
-// 分页大小：一次只挂 80 条，避免 1300+ 行全量 DOM 拖慢 H5 滚动
-const PAGE = 80
+import { PAGE_SIZE_OPTS, getPageSize, setPageSize, pageCount as calcPageCount, pageList as calcPageList, clampPage } from '../utils/pagination.js'
 
 // 页码记忆：本地保存上次停留的页（用户要求下次打开仍从第 N 页开始）
 const PAGE_KEY = 'whbis:linedb-page'
@@ -230,6 +238,9 @@ export default {
         { key: 'off', label: '已停运' },
       ],
       page: 1,
+      // 每页条数由用户选择（10/20/50/100），全站记忆
+      pageSize: getPageSize(),
+      pageSizeOpts: PAGE_SIZE_OPTS,
       detail: null,
     }
   },
@@ -302,26 +313,16 @@ export default {
         return true
       })
     },
-    // 总页数 / 当前页切片 / 页码按钮（首末页 + 当前页邻域，中间用 … 省略）
+    // 总页数 / 当前页切片 / 页码按钮（复用全站分页工具）
     pageCount() {
-      return Math.max(1, Math.ceil(this.filtered.length / PAGE))
+      return calcPageCount(this.filtered.length, this.pageSize)
     },
     visibleLines() {
-      const start = (this.page - 1) * PAGE
-      return this.filtered.slice(start, start + PAGE)
+      const start = (this.page - 1) * this.pageSize
+      return this.filtered.slice(start, start + this.pageSize)
     },
     pageList() {
-      const n = this.pageCount
-      if (n <= 7) return Array.from({ length: n }, (_, i) => i + 1)
-      const cur = this.page
-      const out = [1]
-      const from = Math.max(2, cur - 1)
-      const to = Math.min(n - 1, cur + 1)
-      if (from > 2) out.push('…')
-      for (let i = from; i <= to; i++) out.push(i)
-      if (to < n - 1) out.push('…')
-      out.push(n)
-      return out
+      return calcPageList(this.pageCount, this.page)
     },
   },
   watch: {
@@ -406,14 +407,14 @@ export default {
         columns: ['编号', '起点', '终点', '站数', '方向', '票价', '首班', '末班', '状态', '营运公司', '停运依据'],
         rows,
         toast: `已复制 ${list.length} 条线路`,
-        imageToast: `已复制 ${list.length} 条线路为图片`,
-        excelToast: `已复制 ${list.length} 条线路为 Excel 表格`,
+        imageToast: `已导出 ${list.length} 条线路图片`,
+        excelToast: `已导出 ${list.length} 条线路 Excel 文件`,
       })
     },
     // 翻页：夹到有效区间 → 记忆到本机 → 滚回列表顶部（落地页与浮窗共用）
     gotoPage(p) {
       if (p === '…' || p == null) return
-      const target = Math.min(Math.max(1, Number(p) || 1), this.pageCount)
+      const target = clampPage(p, this.pageCount)
       if (target === this.page) return
       this.page = target
       writePage(target)
@@ -424,8 +425,12 @@ export default {
     },
     // 结果变少（筛选/搜索）导致当前页越界时夹回最后一个有效页
     clampPage() {
-      if (this.page > this.pageCount) this.page = this.pageCount
-      if (this.page < 1) this.page = 1
+      this.page = clampPage(this.page, this.pageCount)
+    },
+    // 每页条数：切换后回到第 1 页并记忆选择
+    setSize(n) {
+      this.pageSize = setPageSize(n)
+      this.page = 1
     },
     openDetail(l) {
       // 模态详情接管画面：先收掉所有就地菜单，避免遮罩层叠
@@ -727,11 +732,31 @@ export default {
   gap: 10rpx;
   margin: 8rpx 26rpx 26rpx;
 }
+.db-pg-size {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 6rpx;
+  font-size: 20rpx;
+  color: #9aa6bd;
+}
+.db-pg-size-label { margin-right: 2rpx; }
+.db-pg-size-opt {
+  min-width: 40rpx;
+  padding: 6rpx 8rpx;
+  text-align: center;
+  border-radius: 10rpx;
+  background: rgba(120, 160, 220, 0.1);
+  cursor: pointer;
+}
+.db-pg-size-opt.on { background: var(--ac, #6366f1); color: #fff; }
 .db-pg-arrow {
   flex: 0 0 auto;
-  width: 64rpx;
+  min-width: 64rpx;
   height: 64rpx;
+  padding: 0 12rpx;
   line-height: 60rpx;
+  font-size: 22rpx;
   text-align: center;
   font-size: 34rpx;
   color: var(--ac-hi);

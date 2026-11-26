@@ -1,18 +1,17 @@
 /**
- * 统一复制出口（全站所有「复制」按钮都走这里）
+ * 统一导出出口（全站所有「导出」按钮都走这里）
  *
- * 复制方式（whbis:copy-mode，由各复制胶囊右半的档位下拉切换，全站共享一份）决定行为：
- *   - 'text'  ：uni.setClipboardData 写 TSV / 纯文本（原有行为）
- *   - 'image' ：H5 用离屏 canvas 把同一份表格画成 PNG，经 ClipboardItem 写入系统剪贴板
- *               （粘贴到微信 / 文档 / 聊天窗口即为一张图片）；页脚标注生成时间，便于判断数据时效
- *   - 'excel' ：H5 把同一份表格写成带样式的 HTML <table>，以 text/html + text/plain 写入剪贴板，
- *               粘贴到 Excel / WPS 直接是可编辑表格（不是需要分列的文本）；不支持的环境降级为文本
+ * 导出方式（whbis:copy-mode，由各导出胶囊右半的档位下拉切换，全站共享一份）决定行为：
+ *   - 'text'  ：uni.setClipboardData 写 TSV / 纯文本（沿用剪贴板）
+ *   - 'excel' ：用零依赖 xlsx.js 生成真 .xlsx 文件并下载（App 端写文件后打开）
+ *   - 'image' ：离屏 canvas 画成 PNG 并下载（App 端存相册），页脚标注生成时间
  *
- * 为什么图片模式自己画 canvas 而不引第三方库：项目无 html2canvas/dom-to-image，
- * 且复制内容是结构化表格而非 DOM 截图，直接绘制更轻、更清晰、可控分页。
+ * 图片模式自己画 canvas 而不引第三方库：项目无 html2canvas/dom-to-image，
+ * 且内容是结构化表格而非 DOM 截图，直接绘制更轻、更清晰、可控分页。
  * 三种模式共用同一份 { title, columns, rows }，保证内容一致，只是载体不同。
  */
 import { getCopyMode, getFontFamily } from './settings.js'
+import { buildXlsx, buildXlsxBytes } from './xlsx.js'
 
 /** 由 {title, columns, rows} 拼出 TSV（三种模式共用同一份数据，保证内容一致） */
 export function tableToText({ title = '', columns = [], rows = [] }) {
@@ -349,8 +348,81 @@ function writeText(text, toast) {
   })
 }
 
+/** 浏览器/App webview 是否支持 a.download 文件下载 */
+function canDownload() {
+  return typeof document !== 'undefined' && typeof Blob !== 'undefined' &&
+    typeof URL !== 'undefined' && typeof URL.createObjectURL === 'function'
+}
+function downloadBlob(blob, filename) {
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = filename
+  if (document.body) document.body.appendChild(a)
+  a.click()
+  if (a.remove) a.remove()
+  setTimeout(() => URL.revokeObjectURL(url), 1500)
+}
+function blobToBytes(blob) {
+  if (blob.arrayBuffer) return blob.arrayBuffer().then((b) => new Uint8Array(b))
+  return new Promise((resolve, reject) => {
+    const fr = new FileReader()
+    fr.onload = () => resolve(new Uint8Array(fr.result))
+    fr.onerror = reject
+    fr.readAsArrayBuffer(blob)
+  })
+}
+function bytesToBase64(bytes) {
+  const CH = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/'
+  let out = ''
+  for (let i = 0; i < bytes.length; i += 3) {
+    const b0 = bytes[i], b1 = bytes[i + 1], b2 = bytes[i + 2]
+    out += CH[b0 >> 2]
+    out += CH[((b0 & 3) << 4) | ((b1 || 0) >> 4)]
+    out += b1 === undefined ? '=' : CH[((b1 & 15) << 2) | ((b2 || 0) >> 6)]
+    out += b2 === undefined ? '=' : CH[b2 & 63]
+  }
+  return out
+}
+/** 无 a.download 的环境（如纯 App）：写临时文件后打开 / 存相册 */
+function saveAppFile(bytes, filename, isImage) {
+  try {
+    const filePath = `${uni.env.USER_DATA_PATH}/${filename}`
+    uni.getFileSystemManager().writeFile({
+      filePath,
+      data: bytesToBase64(bytes),
+      encoding: 'base64',
+      success() {
+        if (isImage) {
+          uni.saveImageToPhotosAlbum({ filePath, success: () => uni.showToast({ title: '已保存到相册', icon: 'none' }) })
+        } else {
+          uni.openDocument({ filePath, showMenu: true })
+        }
+      },
+      fail() { uni.showToast({ title: '文件写入失败', icon: 'none' }) },
+    })
+  } catch (e) {
+    uni.showToast({ title: '当前环境不支持文件导出', icon: 'none' })
+  }
+}
+async function deliverFile(blob, filename, bytes, isImage, customToast) {
+  if (canDownload()) {
+    downloadBlob(blob, filename)
+    uni.showToast({ title: customToast || (isImage ? '已导出图片' : '已导出 Excel 文件'), icon: 'none' })
+    return true
+  }
+  const data = bytes || await blobToBytes(blob)
+  saveAppFile(data, filename, isImage)
+  return true
+}
+function exportFilename(title, ext) {
+  const safe = String(title || '导出数据').replace(/[\\/:*?"<>|\s]+/g, '_').slice(0, 40)
+  return `${safe}_${stampText().replace(/[-: ]/g, '')}.${ext}`
+}
+
 /**
- * 复制一份表格。所有复制按钮统一调用本函数，行为完全由设置里的 copyMode 决定。
+ * 复制/导出一份表格。所有按钮统一调用本函数，行为完全由设置里的 copyMode 决定：
+ * text=复制 TSV；excel=下载 .xlsx 文件；image=下载 .png 文件（手机同样可用）。
  * @param {Object} p { title, columns:string[], rows:string[][], text?:string,
  *   toast?:string, imageToast?:string, excelToast?:string }
  *   text 可覆盖默认 TSV（供有自定义表头/分段的旧调用复用，也作富格式的 text/plain 兜底）；
@@ -369,41 +441,26 @@ export async function copyTable(p) {
   const mode = getCopyMode()
   if (mode === 'text') return writeText(plain, toast)
 
-  // 富格式（图片 / Excel）共用的环境校验：不满足一律降级为纯文本，不让复制按钮失效
-  if (!canWriteRich()) {
-    uni.showToast({ title: '当前环境不支持该格式，已复制文本', icon: 'none' })
-    return writeText(plain, '')
-  }
-
-  // Excel 模式：text/html 给 Excel / WPS，text/plain 给其它目标（微信 / 记事本）兜底。
-  // ClipboardItem 的多个类型必须同步构造，navigator.clipboard.write 才认这是用户手势内发起。
+  // Excel：生成真正的 .xlsx 文件并下载（不再写剪贴板 HTML）
   if (mode === 'excel') {
     try {
-      const html = renderTableHtml({ title, columns, rows })
-      if (!html) throw new Error('no structured table')
-      const item = new window.ClipboardItem({
-        'text/html': new Blob([html], { type: 'text/html' }),
-        'text/plain': new Blob([plain], { type: 'text/plain' }),
-      })
-      await navigator.clipboard.write([item])
-      uni.showToast({ title: excelToast || '已复制为 Excel 表格', icon: 'none' })
-      return true
+      const bytes = buildXlsxBytes({ title, columns, rows })
+      if (!bytes) throw new Error('no structured table')
+      const blob = buildXlsx({ title, columns, rows })
+      return await deliverFile(blob, exportFilename(title, 'xlsx'), bytes, false, excelToast)
     } catch (e) {
-      uni.showToast({ title: 'Excel 复制失败，已复制文本', icon: 'none' })
+      uni.showToast({ title: 'Excel 导出失败，已复制文本', icon: 'none' })
       return writeText(plain, '')
     }
   }
 
-  // 图片模式
+  // 图片：导出 .png 文件（手机浏览器同样可下载，App 端存相册）
   try {
     const blob = renderTablePng({ title, columns, rows }) // 同步，不能 await
     if (!blob) throw new Error('canvas unavailable')
-    const item = new window.ClipboardItem({ 'image/png': blob })
-    await navigator.clipboard.write([item])
-    uni.showToast({ title: imageToast || '已复制为图片', icon: 'none' })
-    return true
+    return await deliverFile(blob, exportFilename(title, 'png'), null, true, imageToast)
   } catch (e) {
-    uni.showToast({ title: '图片复制失败，已复制文本', icon: 'none' })
+    uni.showToast({ title: '图片导出失败，已复制文本', icon: 'none' })
     return writeText(plain, '')
   }
 }

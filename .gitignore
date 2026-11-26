@@ -34,3 +34,5 @@ scripts/.amap-progress.json
 scripts/.buspedia-state.json
 scripts/.buspedia-cookie.txt
 scripts/.busnumber-runtime.json
+# 车辆营运采集的 MD5 反查字典缓存（CI 由 actions/cache 恢复，不入库）
+.cache/

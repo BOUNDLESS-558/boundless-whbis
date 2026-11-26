@@ -295,19 +295,21 @@
       <view class="bb-group">
         <!-- 通用：重扫（线路态=刷新线路，全市态=重扫全网） -->
         <view class="bb-item" @click="bottomRescan" :title="cityOn ? (cityBusy ? '中止本轮拉取' : '重新拉取全网在运车辆') : (loading ? '刷新中…' : '立即刷新线路')">
-          <text class="bb-ico" :class="{ spin: cityBusy || loading }">↻</text>
+          <text class="bb-ico" :class="{ spin: cityBusy || loading }">🔄</text>
           <text class="bb-label">重扫</text>
         </view>
         <view class="bb-sep"></view>
         <!-- 视图工具：缩放 / 全览 / 站名 / 底图 -->
         <view class="bb-item" @click="zoomBy(0.6)" title="放大">
-          <text class="bb-ico">＋</text>
+          <text class="bb-ico">➕</text>
+          <text class="bb-label">放大</text>
         </view>
         <view class="bb-item" @click="zoomBy(-0.6)" title="缩小">
-          <text class="bb-ico">－</text>
+          <text class="bb-ico">➖</text>
+          <text class="bb-label">缩小</text>
         </view>
         <view class="bb-item" :class="{ on: cityOn ? false : true }" @click="resetView" :title="cityOn ? '全览全市在运车辆' : '全览整条线路'">
-          <text class="bb-ico">⊞</text>
+          <text class="bb-ico">🎯</text>
           <text class="bb-label">全览</text>
         </view>
         <view class="bb-item" :class="{ on: showStopLabels }" @click="toggleLabels" title="显示/隐藏站名">
@@ -322,15 +324,15 @@
         <template v-if="!cityOn">
           <view class="bb-sep"></view>
           <view class="bb-item" :class="{ on: dirFilter === 0 }" @click="setDirView(0)" title="仅显示上行车辆">
-            <text class="bb-ico up">↑</text>
+            <text class="bb-ico up">⬆️</text>
             <text class="bb-label">上行</text>
           </view>
           <view class="bb-item" :class="{ on: dirFilter === 1 }" @click="setDirView(1)" title="仅显示下行车辆">
-            <text class="bb-ico down">↓</text>
+            <text class="bb-ico down">⬇️</text>
             <text class="bb-label">下行</text>
           </view>
           <view class="bb-item" :class="{ on: dirFilter === 2 }" @click="setDirView(2)" title="上下行同时显示">
-            <text class="bb-ico all">⇄</text>
+            <text class="bb-ico all">🔀</text>
             <text class="bb-label">全部</text>
           </view>
         </template>
@@ -389,7 +391,7 @@
             @input="onOrgInput"
             @confirm="doOrgSearch"
           />
-          <view class="os-go" @click="doOrgSearch">查车</view>
+          <view class="os-go" @click="doOrgSearch">🔍 查车</view>
         </view>
         <view class="os-tip">按自编号末尾数字跨所有公司匹配，输入时实时呈现；基于当前快照（{{ cityBuses.length }} 辆），不另发请求</view>
 
@@ -400,7 +402,7 @@
               <text class="os-count-key">尾号 {{ orgQueryDigits }}</text>
             </view>
             <!-- 复制结果：档位（文字 / Excel / 图片）与全站共享，放在计数行右侧避免头部挤压 -->
-            <CopyPill label="复制" :disabled="!orgResults.length" @copy="copyOrgResults" />
+            <CopyPill label="导出" :disabled="!orgResults.length" @copy="copyOrgResults" />
           </view>
           <scroll-view class="os-list" scroll-y>
             <view class="os-row" v-for="b in orgResults" :key="b.busId" @click="onOrgHitPick(b)">
@@ -481,7 +483,7 @@
               </view>
             </view>
           </view>
-          <CopyPill label="复制" :disabled="!shownBuses.length" @copy="copyOnlineBuses" />
+          <CopyPill label="导出" :disabled="!shownBuses.length" @copy="copyOnlineBuses" />
           <text class="pt-hint">{{ refreshSec > 0 ? '自动刷新中' : '仅点 ↻ 时拉取' }}</text>
         </view>
         <view class="panel-body" v-show="!panelCollapsed">
@@ -4071,8 +4073,8 @@ export default {
         columns: ['线路号', '营运公司', '所处站点', '自编号', '上下行'],
         rows,
         toast: `已复制查车结果 ${rows.length} 辆`,
-        imageToast: `已复制查车结果 ${rows.length} 辆为图片`,
-        excelToast: `已复制查车结果 ${rows.length} 辆为 Excel 表格`,
+        imageToast: `已导出查车结果 ${rows.length} 辆图片`,
+        excelToast: `已导出查车结果 ${rows.length} 辆 Excel 文件`,
       })
     },
     // 点结果行：详情窗 + 精确定位；为避免筛选把目标藏起来，先清掉线路筛选
@@ -4611,8 +4613,8 @@ export default {
         rows: allRows,
         text: blocks.join('\n'), // 文本模式保留原有的上行/下行分段格式
         toast: `已复制 ${total} 辆车信息`,
-        imageToast: `已复制 ${total} 辆车信息为图片`,
-        excelToast: `已复制 ${total} 辆车信息为 Excel 表格`,
+        imageToast: `已导出 ${total} 辆车信息图片`,
+        excelToast: `已导出 ${total} 辆车信息 Excel 文件`,
       })
     },
     formatGpsTime(t) {
@@ -4625,6 +4627,8 @@ export default {
 
 <style scoped>
 .lmap-page {
+  /* 线路号输入卡与实时车辆/发车时刻栏共用同一宽度，避免移动端两栏错位 */
+  --panel-w: 720rpx;
   position: relative;
   width: 100%;
   height: 100%;
@@ -4903,7 +4907,7 @@ export default {
   position: absolute;
   top: 12rpx;
   left: 12rpx;
-  width: 680rpx;
+  width: var(--panel-w);
   max-width: calc(100vw - 24rpx);
   display: flex;
   flex-direction: column;
@@ -5043,7 +5047,7 @@ export default {
   position: absolute;
   top: 24rpx;
   right: 24rpx;
-  width: 720rpx;
+  width: var(--panel-w);
   max-height: calc(100vh - 48rpx);
   display: flex;
   flex-direction: column;
@@ -5074,14 +5078,24 @@ export default {
    bottom 抬到 120rpx，给放大后的底部快捷栏（bottom 12rpx + 高约 90rpx）让位，
    否则 side-col(z-index 20) 会盖住 bottom-bar(z-index 11)，手机上完全看不到工具按钮。 */
 @media (max-width: 720px) {
+  /* 输入卡与实时车辆/发车时刻栏同宽同边距，彻底消除两栏错位 */
+  .ctrl {
+    left: 20rpx;
+    right: 20rpx;
+    width: auto;
+    max-width: none;
+  }
   .side-col {
     top: auto;
     left: 20rpx;
     right: 20rpx;
-    bottom: 120rpx;
+    bottom: 132rpx;
     width: auto;
-    max-height: 54vh;
+    max-height: 46vh;
+    z-index: 18;
   }
+  /* 底部工具条永远压在面板之上，避免移动端折叠覆盖后按钮点不到 */
+  .bottom-bar { z-index: 22; }
 }
 .panel-header {
   flex-shrink: 0;

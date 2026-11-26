@@ -72,13 +72,27 @@ const slice = {}
 const busesByLine = {}
 
 // MD5(自编号) -> 明文（首位数字 = 营运公司）
+// 20 万条 MD5 每轮重建很慢，Actions 用 actions/cache 持久化本文件；本地首次运行自动构建。
+const DICT_CACHE = process.env.MD5_DICT_CACHE || path.resolve(ROOT, '.cache/vehicle-ops-md5-dict.json')
 const dict = new Map()
-for (let i = 0; i <= 200000; i++) {
-  const s = String(i)
-  const h = md5(s)
-  if (!dict.has(h)) dict.set(h, s)
+let dictFromCache = false
+try {
+  const cached = JSON.parse(fs.readFileSync(DICT_CACHE, 'utf8'))
+  for (const [k, v] of Object.entries(cached)) dict.set(k, v)
+  dictFromCache = dict.size > 0
+} catch (e) { /* 首次运行或缓存失效：现场构建 */ }
+if (!dictFromCache) {
+  for (let i = 0; i <= 200000; i++) {
+    const s = String(i)
+    const h = md5(s)
+    if (!dict.has(h)) dict.set(h, s)
+  }
+  try {
+    fs.mkdirSync(path.dirname(DICT_CACHE), { recursive: true })
+    fs.writeFileSync(DICT_CACHE, JSON.stringify(Object.fromEntries(dict)))
+  } catch (e) { console.log(`MD5 字典缓存写入失败（不影响采集）：${e.message}`) }
 }
-console.log(`MD5 反查字典：${dict.size} 条`)
+console.log(`MD5 反查字典：${dict.size} 条（${dictFromCache ? '缓存命中' : '现场构建'}）`)
 
 const db = JSON.parse(fs.readFileSync(LINES_FILE, 'utf8'))
 const lines = (db.lines || []).filter((l) => {

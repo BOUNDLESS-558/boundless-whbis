@@ -23,7 +23,7 @@ const SKIN_KEY = 'whbis:skin'
 const ACCENT_KEY = 'whbis:accent'
 const REFRESH_KEY = 'whbis:refresh-default'
 const PROFILE_KEY = 'whbis:profile'
-// 复制方式：所有「复制」按钮统一按此档执行（文本 TSV / 画成图片 / Excel 表格）
+// 导出方式：所有「导出」按钮统一按此档执行（文本 TSV / Excel 文件 / 图片文件）
 const COPY_MODE_KEY = 'whbis:copy-mode'
 
 export const SKIN_OPTS = [
@@ -902,17 +902,16 @@ export function onRefreshSecChange(cb) {
 export const getRefreshDefault = getRefreshSec
 export const setRefreshDefault = setRefreshSec
 
-// ── 复制方式（全站统一）──
-// text = TSV 纯文本；image = PNG 图片（页脚带生成时间）；
-// excel = HTML <table> 写进剪贴板，粘贴到 Excel / WPS 直接是可编辑表格（H5 安全上下文）
-// 没有设置面板入口：档位就在每个复制胶囊（components/CopyPill.vue）右半的下拉里，
+// ── 导出方式（全站统一）──
+// text = TSV 纯文本写入剪贴板；excel = 下载真正的 .xlsx 文件；image = 下载 .png 文件（手机可用）
+// 没有设置面板入口：档位就在每个导出胶囊（components/CopyPill.vue）右半的下拉里，
 // 任一处切换经 onCopyModeChange 广播，其余胶囊即时跟随。
 // 顺序即下拉里的排列：纯文本 → Excel → 图片（由轻到重）。
-// short 用于复制胶囊右半的档位标签（一行放得下），label 用于下拉与提示。
+// short 用于导出胶囊右半的档位标签（一行放得下），label 用于下拉与提示。
 export const COPY_MODE_OPTS = [
   { key: 'text', label: '复制为纯文本', short: '文本', note: 'TSV 表格，可粘进 Excel' },
-  { key: 'excel', label: '复制为 Excel', short: 'Excel', note: '带样式表格，粘到 Excel / WPS 即可编辑' },
-  { key: 'image', label: '复制为图片', short: '图片', note: 'PNG 图片，带生成时间，可直接粘贴发送' },
+  { key: 'excel', label: '导出为 Excel 文件', short: 'Excel', note: '下载 .xlsx 文件，Excel / WPS 可直接打开' },
+  { key: 'image', label: '导出为图片文件', short: '图片', note: '下载 .png 图片，带生成时间，手机同样可用' },
 ]
 
 function normalizeCopyMode(v) {

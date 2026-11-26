@@ -14,8 +14,11 @@
  * 别拿它保护真正的机密。
  */
 import { md5 } from './md5.js'
+import { APP_CONFIG } from '../config.js'
 
 const SESSION_KEY = 'whbis:session'
+// 数据库会话令牌：DB 登录成功后保存；API 不可用时回退本地预置账号逻辑
+const AUTH_TOKEN_KEY = 'whbis:auth-token'
 // 自定义密码覆盖表（账号→口令哈希）：只存 md5 不存明文；没改过密码的账号不在表内，登录时回到 genPass 预置口令。
 const PASS_OVERRIDE_KEY = 'whbis:pass-override'
 // 登录有效期档位（天）：0 = 永不过期。可在「账号与设置」面板里随时调整（立即生效，从当下重算）
@@ -89,9 +92,29 @@ function writeStore(key, val) {
   }
 }
 
+/** 调数据库认证 API；网络/服务不可用时返回 null，由调用方回退本地逻辑 */
+function authRequest(data, token) {
+  return new Promise((resolve) => {
+    try {
+      uni.request({
+        url: APP_CONFIG.authApi,
+        method: 'POST',
+        timeout: 6000,
+        header: {
+          'Content-Type': 'application/json',
+          ...(token ? { 'x-auth-token': token } : {}),
+        },
+        data,
+        success: (res) => resolve(res && res.statusCode === 200 ? (res.data || null) : null),
+        fail: () => resolve(null),
+      })
+    } catch (e) { resolve(null) }
+  })
+}
+
 // —— 自定义密码（本机覆盖预置口令）——
 // 按账号加盐的 md5：同一账号同一密码永远得到同一哈希，不存明文。
-function hashPass(account, pwd) {
+export function hashPass(account, pwd) {
   return md5(PASS_SECRET + 'u:' + normAccount(account) + ':' + String(pwd))
 }
 function readOverrides() {
@@ -124,13 +147,8 @@ export function setPassword(account, newPass) {
   return { ok: true }
 }
 
-/** 改密：无需旧密码，直接设新密码（使用门槛非安全机制，忘记密码也能重设） */
-export function changePassword(account, newPass) {
-  return setPassword(account, newPass)
-}
-
-/** 恢复默认口令：删覆盖条目，回到 genPass 预置口令（无需旧密码） */
-export function resetPassword(account) {
+/** 本地恢复默认口令：删覆盖条目，回到 genPass 预置口令 */
+function localReset(account) {
   const acc = normAccount(account)
   const o = readOverrides()
   if (o[acc]) {
@@ -138,6 +156,36 @@ export function resetPassword(account) {
     if (!writeStore(PASS_OVERRIDE_KEY, o)) return { ok: false, error: '存储不可用，未恢复' }
   }
   return { ok: true }
+}
+
+/** 改密：优先写数据库会话，失败回退本机覆盖哈希（离线可用） */
+export async function changePassword(account, newPass) {
+  const p = String(newPass == null ? '' : newPass)
+  if (p.length < 6 || p.length > 32) return { ok: false, error: '新密码需 6~32 位' }
+  const token = String(uni.getStorageSync(AUTH_TOKEN_KEY) || '')
+  if (token) {
+    const r = await authRequest({ action: 'change', newPass: p }, token)
+    if (r && r.ok) {
+      setPassword(account, p) // 同步本地哈希，保证后续离线登录也用新口令
+      return { ok: true, source: 'db' }
+    }
+    if (r && r.error) return { ok: false, error: r.error }
+  }
+  return setPassword(account, p)
+}
+
+/** 恢复默认口令：优先同步数据库，失败回退本机（无需旧密码） */
+export async function resetPassword(account) {
+  const token = String(uni.getStorageSync(AUTH_TOKEN_KEY) || '')
+  if (token) {
+    const r = await authRequest({ action: 'reset' }, token)
+    if (r && r.ok) {
+      localReset(account)
+      return { ok: true, source: 'db' }
+    }
+    if (r && r.error) return { ok: false, error: r.error }
+  }
+  return localReset(account)
 }
 
 /** 会话到期时间戳：显式 0 = 永不过期；缺失（旧会话）= loginAt + 30 天 */
@@ -198,27 +246,53 @@ export function isLoggedIn() {
  * 登录：只认预置账号（EMBEDDED_ACCOUNTS），密码按 genPass 确定性校验（不落地任何秘密）。
  * @returns {Promise<{ ok: boolean, error?: string }>}
  */
-export function login(account, password) {
-  return new Promise((resolve) => {
-    const acc = normAccount(account)
-    if (!acc || !password) return resolve({ ok: false, error: '请输入账号和密码' })
-    if (!EMBEDDED_MAP.has(acc)) return resolve({ ok: false, error: '账号不存在' })
-    if (!verifyPass(account, password)) return resolve({ ok: false, error: '密码错误' })
-    const days = getSessionDays()
+export async function login(account, password) {
+  const acc = normAccount(account)
+  if (!acc || !password) return { ok: false, error: '请输入账号和密码' }
+  const days = getSessionDays()
+
+  // 1) 优先走数据库；API 返回明确错误时直接反馈，网络失败才回退本地
+  const db = await authRequest({ action: 'login', account, password, days })
+  if (db && db.ok) {
     writeStore(SESSION_KEY, {
-      account: EMBEDDED_MAP.get(acc),
+      account: db.account || EMBEDDED_MAP.get(acc) || account,
       loginAt: Date.now(),
-      // expiresAt：0 = 永不过期；其余为到期时间戳
-      expiresAt: days > 0 ? Date.now() + days * 86400000 : 0,
+      expiresAt: db.expiresAt || 0,
     })
-    resolve({ ok: true })
+    writeStore(AUTH_TOKEN_KEY, db.token || '')
+    return { ok: true, source: 'db' }
+  }
+  if (db && db.error) {
+    // 线上口令与本地自定义口令不一致时（离线改过密码），用默认口令换 token 后把新口令同步上去
+    if (db.error === '密码错误' && EMBEDDED_MAP.has(acc) && verifyPass(account, password)) {
+      const def = await authRequest({ action: 'login', account, password: genPass(account), days })
+      if (def && def.ok) {
+        await authRequest({ action: 'change', newPass: String(password) }, def.token)
+        writeStore(SESSION_KEY, { account: def.account || EMBEDDED_MAP.get(acc), loginAt: Date.now(), expiresAt: def.expiresAt || 0 })
+        writeStore(AUTH_TOKEN_KEY, def.token || '')
+        return { ok: true, source: 'db-synced' }
+      }
+    } else {
+      return { ok: false, error: db.error }
+    }
+  }
+
+  // 2) 本地兜底：保留离线可用（预置账号 + 本机自定义口令哈希）
+  if (!EMBEDDED_MAP.has(acc)) return { ok: false, error: '账号不存在' }
+  if (!verifyPass(account, password)) return { ok: false, error: '密码错误' }
+  writeStore(SESSION_KEY, {
+    account: EMBEDDED_MAP.get(acc),
+    loginAt: Date.now(),
+    expiresAt: days > 0 ? Date.now() + days * 86400000 : 0,
   })
+  return { ok: true, source: 'local' }
 }
 
 /** 注销：清会话（账户表保留，下次直接登录） */
 export function logout() {
   try {
     uni.removeStorageSync(SESSION_KEY)
+    uni.removeStorageSync(AUTH_TOKEN_KEY)
   } catch (e) { /* 清不掉也不阻塞回登录页 */ }
 }
 

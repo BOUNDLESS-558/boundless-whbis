@@ -11,7 +11,7 @@
       </view>
       <view class="rank-head-ops" @click.stop>
         <!-- 复制榜单：档位（文字 / Excel / 图片）与全站共享，左半按当前档位复制 -->
-        <CopyPill label="复制" :disabled="!hasData" @copy="copyRank" />
+        <CopyPill label="导出" :disabled="!hasData" @copy="copyRank" />
         <view class="rank-mini fold-btn" :class="{ folded: folded }" :title="folded ? '展开' : '折叠'" @click="toggleFold">▾</view>
         <view class="rank-mini" title="关闭" @click="$emit('close')">✕</view>
       </view>
@@ -376,8 +376,8 @@ export default {
         columns: ['名次', '线路', '方向', '自编号', '车速(km/h)', '走向', '营运公司', '所处站点', '到站状态', 'GPS时刻', '备注'],
         rows,
         toast: `已复制${isLine ? this.lineNo + ' 路' : ''}车速榜前 ${this.limit} 名`,
-        imageToast: `已复制${isLine ? this.lineNo + ' 路' : ''}车速榜前 ${this.limit} 名为图片`,
-        excelToast: `已复制${isLine ? this.lineNo + ' 路' : ''}车速榜前 ${this.limit} 名为 Excel 表格`,
+        imageToast: `已导出${isLine ? this.lineNo + ' 路' : ''}车速榜前 ${this.limit} 名图片`,
+        excelToast: `已导出${isLine ? this.lineNo + ' 路' : ''}车速榜前 ${this.limit} 名 Excel 文件`,
       })
     },
   },

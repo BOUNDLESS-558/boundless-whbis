@@ -34,6 +34,10 @@ export const APP_CONFIG = {
   // 车辆营运信息 API（Vercel Serverless Function + Neon 数据库）。
   // Vercel 部署下同源 /api/vehicle-ops；本地 dev 无此路由，自动回退静态 profile.json。
   vehicleOpsApi: '/api/vehicle-ops',
+
+  // 账号认证 API（Vercel Serverless Function + Neon 数据库）。
+  // 本地 dev 无此路由，auth.js 自动回退本地预置账号逻辑。
+  authApi: '/api/auth',
 }
 
 // 线路 ID 编码规则：{cityCode}-{线路号}-{方向}，方向 0/1 表示上下行

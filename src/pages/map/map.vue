@@ -1205,7 +1205,7 @@ export default {
       this.sessionExpText = `已登录 · ${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} 到期`
     },
     // 修改登录密码：无需旧密码，仅校验两次新密码一致；成功后清空输入并标记已自定义
-    onChangePwd() {
+    async onChangePwd() {
       if (!this.pwdNew || !this.pwdConfirm) {
         uni.showToast({ title: '请填写新密码', icon: 'none' })
         return
@@ -1214,7 +1214,7 @@ export default {
         uni.showToast({ title: '两次输入的新密码不一致', icon: 'none' })
         return
       }
-      const r = changePassword(this.account, this.pwdNew)
+      const r = await changePassword(this.account, this.pwdNew)
       if (!r.ok) {
         uni.showToast({ title: r.error || '修改失败', icon: 'none' })
         return
@@ -1222,11 +1222,11 @@ export default {
       this.pwdNew = ''
       this.pwdConfirm = ''
       this.pwdCustom = true
-      uni.showToast({ title: '密码已修改', icon: 'success' })
+      uni.showToast({ title: r.source === 'db' ? '密码已修改并同步到数据库' : '密码已修改（本机）', icon: 'success' })
     },
     // 恢复默认口令：无需旧密码，直接恢复为预置口令
-    onResetPwd() {
-      const r = resetPassword(this.account)
+    async onResetPwd() {
+      const r = await resetPassword(this.account)
       if (!r.ok) {
         uni.showToast({ title: r.error || '恢复失败', icon: 'none' })
         return
@@ -1234,7 +1234,7 @@ export default {
       this.pwdNew = ''
       this.pwdConfirm = ''
       this.pwdCustom = false
-      uni.showToast({ title: '已恢复默认口令', icon: 'success' })
+      uni.showToast({ title: r.source === 'db' ? '已恢复默认口令（数据库）' : '已恢复默认口令（本机）', icon: 'success' })
     },
     // 账号窗内确认注销：清会话回登录页
     onLogout() {

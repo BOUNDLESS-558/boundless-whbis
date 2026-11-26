@@ -1,10 +1,10 @@
 <template>
-  <!-- 全站统一的复制胶囊：结构与刷新胶囊一致（左半执行 + 右半档位下拉）。
-       左半按当前档位立即复制，右半点开三档（纯文本 / Excel / 图片）；
-       档位写在全站唯一真源里，任一处切换后所有复制胶囊的标签同步跟随。 -->
+  <!-- 全站统一的导出胶囊：结构与刷新胶囊一致（左半执行 + 右半档位下拉）。
+       左半按当前档位立即导出，右半点开三档（纯文本 / Excel 文件 / 图片文件）；
+       档位写在全站唯一真源里，任一处切换后所有导出胶囊的标签同步跟随。 -->
   <view class="copy-pill" :class="{ 'menu-open': menu, disabled: disabled }">
     <view class="cp-main" @click="run" :title="runTitle">
-      <text class="cp-ico">⧉</text>
+      <text class="cp-ico">{{ modeIcon }}</text>
       <text class="cp-label">{{ label }}</text>
     </view>
     <view class="cp-split"></view>
@@ -43,8 +43,8 @@ import { attachDropdown } from '../utils/dropdown.js'
 export default {
   name: 'CopyPill',
   props: {
-    // 左半文案（默认「复制」，极简面板用「线路 / 站点 / 在线」区分复制内容）
-    label: { type: String, default: '复制' },
+    // 左半文案（默认「导出」，极简面板可用「线路 / 站点 / 在线」区分导出内容）
+    label: { type: String, default: '导出' },
     // 无可复制内容时置灰：主键不触发，但档位仍可切换
     disabled: { type: Boolean, default: false },
   },
@@ -61,16 +61,19 @@ export default {
     cur() {
       return this.OPTS.find((o) => o.key === this.mode) || this.OPTS[0]
     },
+    modeIcon() {
+      return { text: '📋', excel: '📊', image: '🖼️' }[this.mode] || '📤'
+    },
     // 只压高度：位置由 CSS 的 top:100% / right:0 决定。
     // uni-h5 下 fixed 会被祖先降级成相对定位，用视口坐标去算反而会让菜单跑到按钮上方
     menuStyle() {
       return this.menuMaxH ? { maxHeight: this.menuMaxH + 'px' } : {}
     },
     runTitle() {
-      return this.disabled ? '当前没有可复制的内容' : `按「${this.cur.label}」方式复制`
+      return this.disabled ? '当前没有可导出的内容' : `按「${this.cur.label}」方式导出`
     },
     modeTitle() {
-      return `复制方式：${this.cur.label}（全站共享，切换后所有复制按钮同步）`
+      return `导出方式：${this.cur.label}（全站共享，切换后所有导出按钮同步）`
     },
   },
   mounted() {
@@ -85,7 +88,7 @@ export default {
   methods: {
     run() {
       if (this.disabled) {
-        uni.showToast({ title: '当前没有可复制的内容', icon: 'none' })
+        uni.showToast({ title: '当前没有可导出的内容', icon: 'none' })
         return
       }
       this.$emit('copy', this.mode)
@@ -118,7 +121,7 @@ export default {
       this.mode = setCopyMode(key)
       this.closeMenu()
       const o = this.OPTS.find((x) => x.key === this.mode)
-      uni.showToast({ title: `复制方式：${o ? o.label : this.mode}`, icon: 'none' })
+      uni.showToast({ title: `导出方式：${o ? o.label : this.mode}`, icon: 'none' })
     },
   },
 }

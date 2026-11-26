@@ -204,9 +204,9 @@
           <!-- 复制出口统一走 utils/clipboard.js 的 copyTable；档位由 CopyPill 右半的三档下拉决定，
                与车辆面板 / 发车时刻 / 线路库的复制按钮共享同一份设置 -->
           <view class="min-copy-group">
-            <CopyPill label="线路" @copy="copyLineInfo" />
-            <CopyPill label="站点" :disabled="!activeCols.length" @copy="copyStopsInfo" />
-            <CopyPill label="在线" :disabled="!onlineCount" @copy="copyOnlineBuses" />
+            <CopyPill label="导出线路" @copy="copyLineInfo" />
+            <CopyPill label="导出站点" :disabled="!activeCols.length" @copy="copyStopsInfo" />
+            <CopyPill label="导出在线" :disabled="!onlineCount" @copy="copyOnlineBuses" />
           </view>
           <view class="refresh-wrap min-refresh" :class="{ 'menu-open': refreshMenu }">
             <view class="refresh-pill" :class="{ busy: loading, auto: refreshSec > 0 }">
@@ -562,8 +562,8 @@ export default {
         columns: ['编号', '营运公司', '所在站点', '时间', '速度', '状态', '经纬度'],
         rows: lines.map((s) => s.split('\t')),
         toast: `已复制 ${lines.length} 辆车信息`,
-        imageToast: `已复制 ${lines.length} 辆车信息为图片`,
-        excelToast: `已复制 ${lines.length} 辆车信息为 Excel 表格`,
+        imageToast: `已导出 ${lines.length} 辆车信息图片`,
+        excelToast: `已导出 ${lines.length} 辆车信息 Excel 文件`,
       })
     },
     // 复制线路基本信息（线路号 / 方向 / 起讫站 / 首末班 / 票价 / 站数 / 在线数）。
@@ -587,8 +587,8 @@ export default {
         columns: ['项目', '内容'],
         rows,
         toast: '已复制线路信息',
-        imageToast: '已复制线路信息为图片',
-        excelToast: '已复制线路信息为 Excel 表格',
+        imageToast: '已导出线路信息图片',
+        excelToast: '已导出线路信息 Excel 文件',
       })
     },
     // 双击「站点」统计块 / 极简面板「站点」按钮 → 复制当前线路走向的全部站点信息
@@ -612,8 +612,8 @@ export default {
         columns: ['序号', '站名', '站号', '换乘', '标记'],
         rows,
         toast: `已复制 ${cols.length} 站信息`,
-        imageToast: `已复制 ${cols.length} 站信息为图片`,
-        excelToast: `已复制 ${cols.length} 站信息为 Excel 表格`,
+        imageToast: `已导出 ${cols.length} 站信息图片`,
+        excelToast: `已导出 ${cols.length} 站信息 Excel 文件`,
       })
     },
     // 复制当前方向的仿真线路走向图为 PNG（上行走上行、下行走下行），写入剪贴板

@@ -34,7 +34,16 @@
 
 ## 更新日志
 
-### 2026-11-24（最新）
+### 2026-11-26（最新）
+
+- **采集鉴权与可靠性**：定位 `vehicle-ops.yml` 的 401 为 GitHub Secret 与 Vercel Env `VEHICLE_OPS_TOKEN` 值不一致（需两端手动对齐同值）；Actions 改 `cancel-in-progress: true`、`timeout-minutes: 30`，并用 `actions/cache` 缓存 20 万条 MD5 反查字典（脚本支持 `MD5_DICT_CACHE`），降低超时排队导致的实际间隔拉长。Hobby 套餐下 Cron 只能每天一次，故保留 15 分钟 Actions 并继续双写静态快照 + 数据库。
+- **数据库按日表与面板筛选分页**：新增 `vehicle_ops_daily`（PK 日期+自编号，含 `recorded_at` 记录时间）及账号/会话表 `app_accounts`/`app_sessions`；`/api/vehicle-ops` GET 支持 `view=daily` 的日期/年月/公司/线路/关键词筛选与分页，POST 同时写累计表与按日表（`dailyOnly` 供回填）；新增 `scripts/backfill-vehicle-ops.mjs` 从历史按日快照回填。`DataPanel.vue` 重写：年/月/日/公司/线路联动筛选（含全部）、记录时间列、车速分档配色（复用 `SPEED_BANDS`）、营运公司徽标（复用 `companyOf`）、用户可选每页条数与分页（复用新 `utils/pagination.js`，`LineDb` 同步接入）。
+- **导出体系统一**：新增零依赖 `utils/xlsx.js`（最小 OOXML + ZIP STORE）生成真 `.xlsx`；`clipboard.js` 的 Excel/图片档改为下载文件（App 端写临时文件后打开/存相册），解决手机图片导出不可用；全站按钮改名「导出」、图标改 Emoji + 文字（📊/🖼️/📋、🔄 同步、翻页箭头等），提示文案同步。
+- **账号 DB 化 + 离线兜底**：新增 `/api/auth`（login/change/reset，会话 token，哈希与 `genPass/hashPass` 兼容），`auth.js` 优先走数据库，网络失败回退本机预置账号；登录/改密/重置在双端保持原调用签名，改密成功按来源提示。
+- **移动端排版与线网数据源**：`LineMap.vue` 控制卡与实时车辆/发车时刻栏统一 `--panel-w` 与移动端边距，底部栏 z-index 提高防折叠覆盖；新增 `scripts/build-net-from-assets.mjs`，线网 `network.json` 改由各线路分片 `stops + route`（高德/OSRM 贴路）经 `routeClean.js` 清洗抽稀生成（901 线 / 1504 方向 / 34395 点）；`test-route-clean.mjs` 样本改为真实站点资产，三项单测通过。
+- **需求 16/17 分析结论**：高德站点与自编号映射表暂不建议整库入库（静态分片缓存已满足、12h 才变、入库同步成本大于收益）；若未来需关系查询，可分别建轻量 `amap_stops` / `bus_number_map` 表。
+
+### 2026-11-24
 
 - **CI 套娃修复 + 数据面板迁 Vercel 数据库**：给 `auto-collect.mjs` 与 `vehicle-ops.yml` 的采集 commit 加 `[skip ci]`，避免数据 push main 反触发 daily-collect 全量采集形成循环。新增 `api/vehicle-ops.js`（Vercel Serverless Function：GET 读库 / POST 写库，`x-api-key` 鉴权，Neon serverless driver）与 `api/init.sql`（建表 + 索引）。`scan-vehicle-ops.mjs` 采集后把本轮数据 POST 到 `VEHICLE_OPS_API`（配 `VEHICLE_OPS_TOKEN`），静态 JSON 仍落盘作备份。`DataPanel.vue` 优先读 `/api/vehicle-ops`，失败回退静态 `profile.json`。`config.js` 新增 `APP_CONFIG.vehicleOpsApi`。新增依赖 `@neondatabase/serverless`。
 - **GitHub Pages 下线，全面迁移 Vercel**：新增 `vercel.json`（buildCommand 先切 base 为 `/` 再 `npm run build:h5`，产物 `dist/build/h5`，hash 路由配 rewrites 兜底）与 `scripts/set-h5-base.mjs`（构建时切换 `h5.router.base`，不污染仓库 manifest）。`auto-collect.mjs` 移除「构建 H5 + 强推 pages 分支」步骤（Vercel 靠 main push 自动部署），删除 `deploy:pages` 脚本与 `deploy-pages.mjs`，远端 `pages` 分支已删除。AGENTS.md / README 同步更新分支约定与部署模型，主站为 `https://boundless-whbis.vercel.app/`。

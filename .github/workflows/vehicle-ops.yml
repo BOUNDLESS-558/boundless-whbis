@@ -11,12 +11,13 @@ permissions:
 
 concurrency:
   group: vehicle-ops
-  cancel-in-progress: false
+  # 高峰期 GitHub 定时会排队；取消上一轮未完成的采集，避免失败轮次堆积导致实际间隔拉长
+  cancel-in-progress: true
 
 jobs:
   collect:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 30
     env:
       SCAN_BASE: https://whbis-proxy.lwu584742.workers.dev
       # Vercel 数据库同步：在 GitHub 仓库 Settings → Secrets 配这两个值
@@ -32,6 +33,13 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: '20'
+
+      # 20 万条 MD5 反查字典缓存：命中后每轮省去现场构建，降低超时概率
+      - name: 缓存 MD5 反查字典
+        uses: actions/cache@v4
+        with:
+          path: .cache/vehicle-ops-md5-dict.json
+          key: md5-dict-${{ hashFiles('src/utils/md5.js', 'scripts/scan-vehicle-ops.mjs') }}
 
       - name: 采集全车营运信息
         run: node scripts/scan-vehicle-ops.mjs
