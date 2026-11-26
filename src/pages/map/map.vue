@@ -69,8 +69,8 @@
             :class="{ on: minStopsMode }"
             @click.stop="onMinStopsMode(!minStopsMode)"
             :title="minStopsMode ? '退出极简站牌，返回完整视图' : '开启极简站牌：只显示线路头、候车信息与站点序列'"
-          >{{ minStopsMode ? '✖️' : '🚏' }}</view>
-          <view class="fw-act" @click.stop="onCopyRouteImg" title="复制线路仿真走向图（按当前方向区分上下行）">📷</view>
+          >{{ minStopsMode ? '✖️ 退出站牌' : '🚏 站牌' }}</view>
+          <view class="fw-act" @click.stop="onCopyRouteImg" title="导出线路仿真走向图（按当前方向区分上下行）">📷 走向图</view>
         </template>
         <LineStops
           ref="stopsC"

@@ -148,7 +148,7 @@
                 <text class="nb" :class="i === 0 ? 'nb-first' : 'nb-last'">{{ i === 0 ? '始发站' : '终点站' }}</text>
               </view>
               <view class="node-tags" v-if="stop.transferInfos && stop.transferInfos.length">
-                <text class="ttag" v-for="t in stop.transferInfos" :key="t.subwayLineNo">{{ t.subwayLineNo }}号线</text>
+                <text class="ttag" v-for="t in stop.transferInfos" :key="t.subwayLineNo">🚇 {{ t.subwayLineNo }}号线</text>
               </view>
             </view>
           </view>
@@ -191,22 +191,22 @@
         </view>
 
         <!-- 极简模式隐藏了方向分段 / 统计块 / 原刷新胶囊，这里补回上下行切换、
-             三个明确的复制按钮（线路 / 站点 / 在线）以及同款刷新胶囊 -->
+             三个明确的导出按钮（线路信息 / 站点信息 / 在线车辆）以及同款刷新胶囊 -->
         <view class="min-tools">
           <view class="min-dir-seg">
             <!-- 环形线没有上下行：只留一个不可点的「环形」 -->
-            <view class="min-dir-btn loop on" v-if="isLoop">⟳ 环形</view>
+            <view class="min-dir-btn loop on" v-if="isLoop">🔄 环形</view>
             <template v-else>
-              <view class="min-dir-btn" :class="{ on: dir === 0, up: dir === 0 }" @click="setDir(0)">↑ 上行</view>
-              <view class="min-dir-btn" :class="{ on: dir === 1, down: dir === 1 }" @click="setDir(1)">↓ 下行</view>
+              <view class="min-dir-btn" :class="{ on: dir === 0, up: dir === 0 }" @click="setDir(0)">⬆️ 上行</view>
+              <view class="min-dir-btn" :class="{ on: dir === 1, down: dir === 1 }" @click="setDir(1)">⬇️ 下行</view>
             </template>
           </view>
           <!-- 复制出口统一走 utils/clipboard.js 的 copyTable；档位由 CopyPill 右半的三档下拉决定，
                与车辆面板 / 发车时刻 / 线路库的复制按钮共享同一份设置 -->
           <view class="min-copy-group">
-            <CopyPill label="导出线路" @copy="copyLineInfo" />
-            <CopyPill label="导出站点" :disabled="!activeCols.length" @copy="copyStopsInfo" />
-            <CopyPill label="导出在线" :disabled="!onlineCount" @copy="copyOnlineBuses" />
+            <CopyPill label="导出线路信息" @copy="copyLineInfo" />
+            <CopyPill label="导出站点信息" :disabled="!activeCols.length" @copy="copyStopsInfo" />
+            <CopyPill label="导出在线车辆" :disabled="!onlineCount" @copy="copyOnlineBuses" />
           </view>
           <view class="refresh-wrap min-refresh" :class="{ 'menu-open': refreshMenu }">
             <view class="refresh-pill" :class="{ busy: loading, auto: refreshSec > 0 }">
@@ -247,6 +247,12 @@
           <view class="min-stop-dot" :class="{ 'min-dot-first': i === 0, 'min-dot-last': i === activeCols.length - 1 }"></view>
           <view class="min-stop-content">
             <text class="min-stop-name">{{ stop.stopName }}</text>
+            <text
+              class="min-metro-tag"
+              v-for="t in (stop.transferInfos || [])"
+              :key="t.subwayLineNo"
+              :title="'可换乘地铁 ' + t.subwayLineNo + ' 号线'"
+            >🚇 {{ t.subwayLineNo }}号线</text>
             <text class="min-stop-no" v-if="i !== 0 && i !== activeCols.length - 1">#{{ stop.stopNo }}</text>
           </view>
           <!-- 车辆自编号（若有） -->
@@ -1755,6 +1761,17 @@ export default {
   color: #fff;
   overflow: hidden;
   text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* 纵向站点名后的地铁换乘标识：🚇 + 线路号，紫色避开上/下行方向色 */
+.min-metro-tag {
+  flex: 0 0 auto;
+  font-size: 18rpx;
+  color: #c4b5fd;
+  background: rgba(var(--ac-rgb), 0.16);
+  border: 2rpx solid rgba(var(--ac-rgb), 0.3);
+  border-radius: 8rpx;
+  padding: 2rpx 8rpx;
   white-space: nowrap;
 }
 /* 序号靠内容区右端对齐，长站名也不会把它挤得忽左忽右 */

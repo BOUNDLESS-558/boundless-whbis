@@ -1,6 +1,6 @@
 <template>
   <!-- 地图上的通用悬浮窗：与车辆详情窗（.bus-sheet）同一套视觉与交互 ——
-       标题栏是拖动手柄（触摸走模板事件、鼠标走原生监听），📌 锁定位置、✕ 关闭由宿主决定；
+       标题栏是拖动手柄（触摸走模板事件、鼠标走原生监听），📌 固定/解锁位置、✕ 关闭由宿主决定；按钮统一 Emoji + 文字；
        不带遮罩 —— 窗口开着时地图照样能拖拽缩放 -->
   <view class="float-win" :class="{ dragging, pinned, ready: !!pos }" :style="winStyle" :id="domId">
     <view
@@ -15,15 +15,15 @@
       <text class="fw-title">{{ title }}</text>
       <text class="fw-sub" v-if="sub">{{ sub }}</text>
       <view class="fw-actions">
-        <!-- 宿主注入的窗口级动作（如实时线路的「站牌」切换），排在 📌 / ✕ 左侧 -->
+        <!-- 宿主注入的窗口级动作（如实时线路的「站牌」/「走向图」切换），排在 📌 / ✕ 左侧 -->
         <slot name="actions" />
         <view
           class="fw-pin"
           :class="{ on: pinned }"
           @click.stop="togglePin"
           :title="pinned ? '取消固定（恢复原拖动）' : '固定位置（锁定拖动）'"
-        >📌</view>
-        <view class="fw-close" @click.stop="close" title="关闭">✕</view>
+        >📌 {{ pinned ? '解锁' : '固定' }}</view>
+        <view class="fw-close" @click.stop="close" title="关闭">✕ 关闭</view>
       </view>
     </view>
     <view class="fw-body">
@@ -368,12 +368,13 @@ export default {
 }
 .fw-pin,
 .fw-close {
-  width: 56rpx;
   height: 56rpx;
   line-height: 56rpx;
+  padding: 0 18rpx;
   text-align: center;
-  border-radius: 50%;
-  font-size: 26rpx;
+  border-radius: 999rpx;
+  font-size: 22rpx;
+  white-space: nowrap;
   color: rgba(255, 255, 255, 0.66);
   background: rgba(255, 255, 255, 0.08);
   border: 2rpx solid transparent;
