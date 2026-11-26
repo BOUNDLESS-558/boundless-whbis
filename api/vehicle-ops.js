@@ -147,6 +147,101 @@ async function getDaily(sql, res, q) {
   return res.status(200).json({ total, updated, days, companies, lines, rows: rows.map((r) => toRow(r, true)) })
 }
 
+/**
+ * 批量写入：整轮车辆档案压成 2 条 SQL（累计表 + 按日表），不再逐车 await。
+ * 逐车串行时 N 辆车要跑 2N 条 SQL，在 Serverless 单次请求里很容易逼近函数超时；
+ * 批量后 SQL 条数与车辆数无关（恒为 2，dailyOnly 时 1）。
+ * 各 ON CONFLICT 子句的累加 / 取极值语义与旧逐车版保持一致。
+ */
+const RECORD_COLS = `org_id TEXT, line_no TEXT, company TEXT, max_speed NUMERIC, speed_count INTEGER,
+    online_at TEXT, offline_at TEXT, departures INTEGER, transfers JSONB, lines JSONB, samples INTEGER`
+
+const UPSERT_CUMULATIVE = `
+  INSERT INTO vehicle_ops (
+    org_id, line_no, company, max_speed, speed_count,
+    online_at, offline_at, departures, transfers, lines, samples, updated_at
+  )
+  SELECT
+    b.org_id, b.line_no, b.company, b.max_speed, b.speed_count,
+    b.online_at, b.offline_at, b.departures, b.transfers, b.lines, b.samples, now()
+  FROM jsonb_to_recordset($1::jsonb) AS b(${RECORD_COLS})
+  ON CONFLICT (org_id) DO UPDATE SET
+    line_no = EXCLUDED.line_no,
+    company = EXCLUDED.company,
+    max_speed = GREATEST(vehicle_ops.max_speed, EXCLUDED.max_speed),
+    speed_count = vehicle_ops.speed_count + EXCLUDED.speed_count,
+    online_at = LEAST(vehicle_ops.online_at, EXCLUDED.online_at),
+    offline_at = GREATEST(vehicle_ops.offline_at, EXCLUDED.offline_at),
+    departures = vehicle_ops.departures + EXCLUDED.departures,
+    transfers = EXCLUDED.transfers,
+    lines = EXCLUDED.lines,
+    samples = vehicle_ops.samples + EXCLUDED.samples,
+    updated_at = now()
+`
+
+const UPSERT_DAILY = `
+  INSERT INTO vehicle_ops_daily (
+    date, org_id, recorded_at, line_no, company, max_speed, speed_count,
+    online_at, offline_at, departures, transfers, lines, samples, updated_at
+  )
+  SELECT
+    $2::date, b.org_id, $3::text, b.line_no, b.company, b.max_speed, b.speed_count,
+    b.online_at, b.offline_at, b.departures, b.transfers, b.lines, b.samples, now()
+  FROM jsonb_to_recordset($1::jsonb) AS b(${RECORD_COLS})
+  ON CONFLICT (date, org_id) DO UPDATE SET
+    recorded_at = EXCLUDED.recorded_at,
+    line_no = EXCLUDED.line_no,
+    company = EXCLUDED.company,
+    max_speed = GREATEST(vehicle_ops_daily.max_speed, EXCLUDED.max_speed),
+    speed_count = GREATEST(vehicle_ops_daily.speed_count, EXCLUDED.speed_count),
+    online_at = LEAST(
+      COALESCE(NULLIF(vehicle_ops_daily.online_at, ''), EXCLUDED.online_at), EXCLUDED.online_at
+    ),
+    offline_at = GREATEST(vehicle_ops_daily.offline_at, EXCLUDED.offline_at),
+    departures = GREATEST(vehicle_ops_daily.departures, EXCLUDED.departures),
+    transfers = EXCLUDED.transfers,
+    lines = EXCLUDED.lines,
+    samples = GREATEST(vehicle_ops_daily.samples, EXCLUDED.samples),
+    updated_at = now()
+`
+
+/**
+ * 归一化单行字段（与旧逐车逻辑一致），并按 orgId 去重，
+ * 避免批量 ON CONFLICT 报 "affect row a second time"。
+ * ⚠ key 必须是 snake_case 且与 RECORD_COLS 的列名逐一对应：
+ * jsonb_to_recordset 按 JSON key 匹配列名，写成驼峰会让字段静默变 NULL。
+ */
+function normalizeBuses(buses) {
+  const map = new Map()
+  for (const b of buses || []) {
+    const orgId = String((b && b.orgId) || '')
+    if (!orgId) continue
+    map.set(orgId, {
+      org_id: orgId,
+      line_no: String((b && b.lineNo) || ''),
+      company: String((b && b.company) || ''),
+      max_speed: Number(b && b.maxSpeed) || 0,
+      speed_count: Number(b && b.speedCount) || 0,
+      online_at: String((b && b.onlineAt) || ''),
+      offline_at: String((b && b.offlineAt) || ''),
+      departures: Number(b && b.departures) || 0,
+      transfers: Array.isArray(b && b.transfers) ? b.transfers : [],
+      lines: Array.isArray(b && b.lines) ? b.lines : [],
+      samples: Number(b && b.samples) || 0,
+    })
+  }
+  return Array.from(map.values())
+}
+
+export async function upsertBuses(sql, buses, { date, recordedAt, dailyOnly = false } = {}) {
+  const rows = normalizeBuses(buses)
+  if (!rows.length) return 0
+  const payload = JSON.stringify(rows)
+  if (!dailyOnly) await sql.query(UPSERT_CUMULATIVE, [payload])
+  await sql.query(UPSERT_DAILY, [payload, date, recordedAt])
+  return rows.length
+}
+
 export default async function handler(req, res) {
   for (const [k, v] of Object.entries(CORS)) res.setHeader(k, v)
   if (req.method === 'OPTIONS') return res.status(204).end()
@@ -190,63 +285,8 @@ export default async function handler(req, res) {
       // 回填历史快照时只写按日表，避免把历史数据重复累加进累计表 vehicle_ops
       const dailyOnly = body.dailyOnly === true
 
-      let upserted = 0
-      for (const b of buses) {
-        if (!dailyOnly) await sql`
-          INSERT INTO vehicle_ops (
-            org_id, line_no, company, max_speed, speed_count,
-            online_at, offline_at, departures, transfers, lines, samples, updated_at
-          ) VALUES (
-            ${String(b.orgId || '')}, ${String(b.lineNo || '')}, ${String(b.company || '')},
-            ${Number(b.maxSpeed) || 0}, ${Number(b.speedCount) || 0},
-            ${String(b.onlineAt || '')}, ${String(b.offlineAt || '')},
-            ${Number(b.departures) || 0}, ${JSON.stringify(b.transfers || [])}::jsonb,
-            ${JSON.stringify(b.lines || [])}::jsonb, ${Number(b.samples) || 0}, now()
-          )
-          ON CONFLICT (org_id) DO UPDATE SET
-            line_no = EXCLUDED.line_no,
-            company = EXCLUDED.company,
-            max_speed = GREATEST(vehicle_ops.max_speed, EXCLUDED.max_speed),
-            speed_count = vehicle_ops.speed_count + EXCLUDED.speed_count,
-            online_at = LEAST(vehicle_ops.online_at, EXCLUDED.online_at),
-            offline_at = GREATEST(vehicle_ops.offline_at, EXCLUDED.offline_at),
-            departures = vehicle_ops.departures + EXCLUDED.departures,
-            transfers = EXCLUDED.transfers,
-            lines = EXCLUDED.lines,
-            samples = vehicle_ops.samples + EXCLUDED.samples,
-            updated_at = now()
-        `
-        // 按日表：每轮是全量扫描，累计字段取当日最大值，避免跨轮重复累加
-        await sql`
-          INSERT INTO vehicle_ops_daily (
-            date, org_id, recorded_at, line_no, company, max_speed, speed_count,
-            online_at, offline_at, departures, transfers, lines, samples, updated_at
-          ) VALUES (
-            ${date}::date, ${String(b.orgId || '')}, ${recordedAt},
-            ${String(b.lineNo || '')}, ${String(b.company || '')},
-            ${Number(b.maxSpeed) || 0}, ${Number(b.speedCount) || 0},
-            ${String(b.onlineAt || '')}, ${String(b.offlineAt || '')},
-            ${Number(b.departures) || 0}, ${JSON.stringify(b.transfers || [])}::jsonb,
-            ${JSON.stringify(b.lines || [])}::jsonb, ${Number(b.samples) || 0}, now()
-          )
-          ON CONFLICT (date, org_id) DO UPDATE SET
-            recorded_at = EXCLUDED.recorded_at,
-            line_no = EXCLUDED.line_no,
-            company = EXCLUDED.company,
-            max_speed = GREATEST(vehicle_ops_daily.max_speed, EXCLUDED.max_speed),
-            speed_count = GREATEST(vehicle_ops_daily.speed_count, EXCLUDED.speed_count),
-            online_at = LEAST(
-              COALESCE(NULLIF(vehicle_ops_daily.online_at, ''), EXCLUDED.online_at), EXCLUDED.online_at
-            ),
-            offline_at = GREATEST(vehicle_ops_daily.offline_at, EXCLUDED.offline_at),
-            departures = GREATEST(vehicle_ops_daily.departures, EXCLUDED.departures),
-            transfers = EXCLUDED.transfers,
-            lines = EXCLUDED.lines,
-            samples = GREATEST(vehicle_ops_daily.samples, EXCLUDED.samples),
-            updated_at = now()
-        `
-        upserted++
-      }
+      // 整轮 2 条批量 SQL，替代旧的逐车 2N 条串行写入
+      const upserted = await upsertBuses(sql, buses, { date, recordedAt, dailyOnly })
       return res.status(200).json({ ok: true, upserted })
     }
 

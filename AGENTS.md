@@ -39,9 +39,11 @@ uni-app（Vue 3 + Vite 5）跨端应用：H5 网页版 + Android App，查询武
 - 车辆营运信息采集 Actions（`.github/workflows/vehicle-ops.yml`）：**每 15 分钟一次**（cron `*/15 * * * *`），全库线路×方向拉 `detailData`，按日期时间分片落盘 `src/static/vehicle-ops/YYYY-MM-DD/HHMM.json`，累计档案写 `src/static/vehicle-ops/profile.json`。
 
 ### 5. 数据面板（`src/components/DataPanel.vue`）
-- 视图档 `data`，不依赖选线（地图常驻底座上开浮窗）。展示每车：所属公司 / 营运线路号 / 自编号 / 首次上线 / 最终下线 / 最高车速 / 超速次数（徽标）/ 历史发车次数 / 调配记录。
+- 视图档 `data`，不依赖选线（地图常驻底座上开浮窗）。展示每车：所属公司 / 营运线路号 / 自编号 / 记录时间 / 上线时间 / 下线时间 / 最高车速 / 超速次数（徽标）/ 调配记录。
 - 数据源优先级：`/api/vehicle-ops`（Vercel Serverless Function + Neon 数据库，实时）→ 失败回退静态 `src/static/vehicle-ops/profile.json`（本地 dev / 未配库）。API 地址在 `config.js` 的 `APP_CONFIG.vehicleOpsApi`。
-- 支持关键词筛选 + 车速/超速/发车/编号/线路号/上下线排序；导出走全站 CopyPill（文本/Excel/图片三档统一 `copyTable`）。
+- 支持关键词筛选 + 点表头排序（营运公司 / 线路号 / 自编号 / 记录时间 / 最高车速 / 超速 / 上线时间 / 下线时间）；导出走全站 CopyPill（文本/Excel/图片三档统一 `copyTable`）。
+- **表头与列对齐（2026-11-26）**：概览行是 flex-wrap 的 `.dp-cell` 序列，表头 `.dp-head` 必须与之**逐列对应**，复用同一套 `.dp-cell` 宽度 class 与窄屏 `order`，否则换行后列名对不上内容。旧版把排序胶囊栏（`SORTS`）当成表头，且比数据行少了首列「营运公司」徽标，造成「线路号位置显示营运公司」的整体错位观感 —— 别退回胶囊栏冒充表头。列顺序固定：营运公司 / 线路号 / 自编号 / 记录时间 / 最高车速 / 超速 / 上线时间 / 下线时间 / 展开箭头；`COLUMNS` 的 `key` 同时是排序键，点列头调 `onSort()`。
+- **上线 / 下线字段命名**：统一叫「上线时间」「下线时间」，分别取 `onlineAt`（最早一次上线时刻）与 `offlineAt`（最后一次在线时刻）；展开详情与导出列名用全称「上线时间（最早一次上线时间）」「下线时间（最后一次在线时间）」。别合并成「在运区间」，也别叫回「首次上线 / 最终下线」。
 - 数据库：`api/vehicle-ops.js`（GET 读 / POST 写，`x-api-key` 鉴权）、`api/init.sql`（建表）；写库环境变量 `VEHICLE_OPS_API` / `VEHICLE_OPS_TOKEN`（GitHub Secrets）；读库靠 Vercel 注入的 `DATABASE_URL`。
 - **CI 套娃防护**：所有采集 commit 都带 `[skip ci]`，避免数据 push main 反触发 daily-collect 全量采集循环。
 

@@ -50,6 +50,9 @@
 - **面板徽标与超速标签**：营运公司由集团 logo 图改为实时车辆面板同款金色圆形序号徽标（非集团走各自公司标）；超速次数分七档标签（守规标兵 → 偶尔飘一下 → 有点上头 → 风驰电掣 → 秋名山车神 → 狂飙选手 → ≥50 次「暴躁车神」），颜色随档位变化并写入展开详情。
 - **常驻采集守护进程**：新增 `scripts/daemon-vehicle-ops.mjs` 与 `npm run daemon:ops`，在常驻机器上每 45 秒（`OPS_INTERVAL_MS` 可调）跑一轮全市采集并直写 Neon 数据表，不触发 GitHub Actions；并发默认 16、轮次不叠加，需配 `VEHICLE_OPS_API` / `VEHICLE_OPS_TOKEN`。Vercel / Cloudflare Serverless 与浏览器后台均无法常驻，故必须跑在常驻主机上。
 - **数据面板字段精简**：展开详情改为只渲染有内容的项，不再显示空值占位「—」；首末次上线/下线合并为「在运区间」一行（按采集时刻口径）；「发车次数」从详情、排序与导出中移除。
+- **写库批量化**：`api/vehicle-ops.js` 的 POST 由「逐车 2N 条串行 SQL」改为「整轮 2 条批量 SQL」（`jsonb_to_recordset($1::jsonb)` 一次展开全部车辆，分别 upsert `vehicle_ops` 与 `vehicle_ops_daily`），SQL 条数与车辆数无关，消除 Serverless 单次请求随车辆数线性增长导致的超时风险；`GREATEST`/`LEAST`/累加/`NULLIF` 等冲突更新语义与原逐车版一致。批量前按 `org_id` 去重，避免同批 `ON CONFLICT` 报 "affect row a second time"；payload key 统一为 snake_case 并与列定义对齐（`jsonb_to_recordset` 按 key 匹配列名，写成驼峰会让字段静默变 NULL）。
+- **写库离线回归**：新增 `npm run test:ops`（`scripts/test-vehicle-ops-write.mjs`），在临时目录造 `@neondatabase/serverless` mock 后加载真实 handler，不连数据库即可验证 SQL 条数与车辆数无关、列名一致性、字段归一化、去重、`dailyOnly`、`x-api-key` 鉴权与 `at` 解析。
+- **数据面板列对齐与字段名修复**：原先顶部那排排序胶囊容易被看成表头，却比数据行少了首列「营运公司」徽标，导致「线路号位置显示的是营运公司、整体数据和字段列对不上」。改为真表头 `.dp-head`，列与数据格逐列对应（营运公司 / 线路号 / 自编号 / 记录时间 / 最高车速 / 超速 / 上线时间 / 下线时间 / 展开箭头），点列头即排序；表头与数据行共用同一套 `.dp-cell` 宽度 class 与窄屏 `order`，换行后仍对齐。新增「上线时间」「下线时间」两列，分别取 `onlineAt`（最早一次上线时间）与 `offlineAt`（最后一次在线时间）；展开详情把「在运区间」拆回这两个独立字段，导出列名同步改全称。
 
 ### 2026-11-24
 
@@ -169,9 +172,10 @@ npm run build:app
 npm run test:md5      # MD5 实现单测（RFC 1321 向量 + 实测对照）
 npm run test:busid    # 车辆编号还原测试（全量建字典约 400ms）
 npm run test:routeclean # 站点序列清洗回归（离线读 network.json，不发请求不写文件）
+npm run test:ops       # 写库批量化回归（mock neon，不连数据库、不写真实数据）
 ```
 
-三个测试都是 `node scripts/*.mjs`，失败时退出码非 0，可直接当 CI 用。改完 `md5.js` / `busId.js` / `routeClean.js` 必须跑对应测试。
+四个测试都是 `node scripts/*.mjs`，失败时退出码非 0，可直接当 CI 用。改完 `md5.js` / `busId.js` / `routeClean.js` / `api/vehicle-ops.js` 必须跑对应测试。
 
 ### 方式 D：常驻后台采集（45 秒直写数据库，不使用 GitHub Actions）
 
@@ -198,6 +202,7 @@ npm run daemon:ops
 | （Vercel 自动） | `main` push 触发构建部署到 `boundless-whbis.vercel.app` | — |
 | `npm run daemon:ops` | 常驻循环，每 45 秒抓全市车辆并直写数据库（替代 Actions） | Neon 数据表 + 静态快照 |
 | `npm run test:routeclean` | 站点序列清洗回归（离线读 network.json，不发请求不写盘） | — |
+| `npm run test:ops` | 写库批量化离线回归（mock neon，不连数据库、不写真实数据） | — |
 | `npm run scan:lines` | 枚举探测线路网，合并写线路库（只补强不降级） | `src/static/lines/lines.json` |
 | `npm run scan:org` | buspedia 采集营运公司写 `org`（含手动核实映射） | `src/static/lines/lines.json` |
 | `npm run scan:org:live` | 在线车辆自编号反推营运公司（只补强不降级，`--dry` 预览） | `src/static/lines/lines.json` |

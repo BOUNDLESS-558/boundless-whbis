@@ -77,7 +77,7 @@
       </view>
     </view>
 
-    <!-- 搜索 + 排序（排序横向滚动，不占多行） -->
+    <!-- 搜索 -->
     <view class="dp-toolbar">
       <input
         class="dp-search"
@@ -87,17 +87,20 @@
         placeholder-class="dp-search-ph"
         confirm-type="search"
       />
-      <scroll-view class="dp-sorts" scroll-x>
-        <view class="dp-sorts-inner">
-          <view
-            v-for="s in sortOptions"
-            :key="s.key"
-            class="dp-sort"
-            :class="{ on: sortKey === s.key }"
-            @click="onSort(s.key)"
-          >{{ s.label }}<text v-if="sortKey === s.key" class="dp-sort-arrow">{{ desc ? '↓' : '↑' }}</text></view>
-        </view>
-      </scroll-view>
+    </view>
+
+    <!-- 真表头：列与 .dp-item-head 的格子一一对应（含首列营运公司徽标），点列头排序。
+         原先的排序胶囊栏容易被人看成表头、却比数据行少一列，导致「线路号位置显示营运公司」的错位观感。 -->
+    <view class="dp-head" v-if="rows.length">
+      <view
+        v-for="c in columns"
+        :key="c.key"
+        class="dp-cell"
+        :class="c.cls"
+        :title="c.title || c.label"
+        @click="onSort(c.key)"
+      >{{ c.label }}<text v-if="sortKey === c.key" class="dp-sort-arrow">{{ desc ? '↓' : '↑' }}</text></view>
+      <view class="dp-cell arrow"></view>
     </view>
 
     <view class="dp-empty" v-if="!rows.length">
@@ -124,6 +127,8 @@
             <text class="dp-badge" :style="speedStyle(r.maxSpeed)">⚡ {{ r.speedCount }}</text>
             <text class="dp-driver-tag" :style="tierStyle(r)">{{ tierOf(r).emoji }} {{ tierOf(r).label }}</text>
           </text>
+          <text class="dp-cell online" :title="r.onlineAt">{{ shortTime(r.onlineAt) }}</text>
+          <text class="dp-cell offline" :title="r.offlineAt">{{ shortTime(r.offlineAt) }}</text>
           <text class="dp-cell arrow">{{ expanded[rowKey(r)] ? '▴' : '▾' }}</text>
         </view>
         <view class="dp-item-detail" v-if="expanded[rowKey(r)]">
@@ -196,14 +201,17 @@ function driverTierOf(n) {
   return DRIVER_TIERS.find((t) => v <= t.max) || DRIVER_TIERS[DRIVER_TIERS.length - 1]
 }
 
-const SORTS = [
-  { key: 'lineNo', label: '线路号' },
-  { key: 'orgId', label: '自编号' },
-  { key: 'recordedAt', label: '记录时间' },
-  { key: 'maxSpeed', label: '车速' },
-  { key: 'speedCount', label: '超速' },
-  { key: 'onlineAt', label: '上线' },
-  { key: 'offlineAt', label: '下线' },
+// 表头列 = 数据行概览格，顺序 / 样式类必须与 .dp-item-head 内的 .dp-cell 完全一致，
+// 否则窄屏 flex-wrap 换行后会出现「列名对不上内容」的错位（原先排序胶囊被误认成表头）。
+const COLUMNS = [
+  { key: 'company', label: '营运公司', cls: 'company' },
+  { key: 'lineNo', label: '线路号', cls: 'line' },
+  { key: 'orgId', label: '自编号', cls: 'org' },
+  { key: 'recordedAt', label: '记录时间', cls: 'record' },
+  { key: 'maxSpeed', label: '最高车速', cls: 'speed' },
+  { key: 'speedCount', label: '超速', cls: 'over' },
+  { key: 'onlineAt', label: '上线时间', cls: 'online', title: '最早一次上线时间' },
+  { key: 'offlineAt', label: '下线时间', cls: 'offline', title: '最后一次在线时间' },
 ]
 
 function normalize(r, daily = false) {
@@ -232,7 +240,7 @@ export default {
       fy: ALL, fm: ALL, fd: ALL, fc: ALL, fl: ALL,
       yearOpts: [ALL], monthOpts: [ALL, '01', '02', '03', '04', '05', '06', '07', '08', '09', '10', '11', '12'],
       dayOpts: [ALL], companyOpts: [ALL], lineOpts: [ALL], allDays: [],
-      sortKey: 'maxSpeed', desc: true, sortOptions: SORTS,
+      sortKey: 'maxSpeed', desc: true, columns: COLUMNS,
       total: 0, page: 1, pageSize: getPageSize(), pageSizeOpts: PAGE_SIZE_OPTS,
       // 折叠态
       filtersOpen: false,
@@ -326,15 +334,14 @@ export default {
       return (r.transfers || []).map((t) => `${t.from}→${t.to} ${t.at}`).join('\n') || '无调配'
     },
     // 详情只渲染有内容的项：空值不再显示「—」占位置。
-    // 首次/最后下线时间实际是采集窗口内的首末次见到时刻，合并为「在运区间」一行。
+    // 上线时间 = 最早一次上线时刻，下线时间 = 最后一次在线时刻，两者分开列示。
     detailCells(r) {
       const out = []
       const record = this.recordText(r)
       if (record && record !== '—') out.push({ k: '记录时间', v: record })
       const on = String(r.onlineAt || ''), off = String(r.offlineAt || '')
-      if (on || off) {
-        out.push({ k: '在运区间', v: `${on ? this.shortTime(on) : '?'} → ${off ? this.shortTime(off) : '?'}` })
-      }
+      if (on) out.push({ k: '上线时间（最早一次上线时间）', v: this.shortTime(on) })
+      if (off) out.push({ k: '下线时间（最后一次在线时间）', v: this.shortTime(off) })
       out.push({ k: '超速次数', v: `${r.speedCount} 次` })
       const t = this.tierOf(r)
       out.push({ k: '超速评价', v: `${t.emoji} ${t.label}`, color: t.color })
@@ -470,7 +477,7 @@ export default {
       ]
     },
     async onCopy() {
-      const columns = ['所属营运公司', '营运线路号', '自编号', '记录时间', '首次上线时间', '最终下线时间', '最高车速', '超速次数', '车辆调配记录']
+      const columns = ['所属营运公司', '营运线路号', '自编号', '记录时间', '上线时间（最早一次上线时间）', '下线时间（最后一次在线时间）', '最高车速', '超速次数', '车辆调配记录']
       let list = []
       if (this.apiMode) {
         const q = this.queryParams({ all: '1' })
@@ -532,14 +539,10 @@ export default {
 .dp-chip { padding: 6rpx 14rpx; border-radius: 999rpx; background: rgba(120,160,220,0.1); font-size: 20rpx; color: #9aa6bd; cursor: pointer; white-space: nowrap; }
 .dp-chip.on { background: var(--ac, #6366f1); color: #fff; }
 
-/* 搜索 + 排序 */
+/* 搜索 */
 .dp-toolbar { display: flex; flex-direction: column; gap: 10rpx; margin-bottom: 12rpx; }
 .dp-search { width: 100%; box-sizing: border-box; height: 68rpx; line-height: 68rpx; padding: 0 18rpx; border-radius: 12rpx; background: rgba(120,160,220,0.08); color: #e8edf6; font-size: 24rpx; }
 .dp-search-ph { color: rgba(232, 237, 246, 0.45); font-size: 24rpx; line-height: 68rpx; }
-.dp-sorts { width: 100%; white-space: nowrap; }
-.dp-sorts-inner { display: inline-flex; gap: 10rpx; }
-.dp-sort { display: inline-block; padding: 8rpx 18rpx; border-radius: 999rpx; background: rgba(120,160,220,0.08); font-size: 22rpx; color: #9aa6bd; cursor: pointer; }
-.dp-sort.on { background: var(--ac, #6366f1); color: #fff; }
 .dp-sort-arrow { margin-left: 6rpx; }
 
 /* 数据行：一行概览 + 点按展开详情 */
@@ -554,7 +557,12 @@ export default {
 .dp-cell.record { flex: 1 1 210rpx; font-size: 19rpx; color: #9aa6bd; }
 .dp-cell.speed { flex: 0 0 120rpx; font-weight: 700; }
 .dp-cell.over { flex: 0 0 210rpx; display: flex; align-items: center; gap: 6rpx; }
+.dp-cell.online, .dp-cell.offline { flex: 0 0 150rpx; font-size: 19rpx; color: #9aa6bd; }
 .dp-cell.arrow { flex: 0 0 28rpx; text-align: center; color: #9aa6bd; font-size: 20rpx; }
+/* 真表头：与 .dp-item-head 完全相同的 flex 布局 + 同一套 .dp-cell 宽度与窄屏 order，
+   保证换行后表头列仍与数据格逐列对齐 */
+.dp-head { display: flex; align-items: center; flex-wrap: wrap; gap: 8rpx 12rpx; padding: 10rpx 8rpx; border-bottom: 2rpx solid rgba(120,160,220,0.18); background: rgba(120,160,220,0.06); }
+.dp-head .dp-cell { font-size: 19rpx; color: #9aa6bd; cursor: pointer; }
 .dp-org { display: flex; align-items: center; gap: 8rpx; }
 /* 营运公司徽标：与实时车辆面板同款（金色圆形序号 + 短名 / 非集团用公司自己的标） */
 .org-tag { display: inline-flex; align-items: center; max-width: 100%; min-width: 0; background: linear-gradient(135deg, rgba(251,191,36,0.18), rgba(251,191,36,0.06)); border: 2rpx solid rgba(251,191,36,0.42); border-radius: 999rpx; padding: 2rpx 16rpx 2rpx 2rpx; white-space: nowrap; box-shadow: inset 0 1rpx 0 rgba(255,255,255,0.14), 0 3rpx 8rpx rgba(251,191,36,0.12); }
@@ -600,7 +608,8 @@ export default {
   .dp-pg-jump { display: none; }
   .dp-pg-arrow { padding: 10rpx 10rpx; font-size: 19rpx; }
   .dp-pg-num { min-width: 40rpx; padding: 8rpx; }
-  /* 窄屏两行：公司/线路/自编号/箭头 → 记录时间/车速/超速 */
+  /* 窄屏多行：公司/线路/自编号/箭头 → 记录时间/车速/超速/上线/下线。
+     表头与数据行共用同一组 order，换行位置一致，不会出现列错位 */
   .dp-cell.company { order: 1; }
   .dp-cell.line { order: 2; }
   .dp-cell.org { order: 3; }
@@ -608,5 +617,7 @@ export default {
   .dp-cell.record { order: 5; flex: 1 1 200rpx; }
   .dp-cell.speed { order: 6; }
   .dp-cell.over { order: 7; }
+  .dp-cell.online { order: 8; }
+  .dp-cell.offline { order: 9; }
 }
 </style>
