@@ -43,6 +43,7 @@
 - **移动端排版与线网数据源**：`LineMap.vue` 控制卡与实时车辆/发车时刻栏统一 `--panel-w` 与移动端边距，底部栏 z-index 提高防折叠覆盖；新增 `scripts/build-net-from-assets.mjs`，线网 `network.json` 改由各线路分片 `stops + route`（高德/OSRM 贴路）经 `routeClean.js` 清洗抽稀生成（901 线 / 1504 方向 / 34395 点）；`test-route-clean.mjs` 样本改为真实站点资产，三项单测通过。
 - **需求 16/17 分析结论**：高德站点与自编号映射表暂不建议整库入库（静态分片缓存已满足、12h 才变、入库同步成本大于收益）；若未来需关系查询，可分别建轻量 `amap_stops` / `bus_number_map` 表。
 - **移动端三栏宽度补强**：`.ctrl` 与 `.side-col` 在窄屏统一用显式 `width/max-width: calc(100vw - 40rpx)`，不再依赖 `width:auto`，避免不同机型 rpx 换算下输入卡比实时车辆/发车时刻栏窄一截。
+- **登录默认视图改为实时地图**：`map.vue` 的初始 `view` 从 `db`（线路库落地页）改为 `map`；`mapMount` 把无线路的实时地图也纳入底座，恢复线路失败/清除记忆/关闭浮窗等回退路径统一落回地图。保留「线路库」标签，仍可手动进入原落地页。
 
 ### 2026-11-24
 

@@ -1,6 +1,6 @@
 <template>
   <view class="home" :class="{ 'home--map': mapMount }">
-    <!-- 未选线路且不在全市态：地图没有走向可画，此时顶栏是独立玻璃卡，主视图整屏留给线路库当落地页 -->
+    <!-- 未选线路且处于线路库/收藏夹等落地视图时，顶栏是独立玻璃卡；默认实时地图态则由 LineMap 直接铺满 -->
     <view class="home-top" v-if="!mapMount">
       <LineSearch
         :views="views"
@@ -121,7 +121,7 @@
         :width-rpx="1200"
         max-height="80vh"
         resize-key="data"
-        @close="view = hasLine ? 'map' : 'db'"
+        @close="view = 'map'"
       >
         <DataPanel />
       </FloatWin>
@@ -513,10 +513,8 @@ import { closeAllDropdowns } from '../../utils/dropdown.js'
 
 // 上次查过的线路：下次进来直接落在地图上，省掉「每次都要搜一遍」
 const HOME_LINE_KEY = 'whbis:home-line'
-// 视图档位：地图是底座，city 是同一张地图的另一种内容，stops / db 是浮在它上面的两扇窗
+// 视图档位：地图是默认底座，city 是同一张地图的另一种内容，db / fav / data 是浮在上面的窗
 const VIEW_KEYS = ['map', 'city', 'db', 'fav', 'data']
-// 没选线路时不可达的档位（无线路 = 无单条线路可画）；city 不在内：全市线网不依赖选线
-const LINE_VIEWS = ['map']
 // 全市公交激活：输入正确激活码后持久化，之后免再激活
 const CITY_ACT_KEY = 'whbis:city-activated'
 const CITY_ACT_CODE = 'BOUNDLESS_558'
@@ -534,7 +532,8 @@ export default {
   components: { LineMap, LineSearch, LineStops, LineDb, FloatWin, FavPanel, DataPanel },
   data() {
     return {
-      view: 'db',
+      // 登录后默认进实时地图（旧版落地页是线路库，现仅在手动点「线路库」标签时才进）
+      view: 'map',
       // 登录账号（顶栏账号胶囊展示）与账号窗开关；acctConfirm = 窗内注销二次确认态
       account: '',
       accountShow: false,
@@ -621,9 +620,10 @@ export default {
     hasLine() {
       return !!this.lineNo
     },
-    // 地图要不要挂载：选了线路，或进入不依赖选线的全市公交 / 数据面板视图
+    // 地图要不要挂载：实时地图是默认底座（即使没选线路也铺地图 + 搜索框），
+    // 或选了线路 / 进入不依赖选线的全市公交、数据面板视图
     mapMount() {
-      return this.hasLine || this.view === 'city' || this.view === 'data'
+      return this.view === 'map' || this.hasLine || this.view === 'city' || this.view === 'data'
     },
     // 线路展示名（带「路」单位，环线不追加）：顶栏 meta 与浮窗标题共用
     displayLineName() {
@@ -802,14 +802,14 @@ export default {
     } else {
       this.restore()
     }
-    // URL 指定的档位优先（探针与外部跳转用它落在指定视图）；未选线路时只认全市公交与线路库
-    // 全市公交需激活：未激活不进入，保持落地页 / 地图
+    // URL 指定的档位优先（探针与外部跳转用它落在指定视图）；实时地图不依赖选线路，任何档位都可达
+    // 全市公交需激活：未激活不进入，保持默认地图
     const v = q.view
     if (v && VIEW_KEYS.includes(v)) {
       if (v === 'city' && !this.isCityActivated()) {
         if (this.hasLine) this.view = 'map'
       } else {
-        this.view = !this.hasLine && LINE_VIEWS.includes(v) ? 'db' : v
+        this.view = v
       }
     } else if (this.hasLine) {
       this.view = 'map'
@@ -919,18 +919,13 @@ export default {
         if (c) c.loadByLine(this.lineNo, this.direction, this.lineName)
       }
     },
-    // 分段切换：有线路时是「开窗 / 收窗」，没线路时单条线路类档位不可达（全市公交始终可达）
+    // 分段切换：实时地图不依赖选线路，任何时候都可达；线路库/收藏夹仍可手动进入
     switchView(key) {
       if (!VIEW_KEYS.includes(key)) return
-      // 再点当前档 = 收回上一档：有线路回到地图，没线路回到线路库落地页
-      const home = this.hasLine ? 'map' : 'db'
-      if (key === this.view) { this.view = home; return }
+      // 再点当前档 = 收回上一档，统一回到实时地图底座
+      if (key === this.view) { this.view = 'map'; return }
       // 全市公交需激活：未激活弹窗校验，已激活直接进
       if (key === 'city') { this.enterCity(); return }
-      if (!this.hasLine && LINE_VIEWS.includes(key)) {
-        uni.showToast({ title: '请先选择一条线路', icon: 'none' })
-        return
-      }
       this.view = key
     },
     // 底部栏「站点」按钮：显式开合实时线路窗，不再随选线/切视图自动弹出
@@ -941,7 +936,7 @@ export default {
     // 全市公交自己交回视图档位（首次进入时用户拒了那笔扫描开销）：档位判据只留在宿主一处
     onExitCity() {
       if (this.view !== 'city') return
-      this.view = this.hasLine ? 'map' : 'db'
+      this.view = 'map'
     },
     // 线路徽标只由线路决定，方向变了不需要重写
     writeHomeLine() {
@@ -968,19 +963,21 @@ export default {
       } catch (e) {
         saved = null
       }
-      if (!saved || !saved.lineCode) return
+      if (!saved || !saved.lineCode) { this.view = 'map'; return }
       // 旧版外部线路记忆（lineCode 形如 hanqi-xxx，现有数据源拉不到数据）：清掉这条过期记忆，
-      // 否则每次直接进本页都恢复不了线路、卡在线路库落地页；清掉后下次起恢复最近一次有效线路
+      // 否则每次直接进本页都恢复不了线路；清掉后停在默认实时地图，下次再恢复最近一次有效线路
       if (saved.source === 'hanqi' || String(saved.lineCode).startsWith('hanqi-')) {
         try { uni.removeStorageSync(HOME_LINE_KEY) } catch (e) { /* 存储不可用时保持忽略 */ }
+        this.view = 'map'
         return
       }
       try {
         this.applyPick(typeof saved === 'string' ? JSON.parse(saved) : saved)
         this.view = 'map'
       } catch (e) {
-        // 记忆损坏（JSON 解析失败等）：清掉，落回线路库落地页，别让异常打断 onLoad
+        // 记忆损坏（JSON 解析失败等）：清掉，停在默认实时地图，别让异常打断 onLoad
         try { uni.removeStorageSync(HOME_LINE_KEY) } catch (e2) { /* 忽略 */ }
+        this.view = 'map'
       }
     },
     // 全市公交是否已激活（激活后持久化，免重复激活）
