@@ -45,6 +45,9 @@ const COMMON = {
   appSource: 2,
 }
 const SPEED_LIMIT = Number(process.env.OPS_SPEED_LIMIT || 60) // 超速阈值 km/h
+// 最低记录车速：低于此值的车辆视为无效数据（停运/怠速/GPS 漂移），不入库。
+// 默认 40 km/h，可用 OPS_MIN_SPEED 覆盖；设 0 关闭过滤。
+const MIN_SPEED = Math.max(0, Number(process.env.OPS_MIN_SPEED || 40))
 const CONCURRENCY = Math.max(1, Number(process.env.OPS_CONCURRENCY || 6))
 const DELAY = Math.max(0, Number(process.env.OPS_DELAY || 25))
 const TIMEOUT = 15000
@@ -159,8 +162,10 @@ const workers = Array.from({ length: Math.min(CONCURRENCY, jobs.length) }, async
       const plain = plainOf(b)
       const orgId = plain || String(b.busNo || b.busId || '')
       if (!orgId) continue
-      busCount++
       const speed = numSpeed(b)
+      // 低速过滤：低于 MIN_SPEED 的车辆不记录（停运/怠速/GPS 漂移等无效数据）
+      if (speed < MIN_SPEED) continue
+      busCount++
       const gpsTime = String(b.gpsTime || '')
       const time = gpsTime.length >= 14
         ? `${gpsTime.slice(4, 6)}-${gpsTime.slice(6, 8)} ${gpsTime.slice(8, 10)}:${gpsTime.slice(10, 12)}:${gpsTime.slice(12, 14)}`
