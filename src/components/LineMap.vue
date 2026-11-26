@@ -5078,21 +5078,25 @@ export default {
    bottom 抬到 120rpx，给放大后的底部快捷栏（bottom 12rpx + 高约 90rpx）让位，
    否则 side-col(z-index 20) 会盖住 bottom-bar(z-index 11)，手机上完全看不到工具按钮。 */
 @media (max-width: 720px) {
-  /* 输入卡与实时车辆/发车时刻栏同宽同边距，彻底消除两栏错位 */
+  /* 输入卡与实时车辆/发车时刻栏强制同宽同边距：
+     不用 width:auto（不同机型 rpx 换算下会与右侧栏差十几像素），直接显式同宽 */
   .ctrl {
     left: 20rpx;
-    right: 20rpx;
-    width: auto;
-    max-width: none;
+    right: auto;
+    width: calc(100vw - 40rpx);
+    max-width: calc(100vw - 40rpx);
+    box-sizing: border-box;
   }
   .side-col {
     top: auto;
     left: 20rpx;
-    right: 20rpx;
+    right: auto;
     bottom: 132rpx;
-    width: auto;
+    width: calc(100vw - 40rpx);
+    max-width: calc(100vw - 40rpx);
     max-height: 46vh;
     z-index: 18;
+    box-sizing: border-box;
   }
   /* 底部工具条永远压在面板之上，避免移动端折叠覆盖后按钮点不到 */
   .bottom-bar { z-index: 22; }
