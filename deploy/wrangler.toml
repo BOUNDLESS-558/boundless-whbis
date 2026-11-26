@@ -1,6 +1,6 @@
 name = "whbis-cron"
 main = "cloudflare-cron-worker.js"
-compatibility_date = "2026-11-27"
+compatibility_date = "2026-11-26"
 
 # 免费版每账号 5 个 Cron Trigger，这里用 1 个，每分钟触发 workflow_dispatch。
 # cron 为 UTC；*/1 * * * * 表示每分钟的第 0 秒。

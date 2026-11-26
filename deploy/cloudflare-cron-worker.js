@@ -16,13 +16,13 @@ const GITHUB_API = 'https://api.github.com/repos/BOUNDLESS-558/boundless-whbis/a
 
 export default {
   async scheduled(event, env, ctx) {
-    ctx.waitUntil(trigger(env))
+    ctx.waitUntil(trigger(env).then((r) => { if (!r.ok) console.error('cron 触发失败：' + r.error) }))
   },
   // 手动测试：curl https://<worker域名>/trigger
   async fetch(request, env, ctx) {
     if (new URL(request.url).pathname === '/trigger') {
-      const ok = await trigger(env)
-      return new Response(ok ? 'triggered' : 'failed', { status: ok ? 200 : 500 })
+      const r = await trigger(env)
+      return new Response(r.ok ? 'triggered' : ('failed: ' + r.error), { status: r.ok ? 200 : 500 })
     }
     return new Response('ok', { status: 200 })
   },
@@ -30,10 +30,7 @@ export default {
 
 async function trigger(env) {
   const token = env.GITHUB_TOKEN
-  if (!token) {
-    console.error('缺少 GITHUB_TOKEN（需要 repo 权限的 PAT）')
-    return false
-  }
+  if (!token) return { ok: false, error: '缺少 GITHUB_TOKEN（需 repo 权限 PAT）' }
   try {
     const res = await fetch(GITHUB_API, {
       method: 'POST',
@@ -47,13 +44,15 @@ async function trigger(env) {
       body: JSON.stringify({ ref: 'main' }),
     })
     if (!res.ok) {
-      console.error(`GitHub API 返回 ${res.status}: ${await res.text()}`)
-      return false
+      const text = await res.text()
+      console.error(`GitHub API 返回 ${res.status}: ${text}`)
+      return { ok: false, error: `GitHub ${res.status}: ${text.slice(0, 200)}` }
     }
     console.log(`[${new Date().toISOString()}] 已触发 vehicle-ops workflow`)
-    return true
+    return { ok: true }
   } catch (e) {
-    console.error('触发失败：' + (e && e.message || e))
-    return false
+    const msg = String(e && e.message || e)
+    console.error('触发失败：' + msg)
+    return { ok: false, error: msg }
   }
 }
