@@ -444,29 +444,6 @@
       </view>
     </view>
 
-    <!-- 全市公交激活弹窗：替代系统 showModal（白底样式与全局不符），与玻璃卡同一套视觉 -->
-    <view class="act-mask" v-if="actShow" @click.self="actClose">
-      <view class="act-card">
-        <view class="act-title">激活全市公交</view>
-        <view class="act-desc">输入激活码后开启，激活一次长期有效</view>
-        <view class="act-groove">
-          <input
-            class="act-input"
-            v-model="actCode"
-            type="text"
-            placeholder="请输入激活码"
-            placeholder-class="act-ph"
-            confirm-type="done"
-            :focus="actShow"
-            @confirm="actConfirm"
-          />
-        </view>
-        <view class="act-btns">
-          <view class="act-btn ghost" @click="actClose">取消</view>
-          <view class="act-btn main" @click="actConfirm">激活</view>
-        </view>
-      </view>
-    </view>
   </view>
 </template>
 
@@ -515,9 +492,6 @@ import { closeAllDropdowns } from '../../utils/dropdown.js'
 const HOME_LINE_KEY = 'whbis:home-line'
 // 视图档位：地图是默认底座，city 是同一张地图的另一种内容，db / fav / data 是浮在上面的窗
 const VIEW_KEYS = ['map', 'city', 'db', 'fav', 'data']
-// 全市公交激活：输入正确激活码后持久化，之后免再激活
-const CITY_ACT_KEY = 'whbis:city-activated'
-const CITY_ACT_CODE = 'BOUNDLESS_558'
 // 「账号与设置」各分区的展开态：本机记忆，避免每次开窗都要重新点开
 const ACCT_SECTIONS_KEY = 'whbis:acct-sections'
 const ACCT_SECTION_KEYS = ['session', 'pwd', 'refresh', 'accent', 'font', 'amap']
@@ -593,9 +567,6 @@ export default {
         { days: 30, label: '30 天' },
         { days: 0, label: '永不过期' },
       ],
-      // 全市公交激活弹窗
-      actShow: false,
-      actCode: '',
       lineCode: '',
       lineName: '',
       lineNo: '',
@@ -803,17 +774,9 @@ export default {
       this.restore()
     }
     // URL 指定的档位优先（探针与外部跳转用它落在指定视图）；实时地图不依赖选线路，任何档位都可达
-    // 全市公交需激活：未激活不进入，保持默认地图
     const v = q.view
-    if (v && VIEW_KEYS.includes(v)) {
-      if (v === 'city' && !this.isCityActivated()) {
-        if (this.hasLine) this.view = 'map'
-      } else {
-        this.view = v
-      }
-    } else if (this.hasLine) {
-      this.view = 'map'
-    }
+    if (v && VIEW_KEYS.includes(v)) this.view = v
+    else if (this.hasLine) this.view = 'map'
   },
   onShow() {
     // 组件不触发页面生命周期：自动刷新定时器统一由宿主转发（只在 onLoad 建会叠出多个）
@@ -924,8 +887,6 @@ export default {
       if (!VIEW_KEYS.includes(key)) return
       // 再点当前档 = 收回上一档，统一回到实时地图底座
       if (key === this.view) { this.view = 'map'; return }
-      // 全市公交需激活：未激活弹窗校验，已激活直接进
-      if (key === 'city') { this.enterCity(); return }
       this.view = key
     },
     // 底部栏「站点」按钮：显式开合实时线路窗，不再随选线/切视图自动弹出
@@ -978,33 +939,6 @@ export default {
         // 记忆损坏（JSON 解析失败等）：清掉，停在默认实时地图，别让异常打断 onLoad
         try { uni.removeStorageSync(HOME_LINE_KEY) } catch (e2) { /* 忽略 */ }
         this.view = 'map'
-      }
-    },
-    // 全市公交是否已激活（激活后持久化，免重复激活）
-    isCityActivated() {
-      try { return !!uni.getStorageSync(CITY_ACT_KEY) } catch (e) { return false }
-    },
-    // 进入全市公交：未激活弹出自定义激活弹窗，已激活直接进
-    enterCity() {
-      if (this.isCityActivated()) { this.view = 'city'; return }
-      closeAllDropdowns()
-      this.actCode = ''
-      this.actShow = true
-    },
-    // 激活弹窗：关闭（取消 / 点遮罩）
-    actClose() {
-      this.actShow = false
-    },
-    // 激活弹窗：校验激活码，正确则持久化并进入全市公交
-    actConfirm() {
-      const code = (this.actCode || '').trim()
-      if (code === CITY_ACT_CODE) {
-        try { uni.setStorageSync(CITY_ACT_KEY, 1) } catch (e) { /* 存储不可用时下次再激活 */ }
-        this.actShow = false
-        uni.showToast({ title: '激活成功', icon: 'success' })
-        this.view = 'city'
-      } else {
-        uni.showToast({ title: '激活码错误', icon: 'none' })
       }
     },
     // 顶栏账号胶囊：开「账号与设置」窗；会话已失效时胶囊会引导重新登录
@@ -1300,109 +1234,6 @@ export default {
 /* 地图态：主视图吃掉整屏，不给内边距（LineMap 自己高度 100%） */
 .home--map .home-stage {
   padding: 0;
-}
-
-/* ── 全市公交激活弹窗：与全局深色玻璃卡同一套视觉（配色/描边/高光对齐 LineSearch 主按钮）── */
-.act-mask {
-  position: fixed;
-  left: 0;
-  top: 0;
-  right: 0;
-  bottom: 0;
-  z-index: 200;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: rgba(4, 7, 16, 0.62);
-  animation: act-fade 0.18s ease;
-}
-.act-card {
-  width: 560rpx;
-  max-width: calc(100vw - 80rpx);
-  box-sizing: border-box;
-  padding: 44rpx 40rpx 34rpx;
-  background: rgba(11, 16, 32, 0.96);
-  border: 2rpx solid rgba(255, 255, 255, 0.16);
-  border-radius: 28rpx;
-  box-shadow: 0 24rpx 64rpx rgba(0, 0, 0, 0.5), inset 0 1rpx 0 rgba(255, 255, 255, 0.18);
-  animation: act-pop 0.2s ease;
-}
-.act-title {
-  font-size: 32rpx;
-  font-weight: 700;
-  letter-spacing: 1rpx;
-  text-align: center;
-  color: #eef1ff;
-}
-.act-desc {
-  margin-top: 12rpx;
-  font-size: 24rpx;
-  text-align: center;
-  color: rgba(255, 255, 255, 0.55);
-}
-.act-groove {
-  margin-top: 32rpx;
-  display: flex;
-  align-items: center;
-  height: 84rpx;
-  padding: 0 24rpx;
-  border-radius: 16rpx;
-  background: rgba(255, 255, 255, 0.06);
-  border: 2rpx solid rgba(255, 255, 255, 0.12);
-  transition: border-color 0.2s, background 0.2s;
-}
-.act-groove:focus-within {
-  border-color: rgba(var(--ac-rgb), 0.6);
-  background: rgba(var(--ac-rgb), 0.1);
-}
-.act-input {
-  flex: 1;
-  height: 100%;
-  font-size: 28rpx;
-  color: #eef1ff;
-}
-.act-ph {
-  color: rgba(255, 255, 255, 0.35);
-}
-.act-btns {
-  margin-top: 34rpx;
-  display: flex;
-  gap: 20rpx;
-}
-.act-btn {
-  flex: 1;
-  height: 76rpx;
-  line-height: 76rpx;
-  text-align: center;
-  border-radius: 16rpx;
-  font-size: 28rpx;
-  font-weight: 600;
-  cursor: pointer;
-  transition: transform 0.15s, filter 0.2s;
-}
-.act-btn.ghost {
-  color: rgba(255, 255, 255, 0.72);
-  background: rgba(255, 255, 255, 0.08);
-  border: 2rpx solid rgba(255, 255, 255, 0.14);
-}
-.act-btn.main {
-  color: #fff;
-  background: linear-gradient(135deg, var(--ac), var(--ac-2));
-  box-shadow: 0 10rpx 26rpx rgba(79, 110, 247, 0.42), inset 0 1rpx 0 rgba(255, 255, 255, 0.3);
-}
-.act-btn.main:hover {
-  filter: brightness(1.08);
-}
-.act-btn:active {
-  transform: scale(0.96);
-}
-@keyframes act-fade {
-  from { opacity: 0; }
-  to { opacity: 1; }
-}
-@keyframes act-pop {
-  from { opacity: 0; transform: scale(0.92); }
-  to { opacity: 1; transform: scale(1); }
 }
 
 /* ── 账号窗（FloatWin 内）：信息行 + 注销键，同款玻璃口径 ── */
