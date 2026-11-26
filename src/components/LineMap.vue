@@ -298,6 +298,11 @@
           <text class="bb-ico" :class="{ spin: cityBusy || loading }">🔄</text>
           <text class="bb-label">重扫</text>
         </view>
+        <!-- 全市态：自动跟随，紧跟重扫，两个扫描控制放在一起 -->
+        <view class="bb-item" v-if="cityOn" :class="{ on: cityFollow > 0 }" :title="cityFollowTitle" @click="cycleCityFollow">
+          <text class="bb-ico">⏱️</text>
+          <text class="bb-label">{{ cityFollowLabel }}</text>
+        </view>
         <view class="bb-sep"></view>
         <!-- 视图工具：缩放 / 全览 / 站名 / 底图 -->
         <view class="bb-item" @click="zoomBy(0.6)" title="放大">
@@ -336,7 +341,7 @@
             <text class="bb-label">全部</text>
           </view>
         </template>
-        <!-- 仅全市模式：车速榜 + 查车 + 跟随 + 编号标签 + 线网模式 -->
+        <!-- 仅全市模式：车速榜 + 查车 + 编号标签 + 线网模式 -->
         <template v-else>
           <view class="bb-sep"></view>
           <view class="bb-item" :class="{ on: rankOpen }" @click="toggleRank" title="全局快照车速榜">
@@ -346,10 +351,6 @@
           <view class="bb-item" :class="{ on: orgSearchOpen }" @click="toggleOrgSearch" title="按自编号查车">
             <text class="bb-ico">🔍</text>
             <text class="bb-label">查车</text>
-          </view>
-          <view class="bb-item" :class="{ on: cityFollow > 0 }" :title="cityFollowTitle" @click="cycleCityFollow">
-            <text class="bb-ico">🔄</text>
-            <text class="bb-label">{{ cityFollowLabel }}</text>
           </view>
           <view class="bb-item" :class="{ on: cityTagMode > 0 }" :title="'编号标签：' + cityTagModeLabel + '（点击切换）'" @click="toggleCityTags">
             <text class="bb-ico">🏷</text>
