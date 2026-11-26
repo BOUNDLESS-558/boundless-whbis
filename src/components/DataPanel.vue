@@ -1,7 +1,7 @@
 <template>
   <!-- 数据面板：按日营运档案。优先读 Vercel 按日表 API，失败回退静态 profile.json -->
   <view class="dp-body">
-    <!-- 操作行：同步 / 导出 / 数据时次 -->
+    <!-- 顶部：数据时次 + 导出 / 同步 -->
     <view class="dp-actions">
       <text class="dp-stamp">{{ stamp ? stamp + ' · ' + filteredCount + ' 辆' : '尚未同步 · 0 辆' }}</text>
       <view class="dp-ops">
@@ -10,36 +10,74 @@
       </view>
     </view>
 
-    <!-- 年 / 月 / 日 / 公司 / 线路 联动筛选（均含「全部」） -->
-    <view class="dp-filters">
-      <view class="dp-filter-row">
-        <text class="dp-fl">📅 日期</text>
-        <view class="dp-chips">
-          <view v-for="y in yearOpts" :key="'y' + y" class="dp-chip" :class="{ on: fy === y }" @click="pickYear(y)">{{ y === '全部' ? '全部年' : y }}</view>
-          <view v-for="m in monthOpts" :key="'m' + m" class="dp-chip" :class="{ on: fm === m }" @click="pickMonth(m)">{{ m === '全部' ? '全部月' : m + '月' }}</view>
+    <!-- 筛选条：常驻一行，点击整条展开/折叠；窄屏默认折叠，让数据先露出来 -->
+    <view class="dp-filter-bar">
+      <view class="dp-filter-toggle" @click="filtersOpen = !filtersOpen">
+        <text class="dp-ft-ico">🔍</text>
+        <text class="dp-ft-label">筛选</text>
+        <text class="dp-ft-sum">{{ filterSummary }}</text>
+        <text class="dp-ft-arrow">{{ filtersOpen ? '▴' : '▾' }}</text>
+      </view>
+      <view class="dp-filter-reset" :class="{ off: !hasFilter }" @click="resetFilters">↺ 重置</view>
+    </view>
+
+    <!-- 筛选面板：四组可独立折叠，收起时表头显示当前值 -->
+    <view class="dp-filter-panel" v-if="filtersOpen">
+      <view class="dp-fgroup">
+        <view class="dp-fg-head" @click="toggleGroup('date')">
+          <text>📅 年 / 月</text>
+          <text class="dp-fg-val">{{ dateSummary }}</text>
+          <text class="dp-fg-arrow">{{ openGroups.date ? '▴' : '▾' }}</text>
+        </view>
+        <view class="dp-fg-body" v-if="openGroups.date">
+          <view class="dp-chips">
+            <view v-for="y in yearOpts" :key="'y' + y" class="dp-chip" :class="{ on: fy === y }" @click="pickYear(y)">{{ y === '全部' ? '全部年' : y }}</view>
+            <view v-for="m in monthOpts" :key="'m' + m" class="dp-chip" :class="{ on: fm === m }" @click="pickMonth(m)">{{ m === '全部' ? '全部月' : m + '月' }}</view>
+          </view>
         </view>
       </view>
-      <view class="dp-filter-row">
-        <text class="dp-fl">🗓 具体日</text>
-        <view class="dp-chips">
-          <view v-for="d in dayOpts" :key="'d' + d" class="dp-chip" :class="{ on: fd === d }" @click="pickDay(d)">{{ d === '全部' ? '全部日' : d }}</view>
+
+      <view class="dp-fgroup">
+        <view class="dp-fg-head" @click="toggleGroup('day')">
+          <text>🗓 具体日</text>
+          <text class="dp-fg-val">{{ fd === ALL ? '全部日' : fd }}</text>
+          <text class="dp-fg-arrow">{{ openGroups.day ? '▴' : '▾' }}</text>
+        </view>
+        <view class="dp-fg-body" v-if="openGroups.day">
+          <view class="dp-chips">
+            <view v-for="d in dayOpts" :key="'d' + d" class="dp-chip" :class="{ on: fd === d }" @click="pickDay(d)">{{ d === '全部' ? '全部日' : d }}</view>
+          </view>
         </view>
       </view>
-      <view class="dp-filter-row">
-        <text class="dp-fl">🏢 公司</text>
-        <view class="dp-chips">
-          <view v-for="c in companyOpts" :key="'c' + c" class="dp-chip" :class="{ on: fc === c }" @click="pickCompany(c)">{{ c === '全部' ? '全部公司' : shortCompany(c) }}</view>
+
+      <view class="dp-fgroup">
+        <view class="dp-fg-head" @click="toggleGroup('company')">
+          <text>🏢 营运公司</text>
+          <text class="dp-fg-val">{{ fc === ALL ? '全部公司' : shortCompany(fc) }}</text>
+          <text class="dp-fg-arrow">{{ openGroups.company ? '▴' : '▾' }}</text>
+        </view>
+        <view class="dp-fg-body" v-if="openGroups.company">
+          <view class="dp-chips">
+            <view v-for="c in companyOpts" :key="'c' + c" class="dp-chip" :class="{ on: fc === c }" :title="c" @click="pickCompany(c)">{{ c === '全部' ? '全部公司' : shortCompany(c) }}</view>
+          </view>
         </view>
       </view>
-      <view class="dp-filter-row">
-        <text class="dp-fl">🚌 线路</text>
-        <view class="dp-chips">
-          <view v-for="l in lineOpts" :key="'l' + l" class="dp-chip" :class="{ on: fl === l }" @click="pickLine(l)">{{ l === '全部' ? '全部线路' : l }}</view>
+
+      <view class="dp-fgroup">
+        <view class="dp-fg-head" @click="toggleGroup('line')">
+          <text>🚌 线路</text>
+          <text class="dp-fg-val">{{ fl === ALL ? '全部线路' : fl + ' 路' }}</text>
+          <text class="dp-fg-arrow">{{ openGroups.line ? '▴' : '▾' }}</text>
+        </view>
+        <view class="dp-fg-body" v-if="openGroups.line">
+          <view class="dp-chips">
+            <view v-for="l in lineOpts" :key="'l' + l" class="dp-chip" :class="{ on: fl === l }" @click="pickLine(l)">{{ l === '全部' ? '全部线路' : l }}</view>
+          </view>
         </view>
       </view>
     </view>
 
-    <!-- 搜索 + 排序工具条 -->
+    <!-- 搜索 + 排序（排序横向滚动，不占多行） -->
     <view class="dp-toolbar">
       <input
         class="dp-search"
@@ -49,15 +87,17 @@
         placeholder-class="dp-search-ph"
         confirm-type="search"
       />
-      <view class="dp-sorts">
-        <view
-          v-for="s in sortOptions"
-          :key="s.key"
-          class="dp-sort"
-          :class="{ on: sortKey === s.key }"
-          @click="onSort(s.key)"
-        >{{ s.label }}<text v-if="sortKey === s.key" class="dp-sort-arrow">{{ desc ? '↓' : '↑' }}</text></view>
-      </view>
+      <scroll-view class="dp-sorts" scroll-x>
+        <view class="dp-sorts-inner">
+          <view
+            v-for="s in sortOptions"
+            :key="s.key"
+            class="dp-sort"
+            :class="{ on: sortKey === s.key }"
+            @click="onSort(s.key)"
+          >{{ s.label }}<text v-if="sortKey === s.key" class="dp-sort-arrow">{{ desc ? '↓' : '↑' }}</text></view>
+        </view>
+      </scroll-view>
     </view>
 
     <view class="dp-empty" v-if="!rows.length">
@@ -65,49 +105,50 @@
       <text class="dp-empty-txt">暂无符合条件的营运数据。可点「🔄 同步」读取最新数据。</text>
     </view>
 
-    <scroll-view class="dp-table-scroll" scroll-y v-else>
-      <view class="dp-row dp-thead">
-        <text class="dp-c company">所属营运公司</text>
-        <text class="dp-c line">营运线路号</text>
-        <text class="dp-c org">自编号</text>
-        <text class="dp-c record">记录时间</text>
-        <text class="dp-c time">首次上线</text>
-        <text class="dp-c time">最终下线</text>
-        <text class="dp-c speed">最高车速</text>
-        <text class="dp-c over">超速次数</text>
-        <text class="dp-c depart">发车次数</text>
-        <text class="dp-c trans">车辆调配记录</text>
-      </view>
-      <view class="dp-row" v-for="r in rows" :key="r.date + '|' + r.orgId">
-        <view class="dp-c company dp-org">
-          <image v-if="orgLogo(r)" class="dp-logo" :src="orgLogo(r)" mode="aspectFit" />
-          <text class="dp-org-name" :title="r.company || ''">{{ orgLabel(r) }}</text>
+    <!-- 数据行：一行概览 + 点按展开详情，PC / 移动端同一套结构，靠 flex-wrap 自适应 -->
+    <scroll-view class="dp-list" scroll-y v-else>
+      <view class="dp-item" v-for="r in rows" :key="rowKey(r)">
+        <view class="dp-item-head" @click="toggleRow(r)">
+          <view class="dp-cell company dp-org">
+            <image v-if="orgLogo(r)" class="dp-logo" :src="orgLogo(r)" mode="aspectFit" />
+            <text class="dp-org-name" :title="r.company || ''">{{ orgLabel(r) }}</text>
+          </view>
+          <text class="dp-cell line" :title="'历史线路：' + (r.lines || []).join(' / ')">{{ r.lineNo || (r.lines || [])[0] || '—' }}</text>
+          <text class="dp-cell org" :title="r.orgId">{{ fmtNo(r.orgId) }}</text>
+          <text class="dp-cell record">{{ recordText(r) }}</text>
+          <text class="dp-cell speed" :style="{ color: speedColor(r.maxSpeed) }">{{ r.maxSpeed }}<text class="dp-unit">km/h</text></text>
+          <text class="dp-cell over"><text class="dp-badge" :style="speedStyle(r.maxSpeed)">⚡ {{ r.speedCount }}</text></text>
+          <text class="dp-cell arrow">{{ expanded[rowKey(r)] ? '▴' : '▾' }}</text>
         </view>
-        <text class="dp-c line" :title="'历史线路：' + (r.lines || []).join(' / ')">{{ r.lineNo || (r.lines || [])[0] || '—' }}</text>
-        <text class="dp-c org" :title="r.orgId">{{ fmtNo(r.orgId) }}</text>
-        <text class="dp-c record small">{{ recordText(r) }}</text>
-        <text class="dp-c time small">{{ shortTime(r.onlineAt) }}</text>
-        <text class="dp-c time small">{{ shortTime(r.offlineAt) }}</text>
-        <text class="dp-c speed" :style="{ color: speedColor(r.maxSpeed), fontWeight: '700' }">{{ r.maxSpeed }}<text class="dp-unit">km/h</text></text>
-        <text class="dp-c over">
-          <text class="dp-badge" :style="speedStyle(r.maxSpeed)">{{ r.speedCount }}</text>
-        </text>
-        <text class="dp-c depart">{{ r.departures }}</text>
-        <text class="dp-c trans small" :title="transferText(r)">{{ transferText(r) }}</text>
+        <view class="dp-item-detail" v-if="expanded[rowKey(r)]">
+          <view class="dp-dcell"><text class="dp-dk">记录时间</text><text class="dp-dv">{{ recordText(r) }}</text></view>
+          <view class="dp-dcell"><text class="dp-dk">首次上线</text><text class="dp-dv">{{ r.onlineAt || '—' }}</text></view>
+          <view class="dp-dcell"><text class="dp-dk">最终下线</text><text class="dp-dv">{{ r.offlineAt || '—' }}</text></view>
+          <view class="dp-dcell"><text class="dp-dk">发车 / 超速</text><text class="dp-dv">{{ r.departures }} 次 / {{ r.speedCount }} 次</text></view>
+          <view class="dp-dcell full"><text class="dp-dk">车辆调配</text><text class="dp-dv">{{ transferText(r) }}</text></view>
+        </view>
       </view>
     </scroll-view>
 
-    <!-- 分页：每页条数用户可选，箭头为 Emoji + 文字 -->
+    <!-- 分页：上行统计/每页/跳页，下行翻页按钮+可横滑页码 -->
     <view class="dp-pager" v-if="pageCount > 1">
-      <view class="dp-pg-size">
-        <text>📄 每页</text>
-        <view v-for="n in pageSizeOpts" :key="n" class="dp-pg-size-opt" :class="{ on: pageSize === n }" @click="setSize(n)">{{ n }}</view>
+      <view class="dp-pg-top">
+        <text class="dp-pg-info">共 {{ filteredCount }} 条 · 第 {{ page }} / {{ pageCount }} 页</text>
+        <view class="dp-pg-size">
+          <text>每页</text>
+          <view v-for="n in pageSizeOpts" :key="n" class="dp-pg-size-opt" :class="{ on: pageSize === n }" @click="setSize(n)">{{ n }}</view>
+        </view>
+        <view class="dp-pg-jump">跳至<input class="dp-pg-jump-input" type="number" v-model="jumpPage" @confirm="doJump" />页</view>
       </view>
-      <view class="dp-pg-arrow" :class="{ dis: page <= 1 }" @click="gotoPage(page - 1)">⬅️ 上一页</view>
-      <view class="dp-pg-nums">
-        <view v-for="(p, i) in pageList" :key="i" class="dp-pg-num" :class="{ on: p === page, gap: p === '…' }" @click="gotoPage(p)">{{ p }}</view>
+      <view class="dp-pg-nav">
+        <view class="dp-pg-arrow" :class="{ dis: page <= 1 }" @click="gotoPage(page - 1)">⬅️ 上一页</view>
+        <scroll-view class="dp-pg-nums" scroll-x>
+          <view class="dp-pg-nums-inner">
+            <view v-for="(p, i) in pageList" :key="i" class="dp-pg-num" :class="{ on: p === page, gap: p === '…' }" @click="gotoPage(p)">{{ p }}</view>
+          </view>
+        </scroll-view>
+        <view class="dp-pg-arrow" :class="{ dis: page >= pageCount }" @click="gotoPage(page + 1)">下一页 ➡️</view>
       </view>
-      <view class="dp-pg-arrow" :class="{ dis: page >= pageCount }" @click="gotoPage(page + 1)">下一页 ➡️</view>
     </view>
 
     <view class="dp-foot">
@@ -168,6 +209,12 @@ export default {
       dayOpts: [ALL], companyOpts: [ALL], lineOpts: [ALL], allDays: [],
       sortKey: 'maxSpeed', desc: true, sortOptions: SORTS,
       total: 0, page: 1, pageSize: getPageSize(), pageSizeOpts: PAGE_SIZE_OPTS,
+      // 折叠态
+      filtersOpen: false,
+      openGroups: { date: true, day: false, company: false, line: false },
+      expanded: {},
+      jumpPage: '',
+      _bulk: false,
     }
   },
   computed: {
@@ -189,18 +236,36 @@ export default {
       })
     },
     filteredCount() { return this.apiMode ? this.total : this.localFiltered.length },
-    pageCount() {
-      return calcPageCount(this.filteredCount, this.pageSize)
-    },
+    pageCount() { return calcPageCount(this.filteredCount, this.pageSize) },
     pageList() { return calcPageList(this.pageCount, this.page) },
+    hasFilter() {
+      return this.fy !== ALL || this.fm !== ALL || this.fd !== ALL || this.fc !== ALL || this.fl !== ALL || !!this.keyword
+    },
+    dateSummary() {
+      if (this.fy !== ALL && this.fm !== ALL) return this.fy + '年' + Number(this.fm) + '月'
+      if (this.fy !== ALL) return this.fy + '年'
+      if (this.fm !== ALL) return Number(this.fm) + '月'
+      return '全部日期'
+    },
+    filterSummary() {
+      const bits = []
+      if (this.fd !== ALL) bits.push(this.fd)
+      else {
+        if (this.fy !== ALL) bits.push(this.fy + '年')
+        if (this.fm !== ALL) bits.push(Number(this.fm) + '月')
+      }
+      if (this.fc !== ALL) bits.push(this.shortCompany(this.fc))
+      if (this.fl !== ALL) bits.push(this.fl + '路')
+      return bits.length ? bits.join(' · ') : '全部数据'
+    },
   },
   watch: {
-    keyword() { this.page = 1; if (this.apiMode) this.load() },
-    fy() { this.rebuildDayOpts(); this.page = 1; this.load() },
-    fm() { this.rebuildDayOpts(); this.page = 1; this.load() },
-    fd() { this.page = 1; this.load() },
-    fc() { this.page = 1; this.load() },
-    fl() { this.page = 1; this.load() },
+    keyword() { if (this._bulk) return; this.page = 1; if (this.apiMode) this.load() },
+    fy() { if (this._bulk) return; this.rebuildDayOpts(); this.page = 1; this.load() },
+    fm() { if (this._bulk) return; this.rebuildDayOpts(); this.page = 1; this.load() },
+    fd() { if (this._bulk) return; this.page = 1; this.load() },
+    fc() { if (this._bulk) return; this.page = 1; this.load() },
+    fl() { if (this._bulk) return; this.page = 1; this.load() },
     page() { if (this.apiMode) this.load() },
     pageSize() { this.page = 1; if (this.apiMode) this.load() },
   },
@@ -220,18 +285,31 @@ export default {
     transferText(r) {
       return (r.transfers || []).map((t) => `${t.from}→${t.to} ${t.at}`).join('\n') || '无调配'
     },
-    speedColor(v) {
-      return SPEED_BANDS[speedBandOf(v)].color
-    },
+    speedColor(v) { return SPEED_BANDS[speedBandOf(v)].color },
     speedStyle(v) {
       const c = this.speedColor(v)
       return { color: v > this.speedLimit ? '#fff' : c, background: v > this.speedLimit ? c : 'rgba(120,160,220,0.12)' }
     },
-    orgInfo(r) {
-      return companyOf({ no: r.lineNo, company: r.company, org: r.company })
-    },
+    orgInfo(r) { return companyOf({ no: r.lineNo, company: r.company, org: r.company }) },
     orgLogo(r) { return assetUrl(this.orgInfo(r).logo) },
     orgLabel(r) { return this.orgInfo(r).label },
+
+    // 折叠交互
+    toggleGroup(k) { this.openGroups = { ...this.openGroups, [k]: !this.openGroups[k] } },
+    rowKey(r) { return (r.date || '') + '|' + r.orgId },
+    toggleRow(r) {
+      const k = this.rowKey(r)
+      this.expanded = { ...this.expanded, [k]: !this.expanded[k] }
+    },
+    resetFilters() {
+      this._bulk = true
+      this.fy = this.fm = this.fd = this.fc = this.fl = ALL
+      this.keyword = ''
+      this._bulk = false
+      this.page = 1
+      this.rebuildDayOpts()
+      this.load()
+    },
 
     queryParams(extra = {}) {
       const q = {
@@ -355,6 +433,12 @@ export default {
       const target = clampPage(p, this.pageCount)
       if (target === this.page) return
       this.page = target
+      this.jumpPage = ''
+    },
+    doJump() {
+      const n = Number(this.jumpPage)
+      if (!n) return
+      this.gotoPage(n)
     },
     setSize(n) { this.pageSize = setPageSize(n); this.page = 1 },
   },
@@ -363,54 +447,102 @@ export default {
 
 <style scoped>
 .dp-body { width: 100%; color: #e8edf6; }
-.dp-actions { display: flex; align-items: center; justify-content: space-between; padding: 4rpx 0 12rpx; }
-.dp-stamp { font-size: 19rpx; color: #9aa6bd; }
-.dp-ops { display: flex; align-items: center; gap: 12rpx; }
+/* 顶部 */
+.dp-actions { display: flex; align-items: center; justify-content: space-between; gap: 12rpx; padding: 4rpx 0 12rpx; }
+.dp-stamp { font-size: 19rpx; color: #9aa6bd; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dp-ops { display: flex; align-items: center; gap: 12rpx; flex: 0 0 auto; }
 .dp-mini { padding: 8rpx 16rpx; border-radius: 12rpx; background: rgba(120,160,220,0.12); color: #e8edf6; font-size: 20rpx; cursor: pointer; white-space: nowrap; }
-.dp-filters { display: flex; flex-direction: column; gap: 8rpx; margin-bottom: 12rpx; }
-.dp-filter-row { display: flex; align-items: center; gap: 10rpx; }
-.dp-fl { flex: 0 0 120rpx; font-size: 20rpx; color: #9aa6bd; }
-.dp-chips { display: flex; flex: 1; flex-wrap: wrap; gap: 8rpx; }
-.dp-chip { padding: 6rpx 14rpx; border-radius: 999rpx; background: rgba(120,160,220,0.1); font-size: 20rpx; color: #9aa6bd; cursor: pointer; }
+
+/* 筛选条 */
+.dp-filter-bar { display: flex; align-items: center; gap: 10rpx; margin-bottom: 10rpx; }
+.dp-filter-toggle { flex: 1 1 auto; min-width: 0; display: flex; align-items: center; gap: 10rpx; padding: 12rpx 16rpx; border-radius: 14rpx; background: rgba(120,160,220,0.1); cursor: pointer; }
+.dp-ft-ico { font-size: 22rpx; }
+.dp-ft-label { font-size: 22rpx; font-weight: 700; flex: 0 0 auto; }
+.dp-ft-sum { flex: 1 1 auto; min-width: 0; font-size: 19rpx; color: #9aa6bd; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dp-ft-arrow { font-size: 20rpx; color: #9aa6bd; flex: 0 0 auto; }
+.dp-filter-reset { flex: 0 0 auto; padding: 12rpx 16rpx; border-radius: 14rpx; background: rgba(var(--ac-rgb), 0.18); color: var(--ac-hi); font-size: 20rpx; cursor: pointer; white-space: nowrap; }
+.dp-filter-reset.off { opacity: 0.4; }
+
+/* 筛选面板：四组折叠 */
+.dp-filter-panel { display: flex; flex-direction: column; gap: 8rpx; margin-bottom: 12rpx; }
+.dp-fgroup { border-radius: 14rpx; background: rgba(120,160,220,0.06); overflow: hidden; }
+.dp-fg-head { display: flex; align-items: center; gap: 10rpx; padding: 12rpx 16rpx; font-size: 21rpx; cursor: pointer; }
+.dp-fg-val { flex: 1 1 auto; min-width: 0; text-align: right; font-size: 19rpx; color: #9aa6bd; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dp-fg-arrow { flex: 0 0 auto; font-size: 18rpx; color: #9aa6bd; }
+.dp-fg-body { padding: 0 16rpx 14rpx; }
+.dp-chips { display: flex; flex-wrap: wrap; gap: 8rpx; max-height: 240rpx; overflow-y: auto; }
+.dp-chip { padding: 6rpx 14rpx; border-radius: 999rpx; background: rgba(120,160,220,0.1); font-size: 20rpx; color: #9aa6bd; cursor: pointer; white-space: nowrap; }
 .dp-chip.on { background: var(--ac, #6366f1); color: #fff; }
-.dp-toolbar { display: flex; flex-direction: column; gap: 12rpx; margin-bottom: 12rpx; }
+
+/* 搜索 + 排序 */
+.dp-toolbar { display: flex; flex-direction: column; gap: 10rpx; margin-bottom: 12rpx; }
 .dp-search { width: 100%; box-sizing: border-box; height: 68rpx; line-height: 68rpx; padding: 0 18rpx; border-radius: 12rpx; background: rgba(120,160,220,0.08); color: #e8edf6; font-size: 24rpx; }
 .dp-search-ph { color: rgba(232, 237, 246, 0.45); font-size: 24rpx; line-height: 68rpx; }
-.dp-sorts { display: flex; gap: 10rpx; flex-wrap: wrap; }
-.dp-sort { padding: 8rpx 18rpx; border-radius: 999rpx; background: rgba(120,160,220,0.08); font-size: 22rpx; color: #9aa6bd; cursor: pointer; }
+.dp-sorts { width: 100%; white-space: nowrap; }
+.dp-sorts-inner { display: inline-flex; gap: 10rpx; }
+.dp-sort { display: inline-block; padding: 8rpx 18rpx; border-radius: 999rpx; background: rgba(120,160,220,0.08); font-size: 22rpx; color: #9aa6bd; cursor: pointer; }
 .dp-sort.on { background: var(--ac, #6366f1); color: #fff; }
 .dp-sort-arrow { margin-left: 6rpx; }
-.dp-table-scroll { max-height: 60vh; overflow-y: auto; overflow-x: auto; }
-.dp-row { display: flex; align-items: center; padding: 12rpx 8rpx; border-bottom: 2rpx solid rgba(120,160,220,0.08); min-width: 1900rpx; }
-.dp-thead { position: sticky; top: 0; background: #101a2e; color: #9aa6bd; font-size: 20rpx; z-index: 2; }
-.dp-c { flex: 0 0 auto; font-size: 22rpx; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.dp-c.company { width: 240rpx; }
-.dp-c.line { width: 140rpx; }
-.dp-c.org { width: 130rpx; }
-.dp-c.record { width: 240rpx; }
-.dp-c.time { width: 200rpx; }
-.dp-c.speed { width: 130rpx; }
-.dp-c.over { width: 110rpx; }
-.dp-c.depart { width: 130rpx; }
-.dp-c.trans { width: 400rpx; padding-left: 16rpx; box-sizing: border-box; }
-.dp-c.small { font-size: 19rpx; color: #9aa6bd; }
+
+/* 数据行：一行概览 + 点按展开详情 */
+.dp-list { max-height: 60vh; overflow-y: auto; }
+.dp-item { border-bottom: 2rpx solid rgba(120,160,220,0.08); }
+.dp-item-head { display: flex; align-items: center; flex-wrap: wrap; gap: 8rpx 12rpx; padding: 14rpx 8rpx; cursor: pointer; }
+.dp-item-head:hover { background: rgba(120,160,220,0.06); }
+.dp-cell { font-size: 22rpx; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dp-cell.company { flex: 1 1 150rpx; }
+.dp-cell.line { flex: 0 0 84rpx; font-weight: 700; }
+.dp-cell.org { flex: 0 0 150rpx; }
+.dp-cell.record { flex: 1 1 210rpx; font-size: 19rpx; color: #9aa6bd; }
+.dp-cell.speed { flex: 0 0 120rpx; font-weight: 700; }
+.dp-cell.over { flex: 0 0 96rpx; }
+.dp-cell.arrow { flex: 0 0 28rpx; text-align: center; color: #9aa6bd; font-size: 20rpx; }
 .dp-org { display: flex; align-items: center; gap: 8rpx; }
 .dp-logo { width: 36rpx; height: 36rpx; flex: 0 0 auto; }
-.dp-org-name { overflow: hidden; text-overflow: ellipsis; }
-.dp-unit { font-size: 17rpx; color: #7f8aa3; margin-left: 4rpx; }
-.dp-badge { display: inline-block; min-width: 36rpx; padding: 2rpx 10rpx; border-radius: 999rpx; background: rgba(120,160,220,0.12); text-align: center; }
+.dp-org-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dp-unit { font-size: 17rpx; color: #7f8aa3; margin-left: 4rpx; font-weight: 400; }
+.dp-badge { display: inline-block; min-width: 36rpx; padding: 2rpx 10rpx; border-radius: 999rpx; text-align: center; font-size: 19rpx; }
+.dp-item-detail { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8rpx 20rpx; padding: 12rpx 18rpx 16rpx; background: rgba(120,160,220,0.05); }
+.dp-dcell { display: flex; justify-content: space-between; gap: 12rpx; font-size: 19rpx; min-width: 0; }
+.dp-dcell.full { grid-column: 1 / -1; }
+.dp-dk { color: #9aa6bd; flex: 0 0 auto; }
+.dp-dv { color: #e8edf6; text-align: right; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .dp-empty { display: flex; flex-direction: column; align-items: center; padding: 80rpx 40rpx; text-align: center; }
 .dp-empty-big { font-size: 72rpx; opacity: 0.5; }
 .dp-empty-txt { font-size: 24rpx; color: #9aa6bd; margin-top: 16rpx; }
-.dp-pager { display: flex; align-items: center; flex-wrap: wrap; gap: 10rpx; margin-top: 12rpx; }
-.dp-pg-size { display: flex; align-items: center; gap: 6rpx; font-size: 20rpx; color: #9aa6bd; }
+
+/* 分页：两行 */
+.dp-pager { display: flex; flex-direction: column; gap: 10rpx; margin-top: 14rpx; padding: 12rpx; border-radius: 14rpx; background: rgba(120,160,220,0.06); }
+.dp-pg-top { display: flex; align-items: center; flex-wrap: wrap; gap: 10rpx; }
+.dp-pg-info { flex: 1 1 200rpx; font-size: 20rpx; color: #c4cddd; white-space: nowrap; }
+.dp-pg-size { display: flex; align-items: center; gap: 6rpx; font-size: 19rpx; color: #9aa6bd; }
 .dp-pg-size-opt { padding: 6rpx 12rpx; border-radius: 10rpx; background: rgba(120,160,220,0.1); cursor: pointer; }
 .dp-pg-size-opt.on { background: var(--ac, #6366f1); color: #fff; }
-.dp-pg-arrow { padding: 8rpx 14rpx; border-radius: 12rpx; background: rgba(120,160,220,0.12); font-size: 20rpx; color: #e8edf6; cursor: pointer; }
+.dp-pg-jump { display: flex; align-items: center; gap: 6rpx; font-size: 19rpx; color: #9aa6bd; }
+.dp-pg-jump-input { width: 72rpx; height: 48rpx; line-height: 48rpx; text-align: center; border-radius: 8rpx; background: rgba(120,160,220,0.1); color: #e8edf6; font-size: 19rpx; }
+.dp-pg-nav { display: flex; align-items: center; gap: 10rpx; }
+.dp-pg-arrow { flex: 0 0 auto; padding: 10rpx 14rpx; border-radius: 12rpx; background: rgba(120,160,220,0.12); font-size: 20rpx; color: #e8edf6; cursor: pointer; white-space: nowrap; }
 .dp-pg-arrow.dis { opacity: 0.35; pointer-events: none; }
-.dp-pg-nums { display: flex; align-items: center; gap: 6rpx; flex-wrap: wrap; }
-.dp-pg-num { min-width: 40rpx; padding: 6rpx 10rpx; text-align: center; border-radius: 10rpx; background: rgba(120,160,220,0.08); font-size: 20rpx; cursor: pointer; }
+.dp-pg-nums { flex: 1 1 auto; min-width: 0; white-space: nowrap; }
+.dp-pg-nums-inner { display: inline-flex; gap: 6rpx; }
+.dp-pg-num { display: inline-block; min-width: 44rpx; padding: 8rpx 10rpx; text-align: center; border-radius: 10rpx; background: rgba(120,160,220,0.08); font-size: 20rpx; cursor: pointer; }
 .dp-pg-num.on { background: var(--ac, #6366f1); color: #fff; }
-.dp-pg-num.gap { background: transparent; }
+.dp-pg-num.gap { background: transparent; color: #7f8aa3; }
 .dp-foot { margin-top: 12rpx; font-size: 19rpx; color: #7f8aa3; }
+
+/* 窄屏：详情改单列，跳页隐藏，按钮更紧凑 */
+@media (max-width: 720px) {
+  .dp-item-detail { grid-template-columns: 1fr; }
+  .dp-pg-jump { display: none; }
+  .dp-pg-arrow { padding: 10rpx 10rpx; font-size: 19rpx; }
+  .dp-pg-num { min-width: 40rpx; padding: 8rpx; }
+  /* 窄屏两行：公司/线路/自编号/箭头 → 记录时间/车速/超速 */
+  .dp-cell.company { order: 1; }
+  .dp-cell.line { order: 2; }
+  .dp-cell.org { order: 3; }
+  .dp-cell.arrow { order: 4; }
+  .dp-cell.record { order: 5; flex: 1 1 200rpx; }
+  .dp-cell.speed { order: 6; }
+  .dp-cell.over { order: 7; }
+}
 </style>
