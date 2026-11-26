@@ -48,7 +48,7 @@
 - **线路库翻页修复**：分页条改两行布局（每页选项独占一行），翻页按钮去掉重复字号并加 `white-space: nowrap`，窄屏收紧页码，避免「上一页 / 下一页」被挤压换行而显示不全。
 - **数据面板重构**：筛选区改「汇总条 + 四组独立折叠」（窄屏默认收起，先看数据）；10 列横滚表格改为紧凑概览行 + 点按展开详情，PC / 移动端同一套 flex-wrap 结构自适应；分页重做为两行（条数 / 每页 / 跳页 + 翻页按钮 / 可横滑页码）。保留原筛选、排序、导出与 API 兜底逻辑。
 - **面板徽标与超速标签**：营运公司由集团 logo 图改为实时车辆面板同款金色圆形序号徽标（非集团走各自公司标）；超速次数分七档标签（守规标兵 → 偶尔飘一下 → 有点上头 → 风驰电掣 → 秋名山车神 → 狂飙选手 → ≥50 次「暴躁车神」），颜色随档位变化并写入展开详情。
-- **常驻采集守护进程**：新增 `scripts/daemon-vehicle-ops.mjs` 与 `npm run daemon:ops`，在常驻机器上每 45 秒（`OPS_INTERVAL_MS` 可调）跑一轮全市采集并直写 Neon 数据表，不触发 GitHub Actions；并发默认 32、轮次不叠加，需配 `VEHICLE_OPS_API` / `VEHICLE_OPS_TOKEN`。Vercel / Cloudflare Serverless 与浏览器后台均无法常驻，故必须跑在常驻主机上。
+- **常驻采集守护进程**：新增 `scripts/daemon-vehicle-ops.mjs` 与 `npm run daemon:ops`，在常驻机器上每 45 秒（`OPS_INTERVAL_MS` 可调）跑一轮全市采集并直写 Neon 数据表，不触发 GitHub Actions；并发默认 16、轮次不叠加，需配 `VEHICLE_OPS_API` / `VEHICLE_OPS_TOKEN`。Vercel / Cloudflare Serverless 与浏览器后台均无法常驻，故必须跑在常驻主机上。
 
 ### 2026-11-24
 
@@ -181,7 +181,7 @@ npm run test:routeclean # 站点序列清洗回归（离线读 network.json，�
 export VEHICLE_OPS_API=https://boundless-whbis.vercel.app/api/vehicle-ops
 export VEHICLE_OPS_TOKEN='与 Vercel 环境变量中同名的值保持一致'
 export OPS_INTERVAL_MS=45000     # 可选，默认 45 秒
-export OPS_CONCURRENCY=32        # 可选，默认 32（45 秒窗口需高于 Actions 的 6）
+export OPS_CONCURRENCY=16        # 可选，默认 16（保守并发，降低上游限流风险）
 npm run daemon:ops
 ```
 

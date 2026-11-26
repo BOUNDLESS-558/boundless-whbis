@@ -12,7 +12,7 @@
  *   VEHICLE_OPS_TOKEN = 与 Vercel Settings → Environment Variables 中同名的那个值
  * 可选：
  *   OPS_INTERVAL_MS   默认 45000（45 秒）
- *   OPS_CONCURRENCY   默认 32；45 秒窗口需要比 Actions 默认 6 更高的并发
+ *   OPS_CONCURRENCY   默认 16（保守并发，降低上游限流风险；Actions 默认为 6）
  *   OPS_DELAY         见 scan-vehicle-ops.mjs（请求间限速）
  *   SCAN_BASE         上游反代，脚本内已有默认值
  *
@@ -26,7 +26,7 @@ import { fileURLToPath } from 'node:url'
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const SCRIPT = path.join(ROOT, 'scripts', 'scan-vehicle-ops.mjs')
 const INTERVAL = Math.max(5000, Number(process.env.OPS_INTERVAL_MS || 45000))
-const CONCURRENCY = Math.max(1, Number(process.env.OPS_CONCURRENCY || 32))
+const CONCURRENCY = Math.max(1, Number(process.env.OPS_CONCURRENCY || 16))
 
 let stopping = false
 const log = (...args) => console.log(`[${new Date().toISOString()}]`, ...args)
