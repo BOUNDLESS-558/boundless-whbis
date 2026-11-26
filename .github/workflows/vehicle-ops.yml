@@ -1,9 +1,10 @@
-name: 车辆营运信息采集（15 分钟）
+name: 车辆营运信息采集（1 分钟）
 
 on:
   schedule:
-    # 每 15 分钟一次：UTC 00/15/30/45 → 北京时间 08/08:15/08:30/08:45 等，全天不间断
-    - cron: '*/15 * * * *'
+    # 每 1 分钟一次（GitHub Actions schedule 最小粒度为 1 分钟，无法做到 45 秒）。
+    # 全天不间断，北京时间与 UTC 同步（每分钟的第 0 秒触发）。
+    - cron: '*/1 * * * *'
   workflow_dispatch:
 
 permissions:
@@ -11,8 +12,9 @@ permissions:
 
 concurrency:
   group: vehicle-ops
-  # 高峰期 GitHub 定时会排队；取消上一轮未完成的采集，避免失败轮次堆积导致实际间隔拉长
-  cancel-in-progress: true
+  # 1 分钟间隔下单轮采集可能超时；排队而非取消，确保每轮能完整跑完并写库，
+  # 避免上一轮被取消导致数据缺口。GitHub 高峰期本身会延迟触发，排队不会无限堆积。
+  cancel-in-progress: false
 
 jobs:
   collect:
@@ -20,6 +22,8 @@ jobs:
     timeout-minutes: 30
     env:
       SCAN_BASE: https://whbis-proxy.lwu584742.workers.dev
+      # 1 分钟间隔需提高并发，确保单轮采集能在 1 分钟内完成（脚本默认 6，这里提到 16）
+      OPS_CONCURRENCY: 16
       # Vercel 数据库同步：在 GitHub 仓库 Settings → Secrets 配这两个值
       VEHICLE_OPS_API: ${{ secrets.VEHICLE_OPS_API }}
       VEHICLE_OPS_TOKEN: ${{ secrets.VEHICLE_OPS_TOKEN }}
@@ -41,18 +45,7 @@ jobs:
           path: .cache/vehicle-ops-md5-dict.json
           key: md5-dict-${{ hashFiles('src/utils/md5.js', 'scripts/scan-vehicle-ops.mjs') }}
 
-      - name: 采集全车营运信息
+      - name: 采集全车营运信息（直写 Neon 数据库）
         run: node scripts/scan-vehicle-ops.mjs
-
-      - name: 提交数据
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add src/static/vehicle-ops
-          if git diff --cached --quiet; then
-            echo "无数据变化，跳过提交"
-          else
-            git commit -m "数据: 车辆营运信息 $(date -u +%Y-%m-%dT%H:%M:%SZ) [skip ci]"
-            git pull --rebase origin main
-            git push origin main
-          fi
+        # 不再 git commit/push 静态 JSON：1 分钟频率下会把 main 历史与 Vercel 构建撑爆。
+        # 数据经 /api/vehicle-ops 直写 Neon，前端数据面板实时读库；静态 JSON 仅本机留存。

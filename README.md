@@ -36,7 +36,11 @@
 
 > 按日期倒序，只记要点，细节见对应提交。
 
-### 2026-11-26（最新）
+### 2026-11-27（最新）
+
+- **车辆营运采集提到每 1 分钟**：`vehicle-ops.yml` cron 从 `*/15 * * * *` 改为 `*/1 * * * *`（GitHub Actions 最小粒度，45 秒需用常驻 daemon `npm run daemon:ops`），并发提到 16 确保单轮 1 分钟内完成；`concurrency.cancel-in-progress: false` 排队不取消，避免采集被中途掐断。**不再 git commit 静态 JSON**（数据直写 Neon，避免 main 历史爆炸与 Vercel 每天 1440 次重建），`src/static/vehicle-ops/` 加入 .gitignore 并从 git 追踪移除（磁盘文件保留作本机备份）。
+
+### 2026-11-26
 
 - **采集**：修 15 分钟采集的 401（对齐两端 `VEHICLE_OPS_TOKEN`）；加 MD5 字典缓存、延长超时；保留 Actions 与快照 + 数据库双写。
 - **数据面板**：新增按日表与历史回填；年/月/日/公司/线路筛选、记录时间列、车速配色、公司徽标、可选每页条数与分页。
