@@ -687,6 +687,19 @@
       <text class="fs-ico">{{ isFullscreen ? '⤡' : '⛶' }}</text>
       <text class="fs-txt">{{ isFullscreen ? '退出全屏' : '全屏' }}</text>
     </view>
+
+    <!-- 全市公交扫描代价告知：深色玻璃弹窗，替代白底系统 showModal 保持全站风格统一 -->
+    <view class="cs-mask" v-if="citySweepAsk" @click.self="chooseCitySweep(false)">
+      <view class="cs-card">
+        <view class="cs-icon">🗺️</view>
+        <view class="cs-title">全市公交 · 拉取在运车辆</view>
+        <view class="cs-desc">线网走向读本地静态底图（零请求）；后端没有全市车辆接口，车辆位置需逐方向拉取：本次约发 {{ cityCost }} 个请求、耗时 1 分钟左右。之后 90 秒内重复进入直接复用缓存。</view>
+        <view class="cs-btns">
+          <view class="cs-btn ghost" @click="chooseCitySweep(false)">🗺️ 只看线网</view>
+          <view class="cs-btn main" @click="chooseCitySweep(true)">🔄 开始扫描</view>
+        </view>
+      </view>
+    </view>
   </view>
 </template>
 
@@ -1092,6 +1105,8 @@ export default {
       cityDirty: 0,
       // —— 全市实时分布（快照 = 分布图数据源 + 自编号反查索引）——
       cityOn: false,
+      // 扫描代价告知弹窗（深色玻璃样式，替代系统白底 showModal）
+      citySweepAsk: false,
       // 扫描进行中（按钮上显百分比，并换成「取消」）
       cityBusy: false,
       cityProgress: 0,
@@ -2532,18 +2547,21 @@ export default {
       this.$nextTick(() => this.measureUi())
     },
     // 首次使用的代价告知：后端没有全市接口，一轮 = cityCost 个请求（线网底图是静态文件，不计在内）
+    // 用应用自己的深色玻璃弹窗，避免系统白底 showModal 破坏全局视觉统一
     confirmCitySweep() {
+      markCityWarned()
+      closeAllDropdowns()
       return new Promise((resolve) => {
-        markCityWarned()
-        uni.showModal({
-          title: '全市公交：拉取在运车辆',
-          content: `线网走向读本地静态底图（零请求）；但后端没有全市车辆接口，车辆位置需逐方向拉取：本次约发 ${this.cityCost} 个请求、耗时 1 分钟左右。之后 90 秒内重复进入直接复用缓存。`,
-          confirmText: '开始扫描',
-          cancelText: '只看线网',
-          success: (r) => resolve(!!r.confirm),
-          fail: () => resolve(true),
-        })
+        this._citySweepResolve = resolve
+        this.citySweepAsk = true
       })
+    },
+    // 弹窗按钮：收起并兑现 Promise（true=开始扫描 / false=只看线网）
+    chooseCitySweep(yes) {
+      this.citySweepAsk = false
+      const resolve = this._citySweepResolve
+      this._citySweepResolve = null
+      if (resolve) resolve(!!yes)
     },
     loadCityPref() {
       try {
@@ -4671,6 +4689,82 @@ export default {
 .fs-txt {
   font-size: 24rpx;
   line-height: 1;
+}
+/* 全市扫描代价告知：与账号/线路库弹窗同一套深色玻璃视觉，覆盖所有浮层 */
+.cs-mask {
+  position: fixed;
+  left: 0;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 300;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 40rpx;
+  box-sizing: border-box;
+  background: rgba(4, 7, 16, 0.68);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+}
+.cs-card {
+  width: 620rpx;
+  max-width: 100%;
+  box-sizing: border-box;
+  padding: 44rpx 40rpx 34rpx;
+  border-radius: 28rpx;
+  background: rgba(11, 16, 32, 0.97);
+  border: 2rpx solid rgba(255, 255, 255, 0.16);
+  box-shadow: 0 24rpx 64rpx rgba(0, 0, 0, 0.5), inset 0 1rpx 0 rgba(255, 255, 255, 0.12);
+}
+.cs-icon {
+  text-align: center;
+  font-size: 56rpx;
+  line-height: 1;
+}
+.cs-title {
+  margin-top: 18rpx;
+  text-align: center;
+  font-size: 32rpx;
+  font-weight: 700;
+  letter-spacing: 1rpx;
+  color: #eef1ff;
+}
+.cs-desc {
+  margin-top: 18rpx;
+  font-size: 26rpx;
+  line-height: 1.7;
+  color: rgba(232, 237, 246, 0.66);
+}
+.cs-btns {
+  margin-top: 36rpx;
+  display: flex;
+  gap: 20rpx;
+}
+.cs-btn {
+  flex: 1;
+  height: 80rpx;
+  line-height: 80rpx;
+  text-align: center;
+  border-radius: 16rpx;
+  font-size: 26rpx;
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: transform 0.15s, filter 0.2s;
+}
+.cs-btn.ghost {
+  color: rgba(255, 255, 255, 0.78);
+  background: rgba(255, 255, 255, 0.08);
+  border: 2rpx solid rgba(255, 255, 255, 0.14);
+}
+.cs-btn.main {
+  color: #fff;
+  background: linear-gradient(135deg, var(--ac, #6366f1), var(--ac-2, #818cf8));
+  box-shadow: 0 10rpx 26rpx rgba(var(--ac-rgb, 99, 102, 241), 0.4);
+}
+.cs-btn:active {
+  transform: scale(0.96);
 }
 .map {
   width: 100%;

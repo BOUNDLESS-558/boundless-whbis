@@ -78,7 +78,7 @@ uni-app（Vue 3 + Vite 5）跨端应用：H5 网页版 + Android App，查询武
 - **不设「其它公交公司」开关**（用户明确要求）：非集团线路恒定并入检索池、全市线网、线路库、搜索联想、实时视图。历史键 `whbis:show-foreign` 已移除。
 - **线路库筛选按营运主体归并**：公司行只有 `全部 / 公交集团 / 蔡城公交 / 木兰公交 / 汉奇公交`。集团下属各营运公司、`org` 未收录的历史线、`数字/电/BRT/K/D` 等号段全归「公交集团」；号段细分是选中「公交集团」后的二级行。`companyOf(line).label` 对集团一律「公交集团」，分公司全名在 `.full`。**`lineIndex.orgOf()` 已删除，别再引入**。
 - 复制方式（`whbis:copy-mode`，默认 text）：所有复制按钮统一走 `utils/clipboard.js` 的 `copyTable({title, columns, rows, text})`，不要直接调 `uni.setClipboardData`。档位不在设置面板，由 `CopyPill.vue` 右半下拉提供，切换经 `onCopyModeChange` 全站广播。新复制入口直接用 `<CopyPill label="…" @copy="fn" />`。
-- 就地下拉全局互斥：`utils/dropdown.js` 是唯一仲裁器，经 `attachDropdown(vm, stateKey, prefix)` 接入（CopyPill / 刷新间隔 / 搜索联想），开关走 `vm._dd.open()/close()/toggle()`，卸载 `dispose()`。模态弹窗（账号窗 / 激活码 / 线路库详情）不注册，打开时调 `closeAllDropdowns()`。回归探针 `probe-copy-menu.mjs`。
+- 就地下拉全局互斥：`utils/dropdown.js` 是唯一仲裁器，经 `attachDropdown(vm, stateKey, prefix)` 接入（CopyPill / 刷新间隔 / 搜索联想），开关走 `vm._dd.open()/close()/toggle()`，卸载 `dispose()`。模态弹窗（账号窗 / 线路库详情）不注册，打开时调 `closeAllDropdowns()`。回归探针 `probe-copy-menu.mjs`。
 - 收藏夹：`utils/favorites.js`（`whbis:fav-lines:v1`，上限 10 条）+ `FavStar.vue` + `FavPanel.vue`（挂设置窗分区）。
 
 ## 命令（已实测）
