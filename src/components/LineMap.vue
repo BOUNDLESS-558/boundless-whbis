@@ -430,7 +430,7 @@
 
     <!-- 右侧栏：实时车辆面板在上，发车时刻表面板独立挂在它下方（两张卡各自成块，不共用一个面板壳）。
          全市态整栏隐藏：这里的内容属于「当前这一条线」，与全市分布不是一个作用域，且要把画面让给车点 -->
-    <view class="side-col" v-if="!cityOn">
+    <view class="side-col" v-if="!cityOn" v-show="!hidePanels">
       <!-- 实时车辆面板（可折叠，列表随视角方向过滤） -->
       <view class="panel" :class="{ collapsed: panelCollapsed, 'menu-open': refreshMenu }">
         <view class="panel-header">
@@ -1025,6 +1025,8 @@ export default {
     simSignboard: { type: Boolean, default: false },
     // 实时线路站点窗是否打开（窗本身由宿主渲染）：仅用于底部栏按钮高亮
     stopsOpen: { type: Boolean, default: false },
+    // 搜索联想下拉展开时隐藏右侧栏（实时车辆 + 发车时刻），避免遮挡候选列表
+    hidePanels: { type: Boolean, default: false },
   },
   data() {
     return {

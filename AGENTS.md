@@ -36,7 +36,8 @@ uni-app（Vue 3 + Vite 5）跨端应用：H5 网页版 + Android App，查询武
 
 ### 4. 采集频率
 - 地图站点数据采集 Actions 的触发时间：**每 12 小时一次**（cron `0 */12 * * *`）。
-- 车辆营运信息采集 Actions（`.github/workflows/vehicle-ops.yml`）：**每 1 分钟一次**（cron `*/1 * * * *`，GitHub Actions 最小粒度，45 秒需用常驻 daemon `npm run daemon:ops`），全库线路×方向拉 `detailData`（OPS_CONCURRENCY=16），**直写 Neon 数据库**（不再 git commit 静态 JSON，避免污染 main 历史 / Vercel 每天 1440 次重建）；`src/static/vehicle-ops/` 已加入 .gitignore 仅本机留存。`concurrency.cancel-in-progress: false`（排队不取消，确保每轮跑完）。
+- 车辆营运信息采集（`.github/workflows/vehicle-ops.yml`）：**每 1 分钟一次**，由 **Cloudflare Worker Cron** 准时调 GitHub Actions `workflow_dispatch` API 触发（见 `deploy/CLOUDFLARE-CRON.md`）——GitHub 自带 schedule 高峰延迟数小时且丢任务，已停用。API 触发即时启动（不走 schedule 队列）。全库线路×方向拉 `detailData`（OPS_CONCURRENCY=16），**直写 Neon 数据库**（不 git commit 静态 JSON），`src/static/vehicle-ops/` 已 gitignore。`concurrency.cancel-in-progress: false`（排队不取消）。
+- 搜索联想下拉展开时（`LineSearch` 上抛 `suggest-change`）宿主自动隐藏「实时线路」浮窗与 `LineMap` 右侧栏（`hide-panels` prop），搜索完毕恢复，避免遮挡候选列表。
 
 ### 5. 数据面板（`src/components/DataPanel.vue`）
 - 视图档 `data`，不依赖选线（地图常驻底座上开浮窗）。展示每车：所属公司 / 营运线路号 / 自编号 / 记录时间 / 上线时间 / 下线时间 / 最高车速 / 超速次数（徽标）/ 调配记录。

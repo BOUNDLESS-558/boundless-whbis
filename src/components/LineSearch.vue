@@ -197,6 +197,10 @@ export default {
       this.lineNo = v || ''
       this.closeSuggest()
     },
+    // 联想下拉开合上抛给宿主：展开时宿主收起实时线路/车辆面板，收起后恢复，避免遮挡列表
+    suggestOpen(v) {
+      this.$emit('suggest-change', !!v)
+    },
   },
   methods: {
     closeSuggest() { if (this._dd) this._dd.close() },

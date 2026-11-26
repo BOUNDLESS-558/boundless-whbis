@@ -546,7 +546,7 @@ export default {
 .dp-sort-arrow { margin-left: 6rpx; }
 
 /* 数据行：一行概览 + 点按展开详情 */
-.dp-list { max-height: 60vh; overflow-y: auto; }
+.dp-list { max-height: 42vh; overflow-y: auto; }
 .dp-item { border-bottom: 2rpx solid rgba(120,160,220,0.08); }
 .dp-item-head { display: flex; align-items: center; flex-wrap: wrap; gap: 8rpx 12rpx; padding: 14rpx 8rpx; cursor: pointer; }
 .dp-item-head:hover { background: rgba(120,160,220,0.06); }

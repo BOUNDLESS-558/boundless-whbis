@@ -1,0 +1,12 @@
+name = "whbis-cron"
+main = "cloudflare-cron-worker.js"
+compatibility_date = "2026-11-27"
+
+# 免费版每账号 5 个 Cron Trigger，这里用 1 个，每分钟触发 workflow_dispatch。
+# cron 为 UTC；*/1 * * * * 表示每分钟的第 0 秒。
+[triggers]
+crons = ["*/1 * * * *"]
+
+# GITHUB_TOKEN 不写在这里，部署后用命令设置：
+#   wrangler secret put GITHUB_TOKEN
+# 需要一个有 repo 权限的 GitHub Personal Access Token（Fine-grained: Actions 读写）。

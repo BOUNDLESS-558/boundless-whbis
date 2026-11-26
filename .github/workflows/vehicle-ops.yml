@@ -1,10 +1,8 @@
 name: 车辆营运信息采集（1 分钟）
 
 on:
-  schedule:
-    # 每 1 分钟一次（GitHub Actions schedule 最小粒度为 1 分钟，无法做到 45 秒）。
-    # 全天不间断，北京时间与 UTC 同步（每分钟的第 0 秒触发）。
-    - cron: '*/1 * * * *'
+  # schedule 已停用：GitHub Actions 定时高峰可延迟数小时且丢任务。
+  # 改由 Cloudflare Worker Cron 每分钟通过 API 即时触发 workflow_dispatch（见 deploy/CLOUDFLARE-CRON.md）。
   workflow_dispatch:
 
 permissions:
