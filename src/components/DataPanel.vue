@@ -110,14 +110,20 @@
       <view class="dp-item" v-for="r in rows" :key="rowKey(r)">
         <view class="dp-item-head" @click="toggleRow(r)">
           <view class="dp-cell company dp-org">
-            <image v-if="orgLogo(r)" class="dp-logo" :src="orgLogo(r)" mode="aspectFit" />
-            <text class="dp-org-name" :title="r.company || ''">{{ orgLabel(r) }}</text>
+            <view class="org-tag" :class="{ foreign: rowBadges[rowKey(r)].foreign }" :title="rowBadges[rowKey(r)].label">
+              <image v-if="rowBadges[rowKey(r)].foreign" class="org-logo" :src="rowBadges[rowKey(r)].logo" mode="aspectFit" />
+              <text v-else class="org-no">{{ rowBadges[rowKey(r)].no }}</text>
+              <text class="org-name">{{ rowBadges[rowKey(r)].short }}</text>
+            </view>
           </view>
           <text class="dp-cell line" :title="'历史线路：' + (r.lines || []).join(' / ')">{{ r.lineNo || (r.lines || [])[0] || '—' }}</text>
           <text class="dp-cell org" :title="r.orgId">{{ fmtNo(r.orgId) }}</text>
           <text class="dp-cell record">{{ recordText(r) }}</text>
           <text class="dp-cell speed" :style="{ color: speedColor(r.maxSpeed) }">{{ r.maxSpeed }}<text class="dp-unit">km/h</text></text>
-          <text class="dp-cell over"><text class="dp-badge" :style="speedStyle(r.maxSpeed)">⚡ {{ r.speedCount }}</text></text>
+          <text class="dp-cell over">
+            <text class="dp-badge" :style="speedStyle(r.maxSpeed)">⚡ {{ r.speedCount }}</text>
+            <text class="dp-driver-tag" :style="tierStyle(r)">{{ tierOf(r).emoji }} {{ tierOf(r).label }}</text>
+          </text>
           <text class="dp-cell arrow">{{ expanded[rowKey(r)] ? '▴' : '▾' }}</text>
         </view>
         <view class="dp-item-detail" v-if="expanded[rowKey(r)]">
@@ -125,6 +131,7 @@
           <view class="dp-dcell"><text class="dp-dk">首次上线</text><text class="dp-dv">{{ r.onlineAt || '—' }}</text></view>
           <view class="dp-dcell"><text class="dp-dk">最终下线</text><text class="dp-dv">{{ r.offlineAt || '—' }}</text></view>
           <view class="dp-dcell"><text class="dp-dk">发车 / 超速</text><text class="dp-dv">{{ r.departures }} 次 / {{ r.speedCount }} 次</text></view>
+          <view class="dp-dcell"><text class="dp-dk">超速评价</text><text class="dp-dv" :style="{ color: tierOf(r).color }">{{ tierOf(r).emoji }} {{ tierOf(r).label }}</text></view>
           <view class="dp-dcell full"><text class="dp-dk">车辆调配</text><text class="dp-dv">{{ transferText(r) }}</text></view>
         </view>
       </view>
@@ -169,6 +176,22 @@ import CopyPill from './CopyPill.vue'
 
 const PROFILE_URL = 'static/vehicle-ops/profile.json'
 const ALL = '全部'
+
+const CN_ORG = ['', '第一', '第二', '第三', '第四', '第五', '第六', '第七', '第八', '第九']
+// 超速次数档位标签：与实时车辆面板的分档色独立，按「累计超速次数」评价驾驶风格
+const DRIVER_TIERS = [
+  { max: 0, label: '守规标兵', emoji: '😌', color: '#7f8aa3' },
+  { max: 2, label: '偶尔飘一下', emoji: '🙂', color: '#38bdf8' },
+  { max: 5, label: '有点上头', emoji: '😏', color: '#60a5fa' },
+  { max: 10, label: '风驰电掣', emoji: '😎', color: '#a78bfa' },
+  { max: 20, label: '秋名山车神', emoji: '🔥', color: '#fb923c' },
+  { max: 49, label: '狂飙选手', emoji: '⚡', color: '#f87171' },
+  { max: Infinity, label: '暴躁车神', emoji: '😱', color: '#ef4444' },
+]
+function driverTierOf(n) {
+  const v = Math.max(0, Number(n) || 0)
+  return DRIVER_TIERS.find((t) => v <= t.max) || DRIVER_TIERS[DRIVER_TIERS.length - 1]
+}
 
 const SORTS = [
   { key: 'lineNo', label: '线路号' },
@@ -258,6 +281,21 @@ export default {
       if (this.fl !== ALL) bits.push(this.fl + '路')
       return bits.length ? bits.join(' · ') : '全部数据'
     },
+    // 当前页每行的公司徽标（与实时车辆面板同款：圆形序号 + 短名 / 非集团用公司自己的标）
+    rowBadges() {
+      const m = {}
+      for (const r of this.rows) {
+        const d = String(r.orgId || '').charAt(0)
+        if (d >= '1' && d <= '9') {
+          const no = Number(d)
+          m[this.rowKey(r)] = { no, short: CN_ORG[no].replace(/^第/, '') + '公司', label: `武汉公交集团${CN_ORG[no]}营运公司`, foreign: false, logo: '' }
+        } else {
+          const c = companyOf({ no: r.lineNo, company: r.company })
+          m[this.rowKey(r)] = { no: '', short: c.label, label: c.full, foreign: c.key !== 'JT', logo: assetUrl(c.logo) }
+        }
+      }
+      return m
+    },
   },
   watch: {
     keyword() { if (this._bulk) return; this.page = 1; if (this.apiMode) this.load() },
@@ -290,9 +328,11 @@ export default {
       const c = this.speedColor(v)
       return { color: v > this.speedLimit ? '#fff' : c, background: v > this.speedLimit ? c : 'rgba(120,160,220,0.12)' }
     },
-    orgInfo(r) { return companyOf({ no: r.lineNo, company: r.company, org: r.company }) },
-    orgLogo(r) { return assetUrl(this.orgInfo(r).logo) },
-    orgLabel(r) { return this.orgInfo(r).label },
+    tierOf(r) { return driverTierOf(r.speedCount) },
+    tierStyle(r) {
+      const t = this.tierOf(r)
+      return { color: t.color, borderColor: t.color + '66', background: t.color + '1f' }
+    },
 
     // 折叠交互
     toggleGroup(k) { this.openGroups = { ...this.openGroups, [k]: !this.openGroups[k] } },
@@ -495,13 +535,19 @@ export default {
 .dp-cell.org { flex: 0 0 150rpx; }
 .dp-cell.record { flex: 1 1 210rpx; font-size: 19rpx; color: #9aa6bd; }
 .dp-cell.speed { flex: 0 0 120rpx; font-weight: 700; }
-.dp-cell.over { flex: 0 0 96rpx; }
+.dp-cell.over { flex: 0 0 210rpx; display: flex; align-items: center; gap: 6rpx; }
 .dp-cell.arrow { flex: 0 0 28rpx; text-align: center; color: #9aa6bd; font-size: 20rpx; }
 .dp-org { display: flex; align-items: center; gap: 8rpx; }
-.dp-logo { width: 36rpx; height: 36rpx; flex: 0 0 auto; }
-.dp-org-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* 营运公司徽标：与实时车辆面板同款（金色圆形序号 + 短名 / 非集团用公司自己的标） */
+.org-tag { display: inline-flex; align-items: center; max-width: 100%; min-width: 0; background: linear-gradient(135deg, rgba(251,191,36,0.18), rgba(251,191,36,0.06)); border: 2rpx solid rgba(251,191,36,0.42); border-radius: 999rpx; padding: 2rpx 16rpx 2rpx 2rpx; white-space: nowrap; box-shadow: inset 0 1rpx 0 rgba(255,255,255,0.14), 0 3rpx 8rpx rgba(251,191,36,0.12); }
+.org-no { display: inline-flex; align-items: center; justify-content: center; width: 36rpx; height: 36rpx; border-radius: 50%; font-size: 24rpx; font-weight: 800; color: #1a1205; background: linear-gradient(135deg, #fde68a, #fbbf24 45%, #f59e0b); box-shadow: 0 4rpx 12rpx rgba(251,191,36,0.5), inset 0 1rpx 0 rgba(255,255,255,0.6); margin-right: 10rpx; flex-shrink: 0; }
+.org-name { font-size: 18rpx; line-height: 1; font-weight: 700; color: #fde68a; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-shadow: 0 1rpx 2rpx rgba(0,0,0,0.3); }
+.org-tag.foreign { background: rgba(255,255,255,0.07); border-color: rgba(255,255,255,0.18); }
+.org-logo { width: 36rpx; height: 36rpx; border-radius: 50%; margin-right: 10rpx; flex-shrink: 0; }
+.org-tag.foreign .org-name { color: rgba(255,255,255,0.9); }
 .dp-unit { font-size: 17rpx; color: #7f8aa3; margin-left: 4rpx; font-weight: 400; }
 .dp-badge { display: inline-block; min-width: 36rpx; padding: 2rpx 10rpx; border-radius: 999rpx; text-align: center; font-size: 19rpx; }
+.dp-driver-tag { display: inline-block; padding: 2rpx 8rpx; border-radius: 8rpx; border: 1rpx solid; font-size: 17rpx; white-space: nowrap; }
 .dp-item-detail { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8rpx 20rpx; padding: 12rpx 18rpx 16rpx; background: rgba(120,160,220,0.05); }
 .dp-dcell { display: flex; justify-content: space-between; gap: 12rpx; font-size: 19rpx; min-width: 0; }
 .dp-dcell.full { grid-column: 1 / -1; }
