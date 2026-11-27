@@ -2,10 +2,11 @@ name = "whbis-cron"
 main = "cloudflare-cron-worker.js"
 compatibility_date = "2026-11-26"
 
-# 免费版每账号 5 个 Cron Trigger，这里用 1 个，每分钟触发 workflow_dispatch。
-# cron 为 UTC；*/1 * * * * 表示每分钟的第 0 秒。
+# 免费版每账号 5 个 Cron Trigger，这里用 1 个，每 3 分钟触发 workflow_dispatch。
+# 单轮采集约 70~80 秒，3 分钟间隔（180 秒）远大于单轮耗时，彻底避免排队堆积 / 被取消。
+# cron 为 UTC；*/3 * * * * 表示每 3 分钟的第 0 秒。
 [triggers]
-crons = ["*/1 * * * *"]
+crons = ["*/3 * * * *"]
 
 # GITHUB_TOKEN 不写在这里，部署后用命令设置：
 #   wrangler secret put GITHUB_TOKEN

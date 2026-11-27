@@ -12,7 +12,10 @@
  *
  * 部署：见 deploy/CLOUDFLARE-CRON.md
  */
-const GITHUB_API = 'https://api.github.com/repos/BOUNDLESS-558/boundless-whbis/actions/workflows/vehicle-ops.yml/dispatches'
+const REPO = 'BOUNDLESS-558/boundless-whbis'
+const WORKFLOW = 'vehicle-ops.yml'
+const DISPATCH_API = `https://api.github.com/repos/${REPO}/actions/workflows/${WORKFLOW}/dispatches`
+const RUNS_API = `https://api.github.com/repos/${REPO}/actions/workflows/${WORKFLOW}/runs?per_page=5`
 
 export default {
   async scheduled(event, env, ctx) {
@@ -31,16 +34,30 @@ export default {
 async function trigger(env) {
   const token = env.GITHUB_TOKEN
   if (!token) return { ok: false, error: '缺少 GITHUB_TOKEN（需 repo 权限 PAT）' }
+  const headers = {
+    'Authorization': `Bearer ${token}`,
+    'Accept': 'application/vnd.github+json',
+    'X-GitHub-Api-Version': '2022-11-28',
+    'User-Agent': 'whbis-cron-worker',
+  }
   try {
-    const res = await fetch(GITHUB_API, {
+    // 防堆积：触发前查最近 5 轮，只要有 queued/in_progress 就跳过本轮。
+    // 单轮采集约 70~80s > cron 间隔 60s，若不跳过会越排越多、最终被 GitHub 取消。
+    const listRes = await fetch(RUNS_API, { headers, cf: { cacheTtl: 0 } })
+    if (!listRes.ok) {
+      const text = await listRes.text()
+      return { ok: false, error: `查询运行列表失败 ${listRes.status}: ${text.slice(0, 160)}` }
+    }
+    const list = await listRes.json()
+    const busy = (list.workflow_runs || []).some((r) => r.status === 'queued' || r.status === 'in_progress' || r.status === 'pending')
+    if (busy) {
+      console.log(`[${new Date().toISOString()}] 上一轮仍在运行/排队，跳过本次触发（防堆积）`)
+      return { ok: true, skipped: true }
+    }
+
+    const res = await fetch(DISPATCH_API, {
       method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${token}`,
-        'Accept': 'application/vnd.github+json',
-        'X-GitHub-Api-Version': '2022-11-28',
-        'User-Agent': 'whbis-cron-worker',
-        'Content-Type': 'application/json',
-      },
+      headers: { ...headers, 'Content-Type': 'application/json' },
       body: JSON.stringify({ ref: 'main' }),
     })
     if (!res.ok) {

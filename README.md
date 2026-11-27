@@ -38,6 +38,7 @@
 
 ### 2026-11-27（最新）
 
+- **采集间隔改 3 分钟 + 防堆积保护**：Cloudflare Worker cron 从 `*/1 * * * *` 改为 `*/3 * * * *`（单轮采集 70~80s，1 分钟间隔实测约 26% 轮次被取消；3 分钟远大于单轮耗时，彻底无堆积）。Worker 新增「触发前查询 GitHub 运行列表，有 queued/in_progress/pending 则跳过本次」保护作为双保险。同步更新 AGENTS.md / deploy/CLOUDFLARE-CRON.md。
 - **主题色扩至 1500 + 字体扩至 106**：`settings.js` 的 `fillAccentTo1500()` 提高 HSL 采样密度（12 档明度 × 8 档饱和度 × 24° 色相步长），主题色从 999 → **1500**，全部按 HSL 自动归入现有分类（14 类）。`FONT_OPTS` 新增 21 款字体（英文几何/衬线/等宽/展示 14 款、中文标题/书法 5 款、日文 2 款），字体总数 85 → **106**；`map.vue` 新增「日文」分类标签并把新字体归入对应 sans-en/serif-en/mono/display/cursive 分类。
 - **精准定时方案（Cloudflare Worker Cron → GitHub Actions API）**：GitHub Actions schedule 高峰可延迟数小时且丢任务，Vercel Hobby cron 每天仅 1 次，改用 Cloudflare Workers 免费 Cron（每分钟准时）调 GitHub Actions `workflow_dispatch` API（即时启动，不走 schedule 队列）触发采集直写 Neon。新增 `deploy/cloudflare-cron-worker.js` + `deploy/wrangler.toml` + `deploy/CLOUDFLARE-CRON.md`（含 PAT 创建 / wrangler deploy / secret 配置步骤）。`vehicle-ops.yml` 停用 schedule 只留 workflow_dispatch。
 - **UI 调整**：数据面板高度从 80vh/60vh 缩到 62vh/42vh；搜索联想下拉展开时自动隐藏「实时线路」浮窗与 LineMap 右侧栏（实时车辆 + 发车时刻），搜索完毕自动恢复（LineSearch 上抛 `suggest-change`，map.vue 传给 LineMap 的 `hide-panels`）。
