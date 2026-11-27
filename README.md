@@ -38,6 +38,7 @@
 
 ### 2026-11-27（最新）
 
+- **车辆列表：2017 年及以后 + 排序修复 + 文案调整**：范围从全量 1.8 万台收窄为 **batch ≥ 17 的 7538 辆**（一公司 1275 / 二 1361 / 三 1079 / 四 485 / 五 1354 / 六 1061 / 七 923），无论当前是否在运；捕获到在运时由 API `view=vehicles` 按 orgId 回填线路/超速/发车数据。修复公司排序（此前按中文短名拼音排，导致「一公司」排最后）——改为按 `companyNo` 数字 1~9 排序。二级分组文案「XX路车队」→「XX路」，组头「个车队」→「条线路」。
 - **车辆列表覆盖全集团约 1.8 万台**：此前列表只有数据库的 1777 辆在运车，集团实际有五六千台。改为从 `bus-number-map.json`（buspedia 映射表，byFull 18614 条）取全量车辆清单（`getAllVehicles()`），API `view=vehicles` 的在运数据（线路/超速/发车）按 orgId 合并补充；未收录的在运车也加入避免遗漏。映射表懒加载时用 `onBusNumberReady` 等待。三级分组默认全折叠、子级用 `v-if` 按需渲染，避免 1.8 万行一次性进 DOM。
 - **车辆列表改为三级分组**：按车辆模式的车辆选择列表从平铺改为「营运公司 → 车队（线路号）→ 目标编号车辆」三级折叠分组。新增 `vehicleGroups` computed（基于过滤结果按 company / lineNo 嵌套分组，公司按短名、车队按线路号自然排序），`expandedCompanies`/`expandedFleets` 展开状态 + 「展开/收起」一键切换；各级显示车辆/车队数量，搜索仍按编号/公司/线路实时过滤。
 - **所有自编号悬停补全车型**：5 个组件（SpeedRank / LineStops / LinePlan / LineMap / DataPanel）统一在自编号显示的 `:title` 或 Tooltip 文案里加入车型（如「122F3123 · XMQ6127GHEV4」），无映射显示「车型未知」。各组件已有 `busModel(orgId)`（来自 `busNumber.js` 的 `getBusModel`）与 `mapVersion` 重渲染机制。

@@ -32,7 +32,7 @@
       <!-- 车辆选择列表：不知道自编号时可从列表挑选，输入关键词按编号/公司/线路过滤 -->
       <view class="dv-list-wrap" v-if="!vehicleProfile && !vehicleLoading">
         <view class="dv-list-head">
-          <text>车辆分组：公司 › 车队 › 车辆（{{ filteredVehicles.length }} / {{ vehicleList.length }}）</text>
+          <text>车辆分组：公司 › 线路 › 车辆（{{ filteredVehicles.length }} / {{ vehicleList.length }}）</text>
           <view class="dv-list-ops">
             <text class="dv-back" @click="toggleAllGroups">展开/收起</text>
             <text class="dv-back" v-if="vehicleList.length" @click="refreshVehicleList">↻ 刷新</text>
@@ -44,14 +44,14 @@
             <view class="dv-grp-head" @click="toggleCompany(c.company)">
               <text class="dv-grp-arrow">{{ expandedCompanies[c.company] ? '▾' : '▸' }}</text>
               <text class="dv-grp-name">🏢 {{ c.short }}</text>
-              <text class="dv-grp-count">{{ c.fleets.length }} 个车队 · {{ c.count }} 辆</text>
+              <text class="dv-grp-count">{{ c.fleets.length }} 条线路 · {{ c.count }} 辆</text>
             </view>
             <block v-if="expandedCompanies[c.company]">
               <!-- 第二级：车队（线路号） -->
               <view class="dv-grp dv-grp-l2" v-for="f in c.fleets" :key="c.company + '|' + f.line">
                 <view class="dv-grp-head" @click="toggleFleet(c.company + '|' + f.line)">
                   <text class="dv-grp-arrow">{{ expandedFleets[c.company + '|' + f.line] ? '▾' : '▸' }}</text>
-                  <text class="dv-grp-name">🚏 {{ f.line }} 路车队</text>
+                  <text class="dv-grp-name">🚏 {{ f.line }}</text>
                   <text class="dv-grp-count">{{ f.count }} 辆</text>
                 </view>
                 <!-- 第三级：车辆 -->
@@ -398,7 +398,7 @@ export default {
         const company = String(v.company || '').trim() || '未知公司'
         let c = byCompany.get(company)
         if (!c) {
-          c = { company, short: this.shortCompany(company), count: 0, fleets: [], keys: [] }
+          c = { company, short: this.shortCompany(company), companyNo: Number(v.companyNo) || 99, count: 0, fleets: [], keys: [] }
           byCompany.set(company, c)
           groups.push(c)
         }
@@ -412,8 +412,8 @@ export default {
         f.count++
         f.buses.push(v)
       }
-      // 公司按短名排序、车队按线路号自然排序
-      groups.sort((a, b) => a.short.localeCompare(b.short, 'zh'))
+      // 公司按序号（1~9）排序，避免中文拼音把「第一公司」排到最后；车队按线路号自然排序
+      groups.sort((a, b) => (a.companyNo - b.companyNo) || a.short.localeCompare(b.short, 'zh'))
       for (const c of groups) {
         c.fleets.sort((a, b) => a.line.localeCompare(b.line, 'zh', { numeric: true }))
         c.keys = c.fleets.map((f) => c.company + '|' + f.line)
@@ -498,12 +498,12 @@ export default {
     async refreshVehicleList() {
       this.vehicleListLoading = true
       try {
-        // 第一步：从 buspedia 映射表取全量车辆（约 1.8 万台，含所有集团车辆）
-        let all = getAllVehicles()
+        // 第一步：从 buspedia 映射表取 2017 年及以后的车辆（约 7500 台，无论当前是否在运）
+        let all = getAllVehicles().filter((v) => Number(v.batch || 0) >= 17)
         if (!all.length) {
           // 映射表懒加载中：等就绪后再取一次
           await new Promise((resolve) => onBusNumberReady(resolve))
-          all = getAllVehicles()
+          all = getAllVehicles().filter((v) => Number(v.batch || 0) >= 17)
         }
         const CN = ['', '第一', '第二', '第三', '第四', '第五', '第六', '第七', '第八', '第九']
         const byId = new Map()
@@ -512,6 +512,7 @@ export default {
           byId.set(v.orgId, {
             orgId: v.orgId,
             full: v.full,
+            companyNo: no,
             company: no >= 1 && no <= 9 ? `武汉市公共交通集团${CN[no]}营运公司` : (no ? `第${no}营运公司` : '未知公司'),
             model: v.model || '',
             batch: v.batch || 0,
@@ -534,10 +535,12 @@ export default {
                   base.departures = Number(op.departures) || 0
                   base.maxSpeed = Number(op.maxSpeed) || 0
                 } else {
-                  // 映射表未收录的在运车也加入（避免遗漏）
+                  // 映射表未收录的在运车也加入（避免遗漏）；批次未知按 99 归到末尾
+                  const c = Number(String(id).charAt(0)) || 0
                   byId.set(id, {
-                    orgId: id, full: this.fmtNo(id), company: op.company || '未知公司',
-                    model: '', batch: 0,
+                    orgId: id, full: this.fmtNo(id), companyNo: c,
+                    company: op.company || (c >= 1 && c <= 9 ? `武汉市公共交通集团${CN[c]}营运公司` : '未知公司'),
+                    model: '', batch: 99,
                     lineNo: op.lineNo || '', speedCount: Number(op.speedCount) || 0,
                     departures: Number(op.departures) || 0, maxSpeed: Number(op.maxSpeed) || 0,
                   })
