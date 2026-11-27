@@ -3,7 +3,15 @@
   <view class="dp-body">
     <!-- 顶部：数据时次 + 导出 / 同步 -->
     <view class="dp-actions">
-      <text class="dp-stamp">{{ stampText }}</text>
+      <view class="dp-stat" :title="'当前在线统计车辆数 · 数据时次 ' + stampTime">
+        <view class="dp-stat-badge">
+          <text class="dp-stat-dot"></text>
+          <text class="dp-stat-lbl">当前在线统计</text>
+          <text class="dp-stat-num">{{ filteredCount }}</text>
+          <text class="dp-stat-unit">辆</text>
+        </view>
+        <text class="dp-stamp">🕒 更新于 {{ stampTime }}</text>
+      </view>
       <view class="dp-ops">
         <CopyPill label="导出" :disabled="!filteredCount" @copy="onCopy" />
         <view class="dp-mini" :title="loading ? '同步中' : '同步最新数据'" @click="onSync">{{ loading ? '⏳ 同步中' : '🔄 同步' }}</view>
@@ -439,17 +447,17 @@ export default {
       return groups
     },
     // 数据时次：统一中文格式「2026年11月27日 08:29:58 · 649 辆」，避免英文 Date.toString()
-    stampText() {
-      if (!this.stamp) return '尚未同步 · 0 辆'
+    stampTime() {
+      if (!this.stamp) return '尚未同步'
       const d = new Date(this.stamp)
-      let t = String(this.stamp)
-      if (!isNaN(d.getTime())) {
-        // 按北京时间显示（UTC+8），与采集端时刻口径一致
-        const bj = new Date(d.getTime() + 8 * 3600 * 1000)
-        const p = (n) => String(n).padStart(2, '0')
-        t = `${bj.getUTCFullYear()}年${p(bj.getUTCMonth() + 1)}月${p(bj.getUTCDate())}日 ${p(bj.getUTCHours())}:${p(bj.getUTCMinutes())}:${p(bj.getUTCSeconds())}`
-      }
-      return `${t} · ${this.filteredCount} 辆`
+      if (isNaN(d.getTime())) return String(this.stamp)
+      // 按北京时间显示（UTC+8），与采集端时刻口径一致
+      const bj = new Date(d.getTime() + 8 * 3600 * 1000)
+      const p = (n) => String(n).padStart(2, '0')
+      return `${bj.getUTCFullYear()}年${p(bj.getUTCMonth() + 1)}月${p(bj.getUTCDate())}日 ${p(bj.getUTCHours())}:${p(bj.getUTCMinutes())}:${p(bj.getUTCSeconds())}`
+    },
+    stampText() {
+      return `${this.stampTime} · 当前在线统计 ${this.filteredCount} 辆`
     },
     pageCount() { return calcPageCount(this.filteredCount, this.pageSize) },
     pageList() { return calcPageList(this.pageCount, this.page) },
@@ -833,6 +841,13 @@ export default {
 .dp-body { width: 100%; color: #e8edf6; }
 /* 顶部 */
 .dp-actions { display: flex; align-items: center; justify-content: space-between; gap: 12rpx; padding: 4rpx 0 12rpx; }
+.dp-stat { display: flex; align-items: center; gap: 14rpx; min-width: 0; flex-wrap: wrap; }
+.dp-stat-badge { display: inline-flex; align-items: center; gap: 8rpx; padding: 6rpx 16rpx; border-radius: 999rpx; background: rgba(34, 197, 94, 0.12); border: 1px solid rgba(34, 197, 94, 0.45); flex-shrink: 0; }
+.dp-stat-dot { width: 12rpx; height: 12rpx; border-radius: 50%; background: #22c55e; box-shadow: 0 0 8rpx #22c55e; animation: dp-pulse 1.6s ease-in-out infinite; }
+@keyframes dp-pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.35; } }
+.dp-stat-lbl { font-size: 20rpx; color: #86efac; }
+.dp-stat-num { font-size: 30rpx; font-weight: 700; color: #4ade80; line-height: 1; }
+.dp-stat-unit { font-size: 20rpx; color: #86efac; }
 .dp-stamp { font-size: 19rpx; color: #9aa6bd; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .dp-ops { display: flex; align-items: center; gap: 12rpx; flex: 0 0 auto; }
 /* 模式切换 */
