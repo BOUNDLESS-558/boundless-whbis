@@ -3,7 +3,7 @@
   <view class="dp-body">
     <!-- 顶部：数据时次 + 导出 / 同步 -->
     <view class="dp-actions">
-      <text class="dp-stamp">{{ stamp ? stamp + ' · ' + filteredCount + ' 辆' : '尚未同步 · 0 辆' }}</text>
+      <text class="dp-stamp">{{ stampText }}</text>
       <view class="dp-ops">
         <CopyPill label="导出" :disabled="!filteredCount" @copy="onCopy" />
         <view class="dp-mini" :title="loading ? '同步中' : '同步最新数据'" @click="onSync">{{ loading ? '⏳ 同步中' : '🔄 同步' }}</view>
@@ -265,6 +265,19 @@ export default {
       })
     },
     filteredCount() { return this.apiMode ? this.total : this.localFiltered.length },
+    // 数据时次：统一中文格式「2026年11月27日 08:29:58 · 649 辆」，避免英文 Date.toString()
+    stampText() {
+      if (!this.stamp) return '尚未同步 · 0 辆'
+      const d = new Date(this.stamp)
+      let t = String(this.stamp)
+      if (!isNaN(d.getTime())) {
+        // 按北京时间显示（UTC+8），与采集端时刻口径一致
+        const bj = new Date(d.getTime() + 8 * 3600 * 1000)
+        const p = (n) => String(n).padStart(2, '0')
+        t = `${bj.getUTCFullYear()}年${p(bj.getUTCMonth() + 1)}月${p(bj.getUTCDate())}日 ${p(bj.getUTCHours())}:${p(bj.getUTCMinutes())}:${p(bj.getUTCSeconds())}`
+      }
+      return `${t} · ${this.filteredCount} 辆`
+    },
     pageCount() { return calcPageCount(this.filteredCount, this.pageSize) },
     pageList() { return calcPageList(this.pageCount, this.page) },
     hasFilter() {
@@ -488,7 +501,7 @@ export default {
       if (!list.length) list = this.apiMode ? this.all : this.localFiltered
       const rows = this.sortRows(list).map((r) => this.exportRows(r))
       const scope = this.fd !== ALL ? this.fd : (this.fc !== ALL ? this.fc : (this.fl !== ALL ? this.fl + ' 路' : '全部数据'))
-      copyTable({ title: `武汉公交营运数据 ${scope} ${this.stamp}`, columns, rows })
+      copyTable({ title: `武汉公交营运数据 ${scope} ${this.stampText}`, columns, rows })
     },
     gotoPage(p) {
       const target = clampPage(p, this.pageCount)
