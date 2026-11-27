@@ -82,6 +82,7 @@
                       <text class="dv-pick-no">{{ v.full || fmtNo(v.orgId) }}</text>
                       <text class="dv-pick-model">{{ v.model || busModel(v.orgId) || '车型未知' }}</text>
                     </view>
+                    <text v-if="v.newCount" class="dv-new-badge" :title="`已回填 ${v.newCount} 项营运信息`">{{ v.newCount }}</text>
                     <text class="dv-pick-arrow">›</text>
                   </view>
                 </block>
@@ -97,7 +98,11 @@
       <view class="dv-loading" v-if="vehicleLoading">正在查询车辆档案…</view>
       <block v-if="vehicleProfile">
         <view class="dv-head">
-          <text class="dv-back" @click="vehicleProfile = null">‹ 返回车辆列表</text>
+          <view class="dv-back" @click="vehicleProfile = null" title="返回车辆列表">
+            <text class="dv-back-ico">←</text>
+            <text>车辆列表</text>
+            <text v-if="profileNewCount" class="dv-new-badge" :title="`有 ${profileNewCount} 项新采集信息`">{{ profileNewCount }}</text>
+          </view>
           <view class="dv-title">{{ fmtNo(vehicleProfile.orgId) }}</view>
           <text class="dv-meta">{{ vehicleProfile.company || '营运公司未知' }} · {{ busModel(vehicleProfile.orgId) || '车型未知' }}</text>
           <view class="dv-stats">
@@ -380,6 +385,19 @@ export default {
     }
   },
   computed: {
+    // 档案里明确回填的字段数：公司 / 车型 / 最高车速 / 超速 / 发车 / 线路
+    profileNewCount() {
+      const p = this.vehicleProfile
+      if (!p) return 0
+      let n = 0
+      if (p.company) n++
+      if (this.busModel(p.orgId)) n++
+      if (Number(p.maxSpeed) > 0) n++
+      if (Number(p.totalSpeedCount) > 0) n++
+      if (Number(p.totalDepartures) > 0) n++
+      if ((p.days || []).length) n++
+      return n
+    },
     rows() {
       if (this.apiMode) return this.sortRows(this.all)
       return this.sortRows(this.localFiltered).slice((this.page - 1) * this.pageSize, this.page * this.pageSize)
@@ -583,6 +601,11 @@ export default {
               }
             }
           } catch (e) { console.warn('[DataPanel] 运营数据合并失败，仅显示映射表清单', e) }
+        }
+        // 预计算「已回填信息」数量：线路 / 最高车速 / 超速 / 发车，用于列表徽标
+        for (const v of byId.values()) {
+          v.newCount = (v.lineNo ? 1 : 0) + (Number(v.maxSpeed) > 0 ? 1 : 0)
+            + (Number(v.speedCount) > 0 ? 1 : 0) + (Number(v.departures) > 0 ? 1 : 0)
         }
         // 冻结：上万条只读记录不做深度响应式代理，避免展开/折叠时卡顿
         this.vehicleList = Object.freeze(Array.from(byId.values()).map((v) => Object.freeze(v)))
@@ -991,7 +1014,10 @@ export default {
 .dv-pick-company { font-size: 17rpx; color: #9aa6bd; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 100%; }
 .dv-pick-arrow { flex: 0 0 auto; font-size: 26rpx; color: #9aa6bd; }
 .dv-head { padding: 20rpx 0 16rpx; border-bottom: 2rpx solid rgba(120,160,220,0.14); }
-.dv-back { display: inline-block; font-size: 20rpx; color: var(--ac-hi); cursor: pointer; margin-bottom: 8rpx; }
+.dv-back { display: inline-flex; align-items: center; gap: 8rpx; padding: 8rpx 14rpx; margin-bottom: 12rpx; border-radius: 999rpx; background: rgba(120,160,220,0.1); border: 1rpx solid rgba(120,160,220,0.24); color: #c4cddd; font-size: 19rpx; cursor: pointer; transition: background .15s, border-color .15s; }
+.dv-back:hover { background: rgba(120,160,220,0.2); border-color: rgba(120,160,220,0.45); }
+.dv-back-ico { font-size: 24rpx; line-height: 1; color: var(--ac-hi); }
+.dv-new-badge { flex: 0 0 auto; display: inline-flex; align-items: center; justify-content: center; min-width: 28rpx; height: 28rpx; padding: 0 7rpx; border-radius: 999rpx; background: #22c55e; color: #04140a; font-size: 18rpx; font-weight: 800; line-height: 1; box-shadow: 0 2rpx 8rpx rgba(34,197,94,0.4); }
 .dv-title { font-size: 36rpx; font-weight: 800; color: var(--ac-hi); }
 .dv-meta { display: block; font-size: 20rpx; color: #9aa6bd; margin-top: 6rpx; }
 .dv-stats { display: flex; flex-wrap: wrap; gap: 12rpx 24rpx; margin-top: 12rpx; font-size: 19rpx; color: rgba(255,255,255,0.75); }
