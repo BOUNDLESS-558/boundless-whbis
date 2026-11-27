@@ -2,7 +2,7 @@ name: 车辆营运信息采集（1 分钟）
 
 on:
   # schedule 已停用：GitHub Actions 定时高峰可延迟数小时且丢任务。
-  # 改由 Cloudflare Worker Cron 每分钟通过 API 即时触发 workflow_dispatch（见 deploy/CLOUDFLARE-CRON.md）。
+  # 改由 Cloudflare Worker Cron 每 4 分钟通过 API 即时触发 workflow_dispatch（见 deploy/CLOUDFLARE-CRON.md）。
   workflow_dispatch:
 
 permissions:

@@ -38,6 +38,7 @@
 
 ### 2026-11-27（最新）
 
+- **车辆营运采集触发间隔 3 分钟 → 4 分钟**：采集新增待发计划请求后单轮耗时增加，Cloudflare Worker cron 改为 `*/4 * * * *`（`deploy/wrangler.toml`），同步更新 `CLOUDFLARE-CRON.md` / `vehicle-ops.yml` 注释 / `AGENTS.md`。需 `wrangler deploy` 后生效。
 - **车辆营运采集：先定配属再判超速**：`scan-vehicle-ops.mjs` 每条线路×方向在拉 `detailData` 的同时拉 `/detailPlanTime`（待发计划，含明文 `orgBusId`），并在低速过滤与超速判定**之前**为所有在线车辆登记「营运公司 + 配属线路」（在线营运状态优先于待发计划）。配属随 POST 以 `affiliations` 上送，`api/vehicle-ops.js` 只更新累计表 `vehicle_ops` 的 `line_no/company`（不计超速/发车、不进按日表），「按车辆」面板因此能看到低速/待发车辆的正确公司与线路。Actions（`vehicle-ops.yml`）沿用同一脚本，无需改 workflow。
 - **数据面板顶部工具栏重排**：原「统计徽标+时间 / 导出+同步」与「按日/按车辆」分两行、按钮风格不一。合并为单行工具栏 `.dp-toolbar`：左侧「按日 / 按车辆」分段凹槽切换 + 「● 当前在线 N 辆」徽标 + 更新时间，右侧导出胶囊 + 同步胶囊按钮（同高 52rpx、hover 高亮、同步中图标旋转）；`flex-wrap` 窄屏自动换行，兼顾移动端。移除旧 `.dp-actions` 样式。
 - **数据面板顶部统计改为醒目徽标**：原「2026年11月27日 10:07:51 · 1977 辆」一行小灰字看不出含义。改为绿色胶囊徽标「● 当前在线统计 1977 辆」（呼吸圆点 + 大号数字），旁边单独显示「🕒 更新于 时间」，悬停有完整说明；拆出 `stampTime` computed，导出标题同步带「当前在线统计」字样。
