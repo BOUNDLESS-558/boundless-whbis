@@ -30,7 +30,8 @@ const isH5 = false
 // 生产 H5：主线路 = Vercel 同域转发（vercel.json rewrites），备用 = Cloudflare Worker
 const trimBase = (u) => String(u).replace(/\/+$/, '')
 const PROD_BASES = [APP_CONFIG.apiPrimary, APP_CONFIG.apiProxy].filter(Boolean).map(trimBase)
-if (!PROD_BASES.length) PROD_BASES.push(DIRECT_BASE)
+// 最后兜底：直连武汉公交接口（浏览器多半会被 CORS 预检拦下，但万一上游放开或在非浏览器环境仍可用）
+PROD_BASES.push(DIRECT_BASE)
 const BASES = isH5 ? (process.env.NODE_ENV !== 'production' ? [PROXY_PREFIX] : PROD_BASES) : [DIRECT_BASE]
 // 某条线路失败后暂时降级（毫秒），期间优先走下一条，到期再试回主线路
 const DEMOTE_MS = 5 * 60 * 1000
