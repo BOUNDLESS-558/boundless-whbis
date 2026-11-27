@@ -126,7 +126,7 @@
         resize-key="data"
         @close="view = 'map'"
       >
-        <DataPanel />
+        <DataPanel ref="dataC" />
       </FloatWin>
 
       <!-- 账号与设置窗：登录身份（头像/用户名）+ 登录有效期 + 全局默认刷新 + 皮肤 + 注销入口。
@@ -895,6 +895,14 @@ export default {
       // 再点当前档 = 收回上一档，统一回到实时地图底座
       if (key === this.view) { this.view = 'map'; return }
       this.view = key
+      // 进入数据面板即自动同步一次（同步按钮保留供手动刷新）。
+      // DataPanel 由 v-if 挂载，需等渲染完成拿到 ref 再调 load。
+      if (key === 'data') {
+        this.$nextTick(() => {
+          const c = this.$refs.dataC
+          if (c && typeof c.load === 'function') c.load()
+        })
+      }
     },
     // 底部栏「站点」按钮：显式开合实时线路窗，不再随选线/切视图自动弹出
     onToggleStops() {

@@ -3,7 +3,7 @@
   <view class="dp-body">
     <!-- 顶部：数据时次 + 导出 / 同步 -->
     <view class="dp-actions">
-      <text class="dp-stamp">{{ stamp ? stamp + ' · ' + filteredCount + ' 辆' : '尚未同步 · 0 辆' }}</text>
+      <text class="dp-stamp">{{ stampText }}</text>
       <view class="dp-ops">
         <CopyPill label="导出" :disabled="!filteredCount" @copy="onCopy" />
         <view class="dp-mini" :title="loading ? '同步中' : '同步最新数据'" @click="onSync">{{ loading ? '⏳ 同步中' : '🔄 同步' }}</view>
@@ -127,8 +127,6 @@
             <text class="dp-badge" :style="speedStyle(r.maxSpeed)">⚡ {{ r.speedCount }}</text>
             <text class="dp-driver-tag" :style="tierStyle(r)">{{ tierOf(r).emoji }} {{ tierOf(r).label }}</text>
           </text>
-          <text class="dp-cell online" :title="r.onlineAt">{{ shortTime(r.onlineAt) }}</text>
-          <text class="dp-cell offline" :title="r.offlineAt">{{ shortTime(r.offlineAt) }}</text>
           <text class="dp-cell arrow">{{ expanded[rowKey(r)] ? '▴' : '▾' }}</text>
         </view>
         <view class="dp-item-detail" v-if="expanded[rowKey(r)]">
@@ -210,8 +208,6 @@ const COLUMNS = [
   { key: 'recordedAt', label: '记录时间', cls: 'record' },
   { key: 'maxSpeed', label: '最高车速', cls: 'speed' },
   { key: 'speedCount', label: '超速', cls: 'over' },
-  { key: 'onlineAt', label: '上线时间', cls: 'online', title: '最早一次上线时间' },
-  { key: 'offlineAt', label: '下线时间', cls: 'offline', title: '最后一次在线时间' },
 ]
 
 function normalize(r, daily = false) {
@@ -269,6 +265,19 @@ export default {
       })
     },
     filteredCount() { return this.apiMode ? this.total : this.localFiltered.length },
+    // 数据时次：统一中文格式「2026年11月27日 08:29:58 · 649 辆」，避免英文 Date.toString()
+    stampText() {
+      if (!this.stamp) return '尚未同步 · 0 辆'
+      const d = new Date(this.stamp)
+      let t = String(this.stamp)
+      if (!isNaN(d.getTime())) {
+        // 按北京时间显示（UTC+8），与采集端时刻口径一致
+        const bj = new Date(d.getTime() + 8 * 3600 * 1000)
+        const p = (n) => String(n).padStart(2, '0')
+        t = `${bj.getUTCFullYear()}年${p(bj.getUTCMonth() + 1)}月${p(bj.getUTCDate())}日 ${p(bj.getUTCHours())}:${p(bj.getUTCMinutes())}:${p(bj.getUTCSeconds())}`
+      }
+      return `${t} · ${this.filteredCount} 辆`
+    },
     pageCount() { return calcPageCount(this.filteredCount, this.pageSize) },
     pageList() { return calcPageList(this.pageCount, this.page) },
     hasFilter() {
@@ -330,18 +339,18 @@ export default {
     },
     shortTime(t) { return String(t || '—').slice(5) },
     recordText(r) { return r.date ? `${r.date} ${r.recordedAt || ''}`.trim() : (r.recordedAt || '—') },
+    // 车辆调配逻辑：同一台车（自编号 orgId 不变）在不同记录时间点出现在不同线路上，
+    // 即视为发生调配。transfers 由采集端按「线路变化」生成：{from, to, at}。
     transferText(r) {
-      return (r.transfers || []).map((t) => `${t.from}→${t.to} ${t.at}`).join('\n') || '无调配'
+      const list = Array.isArray(r.transfers) ? r.transfers : []
+      if (!list.length) return '无调配'
+      return list.map((t) => `${t.from || '—'}路 → ${t.to || '—'}路（${t.at || '—'}）`).join('\n')
     },
     // 详情只渲染有内容的项：空值不再显示「—」占位置。
-    // 上线时间 = 最早一次上线时刻，下线时间 = 最后一次在线时刻，两者分开列示。
     detailCells(r) {
       const out = []
       const record = this.recordText(r)
       if (record && record !== '—') out.push({ k: '记录时间', v: record })
-      const on = String(r.onlineAt || ''), off = String(r.offlineAt || '')
-      if (on) out.push({ k: '上线时间（最早一次上线时间）', v: this.shortTime(on) })
-      if (off) out.push({ k: '下线时间（最后一次在线时间）', v: this.shortTime(off) })
       out.push({ k: '超速次数', v: `${r.speedCount} 次` })
       const t = this.tierOf(r)
       out.push({ k: '超速评价', v: `${t.emoji} ${t.label}`, color: t.color })
@@ -472,12 +481,12 @@ export default {
     exportRows(r) {
       return [
         r.company || '', r.lineNo || (r.lines || [])[0] || '', this.fmtNo(r.orgId),
-        this.recordText(r), r.onlineAt || '', r.offlineAt || '', String(r.maxSpeed),
+        this.recordText(r), String(r.maxSpeed),
         String(r.speedCount), this.transferText(r).replace(/\n/g, '; '),
       ]
     },
     async onCopy() {
-      const columns = ['所属营运公司', '营运线路号', '自编号', '记录时间', '上线时间（最早一次上线时间）', '下线时间（最后一次在线时间）', '最高车速', '超速次数', '车辆调配记录']
+      const columns = ['所属营运公司', '营运线路号', '自编号', '记录时间', '最高车速', '超速次数', '车辆调配记录']
       let list = []
       if (this.apiMode) {
         const q = this.queryParams({ all: '1' })
@@ -492,7 +501,7 @@ export default {
       if (!list.length) list = this.apiMode ? this.all : this.localFiltered
       const rows = this.sortRows(list).map((r) => this.exportRows(r))
       const scope = this.fd !== ALL ? this.fd : (this.fc !== ALL ? this.fc : (this.fl !== ALL ? this.fl + ' 路' : '全部数据'))
-      copyTable({ title: `武汉公交营运数据 ${scope} ${this.stamp}`, columns, rows })
+      copyTable({ title: `武汉公交营运数据 ${scope} ${this.stampText}`, columns, rows })
     },
     gotoPage(p) {
       const target = clampPage(p, this.pageCount)
@@ -557,7 +566,6 @@ export default {
 .dp-cell.record { flex: 1 1 210rpx; font-size: 19rpx; color: #9aa6bd; }
 .dp-cell.speed { flex: 0 0 120rpx; font-weight: 700; }
 .dp-cell.over { flex: 0 0 210rpx; display: flex; align-items: center; gap: 6rpx; }
-.dp-cell.online, .dp-cell.offline { flex: 0 0 150rpx; font-size: 19rpx; color: #9aa6bd; }
 .dp-cell.arrow { flex: 0 0 28rpx; text-align: center; color: #9aa6bd; font-size: 20rpx; }
 /* 真表头：与 .dp-item-head 完全相同的 flex 布局 + 同一套 .dp-cell 宽度与窄屏 order，
    保证换行后表头列仍与数据格逐列对齐 */
@@ -608,7 +616,7 @@ export default {
   .dp-pg-jump { display: none; }
   .dp-pg-arrow { padding: 10rpx 10rpx; font-size: 19rpx; }
   .dp-pg-num { min-width: 40rpx; padding: 8rpx; }
-  /* 窄屏多行：公司/线路/自编号/箭头 → 记录时间/车速/超速/上线/下线。
+  /* 窄屏多行：公司/线路/自编号/箭头 → 记录时间/车速/超速。
      表头与数据行共用同一组 order，换行位置一致，不会出现列错位 */
   .dp-cell.company { order: 1; }
   .dp-cell.line { order: 2; }
@@ -617,7 +625,5 @@ export default {
   .dp-cell.record { order: 5; flex: 1 1 200rpx; }
   .dp-cell.speed { order: 6; }
   .dp-cell.over { order: 7; }
-  .dp-cell.online { order: 8; }
-  .dp-cell.offline { order: 9; }
 }
 </style>
