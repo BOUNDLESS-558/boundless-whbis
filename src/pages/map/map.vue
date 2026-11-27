@@ -94,7 +94,7 @@
         title="线路库"
         sub="本地全量摘要 · 点一条直达"
         :width-rpx="1200"
-        max-height="76vh"
+        max-height="60vh"
         resize-key="db"
         resize-axis="y"
         @close="view = 'map'"
