@@ -4,6 +4,11 @@ on:
   # schedule 已停用：GitHub Actions 定时高峰可延迟数小时且丢任务。
   # 改由 Cloudflare Worker Cron 每 4 分钟通过 API 即时触发 workflow_dispatch（见 deploy/CLOUDFLARE-CRON.md）。
   workflow_dispatch:
+    inputs:
+      reset_dir_missing:
+        description: '重置无营运方向的旧记录（删除 dir 为空的行后重新采集）'
+        type: boolean
+        default: false
 
 permissions:
   contents: write
@@ -42,6 +47,14 @@ jobs:
         with:
           path: .cache/vehicle-ops-md5-dict.json
           key: md5-dict-${{ hashFiles('src/utils/md5.js', 'scripts/scan-vehicle-ops.mjs') }}
+
+      - name: 清理无营运方向的旧记录
+        if: ${{ inputs.reset_dir_missing }}
+        env:
+          VEHICLE_OPS_API: ${{ secrets.VEHICLE_OPS_API }}
+          VEHICLE_OPS_TOKEN: ${{ secrets.VEHICLE_OPS_TOKEN }}
+        run: |
+          curl -fsS -X DELETE "$VEHICLE_OPS_API?dirMissing=1" -H "x-api-key: $VEHICLE_OPS_TOKEN"
 
       - name: 采集全车营运信息（直写 Neon 数据库）
         run: node scripts/scan-vehicle-ops.mjs

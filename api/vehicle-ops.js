@@ -340,6 +340,13 @@ export default async function handler(req, res) {
         await sql`TRUNCATE TABLE vehicle_ops, vehicle_ops_daily`
         return res.status(200).json({ ok: true, truncated: ['vehicle_ops', 'vehicle_ops_daily'] })
       }
+      // ?dirMissing=1：删除旧版无营运方向的记录（两张表），让下一轮采集能重新写入真实 dir
+      if (req.query?.dirMissing === '1') {
+        const cum = await sql`DELETE FROM vehicle_ops WHERE dir IS NULL`
+        const daily = await sql`DELETE FROM vehicle_ops_daily WHERE dir IS NULL`
+        const n = (r) => Number(r && (r.count ?? r.length)) || 0
+        return res.status(200).json({ ok: true, dirMissing: { cumulative: n(cum), daily: n(daily) } })
+      }
       const orgId = String((req.body && req.body.orgId) || req.query?.orgId || '')
       if (!orgId) return res.status(400).json({ error: 'orgId required' })
       await sql`DELETE FROM vehicle_ops WHERE org_id = ${orgId}`

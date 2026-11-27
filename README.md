@@ -38,6 +38,7 @@
 
 ### 2026-11-27（最新）
 
+- **重置旧版无方向记录**：`DELETE /api/vehicle-ops?dirMissing=1` 删除累计表/按日表中 `dir IS NULL` 的旧记录；`vehicle-ops.yml` 手动触发新增 `reset_dir_missing` 选项，勾选后先清理再采集，下一轮即可得到真实「上行/下行」方向。
 - **数据面板排序口径统一**：营运公司按徽标数字（一=1…九=9，外部公司排最后）升/降序；线路号含数字时按数值、纯字母线路按 A-Z/Z-A；自编号先按首位公司数字、忽略 N/D/F 后按剩余数字排序。公司/线路筛选选项同步按同一口径排序，列头悬停可看排序说明。
 - **数据面板：展开详情新增营运方向与线路走向**：采集脚本记录每车最后一次采到的方向 `dir`（0 上行 / 1 下行），API 与数据库 `vehicle_ops` / `vehicle_ops_daily` 新增 `dir` 列（自动 `ALTER TABLE ADD COLUMN IF NOT EXISTS`）；前端按 `static/lines/lines.json` 起终点显示「起点 → 终点」，方向未知时显示「起点 ⇄ 终点」。
 - **API 请求三级兜底**：Vercel 同域转发 `/bus-api` → Cloudflare Worker → 直连武汉公交接口；仅网络错误 / 429 / 5xx 切换，失败线路降级 5 分钟。
