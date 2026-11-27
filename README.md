@@ -38,6 +38,7 @@
 
 ### 2026-11-27（最新）
 
+- **数据面板：展开详情卡片化**：记录时间 / 车辆型号 / 超速次数 / 超速评价 / 车辆调配改为独立小卡片（标签在上、数值加粗在下），与列表行用虚线分隔，长文本（车辆调配）整行展示并自动换行。
 - **按车辆：未采集车辆提示优化**：库中无营运记录（或接口暂不可用）的车辆不再弹「查询失败，请稍后重试」，改为展示空档案页「📡 车辆信息暂未捕获到 · 上线运行后会自动回填」，保留自编号/车型等基础信息。
 - **车辆营运采集触发间隔 3 分钟 → 4 分钟**：采集新增待发计划请求后单轮耗时增加，Cloudflare Worker cron 改为 `*/4 * * * *`（`deploy/wrangler.toml`），同步更新 `CLOUDFLARE-CRON.md` / `vehicle-ops.yml` 注释 / `AGENTS.md`。需 `wrangler deploy` 后生效。
 - **车辆营运采集：先定配属再判超速**：`scan-vehicle-ops.mjs` 每条线路×方向在拉 `detailData` 的同时拉 `/detailPlanTime`（待发计划，含明文 `orgBusId`），并在低速过滤与超速判定**之前**为所有在线车辆登记「营运公司 + 配属线路」（在线营运状态优先于待发计划）。配属随 POST 以 `affiliations` 上送，`api/vehicle-ops.js` 只更新累计表 `vehicle_ops` 的 `line_no/company`（不计超速/发车、不进按日表），「按车辆」面板因此能看到低速/待发车辆的正确公司与线路。Actions（`vehicle-ops.yml`）沿用同一脚本，无需改 workflow。

@@ -977,11 +977,12 @@ export default {
 .dp-unit { font-size: 17rpx; color: #7f8aa3; margin-left: 4rpx; font-weight: 400; }
 .dp-badge { display: inline-block; min-width: 36rpx; padding: 2rpx 10rpx; border-radius: 999rpx; text-align: center; font-size: 19rpx; }
 .dp-driver-tag { display: inline-block; padding: 2rpx 8rpx; border-radius: 8rpx; border: 1rpx solid; font-size: 17rpx; white-space: nowrap; }
-.dp-item-detail { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8rpx 20rpx; padding: 12rpx 18rpx 16rpx; background: rgba(120,160,220,0.05); }
-.dp-dcell { display: flex; justify-content: space-between; gap: 12rpx; font-size: 19rpx; min-width: 0; }
+.dp-item-detail { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10rpx; padding: 14rpx 16rpx 18rpx; margin: 0 8rpx 8rpx; border-radius: 0 0 14rpx 14rpx; background: rgba(120,160,220,0.06); border-top: 1rpx dashed rgba(120,160,220,0.18); }
+.dp-dcell { display: flex; flex-direction: column; gap: 6rpx; padding: 12rpx 14rpx; border-radius: 10rpx; background: rgba(10,18,34,0.45); border: 1rpx solid rgba(120,160,220,0.12); min-width: 0; }
 .dp-dcell.full { grid-column: 1 / -1; }
-.dp-dk { color: #9aa6bd; flex: 0 0 auto; }
-.dp-dv { color: #e8edf6; text-align: right; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dp-dk { color: #8592ab; font-size: 18rpx; letter-spacing: 1rpx; }
+.dp-dv { color: #e8edf6; font-size: 22rpx; font-weight: 600; line-height: 1.4; word-break: break-all; }
+.dp-dcell:not(.full) .dp-dv { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .dp-empty { display: flex; flex-direction: column; align-items: center; padding: 80rpx 40rpx; text-align: center; }
 .dp-empty-big { font-size: 72rpx; opacity: 0.5; }
 .dp-empty-txt { font-size: 24rpx; color: #9aa6bd; margin-top: 16rpx; }
