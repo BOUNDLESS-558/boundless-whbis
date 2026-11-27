@@ -260,7 +260,7 @@
             :class="{ full: c.full }"
           >
             <text class="dp-dk">{{ c.k }}</text>
-            <text class="dp-dv" :style="c.color ? { color: c.color } : null">{{ c.v }}</text>
+            <text class="dp-dv" :class="c.cls" :style="c.color ? { color: c.color } : null">{{ c.v }}</text>
           </view>
         </view>
       </view>
@@ -289,9 +289,6 @@
 
     </block>
 
-    <view class="dp-foot">
-      <text>超速阈值 {{ speedLimit }} km/h · 数据来源：{{ apiMode ? 'Vercel 数据库（按日）' : '项目内静态快照（累计）' }}</text>
-    </view>
   </view>
 </template>
 
@@ -707,9 +704,15 @@ export default {
     // 营运方向：0 = 上行（起点→终点），1 = 下行（终点→起点）；未采到返回 ''
     dirText(r) {
       const d = r && r.dir
-      if (d === 0 || d === '0') return '⬆ 上行'
-      if (d === 1 || d === '1') return '⬇ 下行'
+      if (d === 0 || d === '0') return '↑ 上行'
+      if (d === 1 || d === '1') return '↓ 下行'
       return ''
+    },
+    dirCls(r) {
+      const d = r && r.dir
+      if (d === 0 || d === '0') return 'd0'
+      if (d === 1 || d === '1') return 'd1'
+      return 'unknown'
     },
     // 线路走向：按方向排列起终点；方向未知时显示「起点 ⇄ 终点」
     routeText(r) {
@@ -733,7 +736,7 @@ export default {
       if (record && record !== '—') out.push({ k: '记录时间', v: record })
       const model = this.busModel(r.orgId)
       if (model) out.push({ k: '车辆型号', v: model })
-      out.push({ k: '营运方向', v: this.dirText(r) || '暂未采集' })
+      out.push({ k: '营运方向', v: this.dirText(r) || '待采集', cls: 'dp-dir ' + this.dirCls(r) })
       const route = this.routeText(r)
       if (route) out.push({ k: '线路走向', v: route, full: true })
       out.push({ k: '超速次数', v: `${r.speedCount} 次` })
@@ -1066,6 +1069,10 @@ export default {
 .dp-dk { color: #8592ab; font-size: 18rpx; letter-spacing: 1rpx; }
 .dp-dv { color: #e8edf6; font-size: 22rpx; font-weight: 600; line-height: 1.4; word-break: break-all; }
 .dp-dcell:not(.full) .dp-dv { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dp-dir { display: inline-flex; align-items: center; justify-content: center; align-self: flex-start; height: 34rpx; padding: 0 12rpx; border-radius: 8rpx; font-size: 20rpx; line-height: 1; }
+.dp-dir.d0 { color: #67e8f9; background: rgba(6,182,212,0.18); border: 2rpx solid rgba(34,211,238,0.45); }
+.dp-dir.d1 { color: #fda4af; background: rgba(225,29,72,0.18); border: 2rpx solid rgba(251,113,133,0.45); }
+.dp-dir.unknown { color: #9aa6bd; background: rgba(120,160,220,0.08); border: 2rpx solid rgba(120,160,220,0.2); }
 .dp-empty { display: flex; flex-direction: column; align-items: center; padding: 80rpx 40rpx; text-align: center; }
 .dp-empty-big { font-size: 72rpx; opacity: 0.5; }
 .dp-empty-txt { font-size: 24rpx; color: #9aa6bd; margin-top: 16rpx; }
@@ -1087,7 +1094,6 @@ export default {
 .dp-pg-num { display: inline-block; min-width: 44rpx; padding: 8rpx 10rpx; text-align: center; border-radius: 10rpx; background: rgba(120,160,220,0.08); font-size: 20rpx; cursor: pointer; }
 .dp-pg-num.on { background: var(--ac, #6366f1); color: #fff; }
 .dp-pg-num.gap { background: transparent; color: #7f8aa3; }
-.dp-foot { margin-top: 12rpx; font-size: 19rpx; color: #7f8aa3; }
 
 /* 窄屏：详情改单列，跳页隐藏，按钮更紧凑 */
 @media (max-width: 720px) {
