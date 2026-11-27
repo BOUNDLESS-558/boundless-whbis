@@ -3182,9 +3182,11 @@ export default {
           if (ctrlEl.__ro) { ctrlEl.__ro.disconnect(); ctrlEl.__ro = null }
         }
       } catch (e) { /* 存储不可用忽略 */ }
+      // 用 height（非 maxHeight）固定面板高度：用户拖到的高度就是最终高度，
+      // 刷新车辆数据只改变内部列表内容、面板不再随内容一起长高/缩短。
       const specs = [
-        { sel: '.panel', opts: { key: 'panel', axis: 'y', edge: 'bottom', heightProp: 'maxHeight', minH: 120, maxH: vh - 48, onResize: () => this.scheduleMeasure() } },
-        { sel: '.plan-side', opts: { key: 'plan', axis: 'y', edge: 'bottom', heightProp: 'maxHeight', minH: 120, maxH: vh - 48, onResize: () => this.scheduleMeasure() } },
+        { sel: '.panel', opts: { key: 'panel', axis: 'y', edge: 'bottom', heightProp: 'height', clip: true, minH: 120, maxH: vh - 48, onResize: () => this.scheduleMeasure() } },
+        { sel: '.plan-side', opts: { key: 'plan', axis: 'y', edge: 'bottom', heightProp: 'height', clip: true, minH: 120, maxH: vh - 48, onResize: () => this.scheduleMeasure() } },
       ]
       specs.forEach((sp) => {
         const el = document.querySelector(sp.sel)

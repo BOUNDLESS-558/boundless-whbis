@@ -128,9 +128,10 @@ export function createResizable(el, opts = {}) {
   // 永远算不出"内容真实高度"，收缩分支因此失效（卡片底部留空白的根因）。
   // 做法：临时摘掉 inline height 让浏览器按内容回流，读一次真实高度，再立即写回目标高度。
   // 同步执行无视觉闪烁；overflow 仍保持 visible，避免裁掉绝对定位的联想下拉。
-  // allowShrink：默认只放大（拖拽时用，尊重用户主动拉大的高度）；仅 applyStored 时传 true，
-  // 用于清掉"记忆里留着上次拖大高度"导致的过期虚高（内容没那么多却留大片空白）。
-  function refit(allowShrink = false) {
+  // 只放大不收缩：尊重用户手动调整的尺寸。刷新内容（车辆数变化）导致内容变少时，
+  // 绝不自动收缩并写回存储——否则用户每次刷新后面板高度都会被内容"绑架"。
+  // 仅在内容确实超出当前高度（溢出被裁）时被动放大，保证内容不被截断。
+  function refit() {
     if (clip || !rh || heightProp !== 'height') return
     if (!el.style.height) return
     const cur = el.getBoundingClientRect().height
@@ -140,21 +141,9 @@ export function createResizable(el, opts = {}) {
     const border = Math.max(0, el.offsetHeight - el.clientHeight)
     const need = el.scrollHeight + border + 1
     el.style.height = prev
-    let next = null
+    // 只处理"内容超出当前高度"的溢出场景；内容变少时保持用户设定的高度不动。
     if (need > cur + 1) {
-      next = Math.round(clamp(need, minH, maxH))
-    } else if (allowShrink && need < cur - 1 && need >= minH) {
-      // 内容变少时同步收缩，避免卡片底部留大片空白（只在读取存储时做，不影响拖拽）
-      next = Math.round(need)
-    }
-    if (next != null) {
-      el.style.height = next + 'px'
-      // 只在 applyStored 的收缩矫正里同步纠正存储（拖拽时 end() 会写用户拖的真实高度，
-      // 这里再写会覆盖用户意图）。readSize 可能返回 {w} 单独项，需保留。
-      if (allowShrink) {
-        const s = readSize(key) || {}
-        writeSize(key, { ...s, h: next })
-      }
+      el.style.height = Math.round(clamp(need, minH, maxH)) + 'px'
     }
   }
 
@@ -165,7 +154,7 @@ export function createResizable(el, opts = {}) {
     if (rw && s.w) el.style.width = Math.round(clamp(s.w, minW, maxW)) + 'px'
     if (rh && s.h) el.style[heightProp] = Math.round(clamp(s.h, minH, maxH)) + 'px'
     ensureClip()
-    refit(true)
+    refit()
   }
   applyStored()
   // 记忆尺寸改变了占位，通知宿主重排（控制卡/侧栏要重新量 fitRect）。
