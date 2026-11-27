@@ -96,7 +96,6 @@
         :width-rpx="1200"
         max-height="60vh"
         resize-key="db"
-        resize-axis="y"
         @close="view = 'map'"
       >
         <LineDb plain @pick="onPickLine" />

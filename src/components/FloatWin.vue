@@ -50,8 +50,9 @@ export default {
     maxHeight: { type: String, default: '74vh' },
     // 缩放记忆键（仅 H5）：传入后出现拖拽手柄，可改尺寸并持久化；不传则尺寸固定
     resizeKey: { type: String, default: '' },
-    // 缩放轴：'x'（右边手柄只改宽、高度由内容+maxHeight 定，默认）/ 'both'（右下角同时改宽+高）
-    resizeAxis: { type: String, default: 'x' },
+    // 缩放轴：'both'（右下角同时改宽+高，默认；拖动后尺寸固定，刷新内容不改变面板大小）/
+    //         'x'（右边手柄只改宽、高度随内容）/ 'y'（底边手柄只改高、宽度固定）
+    resizeAxis: { type: String, default: 'both' },
   },
   emits: ['close'],
   data() {
