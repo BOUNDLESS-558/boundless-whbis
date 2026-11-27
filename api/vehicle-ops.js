@@ -3,6 +3,7 @@
  *
  * GET  /api/vehicle-ops                       → 返回全部车辆档案（旧数据面板兼容）
  * GET  /api/vehicle-ops?view=daily&date=...   → 按日/公司/线路筛选 + 分页的数据面板数据
+ * GET  /api/vehicle-ops?view=vehicle&orgId=... → 车辆档案：按自编号查跨日超速/调配历史
  * POST /api/vehicle-ops                       → upsert 本轮采集的车辆档案（Actions 写入）
  * DELETE /api/vehicle-ops?orgId=...           → 删除累计档案
  *
@@ -95,6 +96,50 @@ function toRow(r, daily = false) {
     out.recordedAt = String(r.recorded_at || '')
   }
   return out
+}
+
+/**
+ * 车辆档案：按自编号（纯数字 orgId）查跨日历史。
+ * 返回该车每日记录（日期/线路/最高车速/超速次数/发车/线路集合），
+ * 并在前端可据此推导调配（相邻记录 line_no 变化）。
+ */
+async function getVehicleHistory(sql, res, q) {
+  const orgId = String(q.orgId || '').trim()
+  if (!orgId) return res.status(400).json({ error: 'orgId required' })
+  const where = ['org_id = ?']
+  const params = [orgId]
+  const add = (clause, ...values) => {
+    let out = clause
+    for (const v of values) { params.push(v); out = out.replace('?', `$${params.length}`) }
+    where.push(out)
+  }
+  if (q.from) add('date >= ?::date', q.from)
+  if (q.to) add('date <= ?::date', q.to)
+  const rows = await sql.query(
+    `SELECT to_char(date, 'YYYY-MM-DD') AS date, line_no, company, max_speed, speed_count,
+            online_at, offline_at, departures, transfers, lines, samples, recorded_at
+     FROM vehicle_ops_daily
+     WHERE ${where.join(' AND ')}
+     ORDER BY date DESC, recorded_at DESC`,
+    params,
+  )
+  // 累计档案（车型/公司/总超速等）从 vehicle_ops 取
+  const cum = await sql`SELECT * FROM vehicle_ops WHERE org_id = ${orgId} LIMIT 1`
+  const c = cum[0] || null
+  return res.status(200).json({
+    orgId,
+    company: c ? c.company : (rows[0] ? rows[0].company : ''),
+    maxSpeed: c ? Number(c.max_speed) : 0,
+    totalSpeedCount: c ? Number(c.speed_count) : 0,
+    totalDepartures: c ? Number(c.departures) : 0,
+    days: rows.map((r) => ({
+      date: r.date, lineNo: r.line_no, recordedAt: r.recorded_at,
+      maxSpeed: Number(r.max_speed), speedCount: Number(r.speed_count),
+      departures: Number(r.departures), transfers: r.transfers || [],
+      lines: r.lines || [], samples: Number(r.samples),
+    })),
+    updated: rows.length ? String(rows[0].recorded_at || '') : '',
+  })
 }
 
 /** 数据面板：按日/公司/线路筛选 + 分页（服务端下推） */
@@ -253,6 +298,7 @@ export default async function handler(req, res) {
     if (req.method === 'GET') {
       const q = req.query || {}
       if (q.view === 'daily') return await getDaily(sql, res, q)
+      if (q.view === 'vehicle') return await getVehicleHistory(sql, res, q)
       const rows = await sql`SELECT * FROM vehicle_ops ORDER BY updated_at DESC`
       return res.status(200).json({
         updated: rows[0] ? rows[0].updated_at : '',

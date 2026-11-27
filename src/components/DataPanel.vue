@@ -10,6 +10,64 @@
       </view>
     </view>
 
+    <!-- 模式切换：按日（全车队排名）/ 按车辆（单车跨日档案） -->
+    <view class="dp-mode">
+      <view class="dp-mode-tab" :class="{ on: mode === 'day' }" @click="switchMode('day')">📅 按日</view>
+      <view class="dp-mode-tab" :class="{ on: mode === 'vehicle' }" @click="switchMode('vehicle')">🚌 按车辆</view>
+    </view>
+
+    <!-- 车辆档案模式：输完整自编号（如 122F3123）查该车的跨日超速/调配轨迹 -->
+    <view class="dp-vehicle" v-if="mode === 'vehicle'">
+      <view class="dv-search">
+        <input
+          class="dp-search"
+          v-model="vehicleQuery"
+          type="text"
+          placeholder="输入完整自编号，如 122F3123"
+          placeholder-class="dp-search-ph"
+          confirm-type="search"
+          @confirm="loadVehicle"
+        />
+        <view class="dv-btn" @click="loadVehicle">查询</view>
+      </view>
+      <view class="dv-empty" v-if="!vehicleProfile && !vehicleLoading">
+        <text class="dp-empty-big">🚌</text>
+        <text class="dp-empty-txt">输入自编号查询该车的每日超速与调配记录</text>
+      </view>
+      <view class="dv-loading" v-if="vehicleLoading">正在查询车辆档案…</view>
+      <block v-if="vehicleProfile">
+        <view class="dv-head">
+          <view class="dv-title">{{ fmtNo(vehicleProfile.orgId) }}</view>
+          <text class="dv-meta">{{ vehicleProfile.company || '营运公司未知' }} · {{ busModel(vehicleProfile.orgId) || '车型未知' }}</text>
+          <view class="dv-stats">
+            <text>历史最高 {{ vehicleProfile.maxSpeed }} km/h</text>
+            <text>累计超速 {{ vehicleProfile.totalSpeedCount }} 次</text>
+            <text>累计发车 {{ vehicleProfile.totalDepartures }} 次</text>
+          </view>
+        </view>
+        <scroll-view class="dv-timeline" scroll-y>
+          <view class="dv-day" v-for="(d, i) in vehicleProfile.days" :key="d.date + '-' + i">
+            <view class="dv-day-head">
+              <text class="dv-date">{{ d.date }}</text>
+              <text class="dv-line">{{ d.lineNo || d.lines.join('/') || '—' }} 路</text>
+              <text class="dv-speed" :style="{ color: speedColor(d.maxSpeed) }">最高 {{ d.maxSpeed }} km/h</text>
+              <text class="dv-count" :class="{ hot: d.speedCount > 0 }">超速 {{ d.speedCount }}</text>
+            </view>
+            <view class="dv-transfer" v-if="d.transfers && d.transfers.length">
+              <text class="dv-tk">调配</text>
+              <text class="dv-tv">{{ (d.transfers || []).map(t => (t.from || '—') + '路→' + (t.to || '—') + '路').join('、') }}</text>
+            </view>
+            <view class="dv-transfer" v-else-if="i < vehicleProfile.days.length - 1 && d.lineNo && vehicleProfile.days[i+1].lineNo && d.lineNo !== vehicleProfile.days[i+1].lineNo">
+              <text class="dv-tk">调配</text>
+              <text class="dv-tv">{{ vehicleProfile.days[i+1].lineNo }}路 → {{ d.lineNo }}路</text>
+            </view>
+          </view>
+        </scroll-view>
+      </block>
+    </view>
+
+    <!-- 按日模式：原有筛选 + 列表 -->
+    <block v-if="mode === 'day'">
     <!-- 筛选条：常驻一行，点击整条展开/折叠；窄屏默认折叠，让数据先露出来 -->
     <view class="dp-filter-bar">
       <view class="dp-filter-toggle" @click="filtersOpen = !filtersOpen">
@@ -164,6 +222,8 @@
       </view>
     </view>
 
+    </block>
+
     <view class="dp-foot">
       <text>超速阈值 {{ speedLimit }} km/h · 数据来源：{{ apiMode ? 'Vercel 数据库（按日）' : '项目内静态快照（累计）' }}</text>
     </view>
@@ -172,7 +232,7 @@
 
 <script>
 import { copyTable } from '../utils/clipboard.js'
-import { formatBusNo, getBusModel, onBusNumberReady } from '../utils/busNumber.js'
+import { formatBusNo, getBusModel, parseBusNo, onBusNumberReady } from '../utils/busNumber.js'
 import { APP_CONFIG } from '../config.js'
 import { assetUrl } from '../utils/asset.js'
 import { SPEED_BANDS, speedBandOf } from '../utils/cityBus.js'
@@ -229,6 +289,10 @@ export default {
       all: [],          // API：当前页；静态：全部
       localAll: [],     // 静态兜底的全量行
       apiMode: false,
+      mode: 'day',     // 'day' 按日排名 / 'vehicle' 单车跨日档案
+      vehicleQuery: '',
+      vehicleProfile: null,
+      vehicleLoading: false,
       mapVersion: 0,   // 自编号映射就绪版本号，驱动 fmtNo/busModel 重渲染
       stamp: '',
       speedLimit: 60,
@@ -333,6 +397,36 @@ export default {
     onBusNumberReady(() => { this.mapVersion++ })
   },
   methods: {
+    // 模式切换：按日 ↔ 按车辆（各自保留查询状态）
+    switchMode(m) {
+      if (this.mode === m) return
+      this.mode = m
+      if (m === 'vehicle' && this.vehicleQuery && !this.vehicleProfile) this.loadVehicle()
+    },
+    // 车辆档案查询：完整自编号 → 纯数字 orgId → API view=vehicle
+    async loadVehicle() {
+      const q = String(this.vehicleQuery || '').trim()
+      if (!q) { uni.showToast({ title: '请输入自编号', icon: 'none' }); return }
+      const orgId = parseBusNo(q)
+      if (!/^\d+$/.test(String(orgId))) { uni.showToast({ title: '自编号格式不正确', icon: 'none' }); return }
+      this.vehicleLoading = true
+      this.vehicleProfile = null
+      try {
+        const api = APP_CONFIG.vehicleOpsApi
+        if (!api) throw new Error('未配置 API')
+        const res = await fetch(`${api}?view=vehicle&orgId=${encodeURIComponent(orgId)}`, { cache: 'no-store' })
+        if (!res.ok) throw new Error('HTTP ' + res.status)
+        this.vehicleProfile = await res.json()
+        if (!this.vehicleProfile.days || !this.vehicleProfile.days.length) {
+          uni.showToast({ title: '该车暂无记录', icon: 'none' })
+        }
+      } catch (e) {
+        console.warn('[DataPanel] 车辆档案查询失败', e)
+        uni.showToast({ title: '查询失败，请稍后重试', icon: 'none' })
+      } finally {
+        this.vehicleLoading = false
+      }
+    },
     fmtNo(v) { void this.mapVersion; return formatBusNo(v) },
     busModel(v) { void this.mapVersion; return getBusModel(v) },
     shortCompany(c) {
@@ -533,6 +627,31 @@ export default {
 .dp-actions { display: flex; align-items: center; justify-content: space-between; gap: 12rpx; padding: 4rpx 0 12rpx; }
 .dp-stamp { font-size: 19rpx; color: #9aa6bd; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .dp-ops { display: flex; align-items: center; gap: 12rpx; flex: 0 0 auto; }
+/* 模式切换 */
+.dp-mode { display: flex; gap: 10rpx; padding: 4rpx 0 14rpx; }
+.dp-mode-tab { padding: 10rpx 28rpx; border-radius: 999rpx; background: rgba(120,160,220,0.08); color: #9aa6bd; font-size: 22rpx; cursor: pointer; }
+.dp-mode-tab.on { background: var(--ac); color: #fff; }
+/* 车辆档案模式 */
+.dp-vehicle { padding-bottom: 8rpx; }
+.dv-search { display: flex; align-items: center; gap: 12rpx; }
+.dv-search .dp-search { flex: 1 1 auto; }
+.dv-btn { flex: 0 0 auto; padding: 0 30rpx; height: 68rpx; line-height: 68rpx; border-radius: 12rpx; background: var(--ac); color: #fff; font-size: 22rpx; cursor: pointer; }
+.dv-empty, .dv-loading { display: flex; flex-direction: column; align-items: center; padding: 60rpx 20rpx; color: #9aa6bd; font-size: 22rpx; }
+.dv-head { padding: 20rpx 0 16rpx; border-bottom: 2rpx solid rgba(120,160,220,0.14); }
+.dv-title { font-size: 36rpx; font-weight: 800; color: var(--ac-hi); }
+.dv-meta { display: block; font-size: 20rpx; color: #9aa6bd; margin-top: 6rpx; }
+.dv-stats { display: flex; flex-wrap: wrap; gap: 12rpx 24rpx; margin-top: 12rpx; font-size: 19rpx; color: rgba(255,255,255,0.75); }
+.dv-timeline { max-height: 46vh; overflow-y: auto; margin-top: 12rpx; }
+.dv-day { padding: 14rpx 8rpx; border-bottom: 1rpx solid rgba(120,160,220,0.1); }
+.dv-day-head { display: flex; align-items: center; gap: 12rpx; flex-wrap: wrap; font-size: 20rpx; }
+.dv-date { font-weight: 700; color: #e8edf6; }
+.dv-line { color: rgba(var(--ac-rgb), 0.9); }
+.dv-speed { margin-left: auto; }
+.dv-count { color: #9aa6bd; }
+.dv-count.hot { color: #ef4444; font-weight: 700; }
+.dv-transfer { display: flex; gap: 10rpx; margin-top: 8rpx; font-size: 18rpx; color: #9aa6bd; }
+.dv-tk { flex: 0 0 auto; padding: 2rpx 10rpx; border-radius: 8rpx; background: rgba(120,160,220,0.12); color: rgba(255,255,255,0.7); }
+.dv-tv { min-width: 0; }
 .dp-mini { padding: 8rpx 16rpx; border-radius: 12rpx; background: rgba(120,160,220,0.12); color: #e8edf6; font-size: 20rpx; cursor: pointer; white-space: nowrap; }
 
 /* 筛选条 */
