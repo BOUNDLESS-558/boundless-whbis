@@ -2,5 +2,8 @@
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "buildCommand": "node scripts/set-h5-base.mjs / && npm run build:h5",
   "outputDirectory": "dist/build/h5",
-  "framework": null
+  "framework": null,
+  "rewrites": [
+    { "source": "/bus-api/:path(line|detailPlanTime|detailData)", "destination": "https://customized.wuhanbus.com/gps-resapi/wechat/bus/:path" }
+  ]
 }
