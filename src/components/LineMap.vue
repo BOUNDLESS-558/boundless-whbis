@@ -570,7 +570,7 @@
         </view>
       </view>
       <!-- 营运公司已并入标题行（方向徽标右侧），不再单独占行 -->
-      <!-- 当前走向：起绿点 / 终琥珀点，站名 → 箭头，方向徽标靠右 -->
+      <!-- 当前走向：起绿点 / 终琥珀点，站名 → 箭头；方向只在标题栏徽标出现一次，不再重复 -->
       <view class="sheet-route" v-if="sheetRoute">
         <view class="sr-line">
           <text class="sr-dot sr-start" title="起点站"></text>
@@ -578,7 +578,6 @@
           <text class="sr-arrow">→</text>
           <text class="sr-dot sr-end" title="终点站"></text>
           <text class="sr-name sr-to" :title="sheetRoute.to">{{ sheetRoute.to }}</text>
-          <text class="sr-dir" :class="isLoop ? 'loop' : 'd' + sheetRoute.dir">{{ dirLabel(sheetRoute.dir) }}</text>
         </view>
       </view>
       <!-- 2×2 指标网格：小标签在上、数值在下，短值各占半行宽度，省掉四行横排 -->
@@ -606,11 +605,11 @@
           <text class="sg-k">车辆型号</text>
           <view class="sg-v sg-model">🚌 {{ busModel(selectedBus.orgId) }}</view>
         </view>
-      </view>
-      <!-- 坐标精度收敛到 6 位（≈0.1m，高于 GPS 自身精度），原始 17 位小数会折成两行 -->
-      <view class="sheet-coord" :title="busCoord">
-        <text class="sg-k">坐标 · GCJ-02</text>
-        <text class="sc-v">{{ busCoord }}</text>
+        <!-- 坐标并入指标网格：与其它指标同一套「标签上 / 值下」排版，等宽 6 位小数 -->
+        <view class="sg-cell sg-cell-wide">
+          <text class="sg-k">坐标 · GCJ-02</text>
+          <view class="sg-v sg-coord" :title="busCoord">{{ busCoord }}</view>
+        </view>
       </view>
       <view class="sheet-btns">
         <view class="sheet-btn" @click="focusBus(selectedBus)" title="居中并把地图放到最大，精确查看这辆车">📍 在地图上定位</view>
@@ -6065,6 +6064,14 @@ export default {
   padding-left: 0 !important;
   border-left: none !important;
 }
+/* 坐标（通栏）：等宽数字 + 6 位小数，单行展示；与其它指标同一套网格排版 */
+.sg-coord {
+  font-size: 22rpx;
+  font-weight: 600;
+  color: #eef1ff;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.3rpx;
+}
 .sg-model {
   font-size: 24rpx;
   white-space: normal;
@@ -6100,51 +6107,18 @@ export default {
   font-weight: 600;
   color: rgba(255, 255, 255, 0.46);
 }
-/* 坐标：等宽数字 + 6 位小数，单行展示 */
-.sheet-coord {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16rpx;
-  min-width: 0;
-  padding: 14rpx 0;
-  border-bottom: 1rpx solid rgba(255, 255, 255, 0.06);
-}
-.sc-v {
-  flex: 1 1 0;
-  min-width: 0;
-  text-align: right;
-  font-size: 21rpx;
-  font-weight: 600;
-  color: #eef1ff;
-  font-variant-numeric: tabular-nums;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  letter-spacing: 0.3rpx;
-}
-/* 当前走向：起绿圆点 / 终琥珀圆点，站名过长时各自省略，箭头不压缩 */
+/* 当前走向：起绿圆点 / 终琥珀圆点，站名过长时各自省略（方向只在标题栏徽标出现，不在此重复） */
 .sheet-route {
   padding: 14rpx 0;
   border-bottom: 1rpx solid rgba(255, 255, 255, 0.06);
 }
-/* 走向行：起讫站一行走完，方向徽标靠右推到行尾 */
+/* 走向行：起讫站一行走完 */
 .sr-line {
   display: flex;
   align-items: center;
   gap: 8rpx;
   min-width: 0;
 }
-.sr-dir {
-  flex: 0 0 auto;
-  margin-left: auto;
-  padding: 1rpx 10rpx;
-  border-radius: 7rpx;
-  font-size: 18rpx;
-}
-.sr-dir.d0 { color: #67e8f9; background: rgba(6, 182, 212, 0.18); }
-.sr-dir.d1 { color: #fda4af; background: rgba(225, 29, 72, 0.18); }
-.sr-dir.loop { color: #ddd6fe; background: rgba(139, 92, 246, 0.18); }
 /* 起讫站圆点：起绿 / 终琥珀，比徽标更轻量 */
 .sr-dot {
   flex: 0 0 auto;
