@@ -145,18 +145,18 @@
 
     <!-- 详情弹层（只展示本地已有摘要） -->
     <view class="db-mask" v-if="detail" @click="closeDetail"></view>
-    <view class="db-pop" v-if="detail">
+    <view class="db-pop" v-if="detail" :class="'st-' + statusOf(detail).key">
       <view class="db-pop-head">
         <text class="db-pop-no">{{ detail.no }}</text>
         <text class="db-badge" :class="'db-badge-' + statusOf(detail).key">{{ statusOf(detail).label }}</text>
         <text class="db-pop-close" @click="closeDetail">✕</text>
       </view>
       <view class="db-pop-route">
-        <text class="rt-tag rt-start">起</text>
-        <text class="rt-name">{{ detail.start || '起点未知' }}</text>
-        <text class="rt-arrow">⇄</text>
-        <text class="rt-tag rt-end">终</text>
-        <text class="rt-name">{{ detail.end || '终点未知' }}</text>
+        <text class="pr-dot pr-start" title="起点站"></text>
+        <text class="pr-name" :title="detail.start || '起点未知'">{{ detail.start || '起点未知' }}</text>
+        <text class="pr-arrow">{{ detail.dirs && detail.dirs.length > 1 ? '⇄' : '→' }}</text>
+        <text class="pr-name" :title="detail.end || '终点未知'">{{ detail.end || '终点未知' }}</text>
+        <text class="pr-dot pr-end" title="终点站"></text>
       </view>
       <view class="db-pop-grid">
         <view class="db-cell"><text class="db-k">首班</text><text class="db-v">{{ detail.early || '未知' }}</text></view>
@@ -165,7 +165,7 @@
         <view class="db-cell"><text class="db-k">站数</text><text class="db-v">{{ detail.stops ? detail.stops + ' 站' : '未知' }}</text></view>
         <view class="db-cell"><text class="db-k">方向</text><text class="db-v">{{ detail.dirs.length > 1 ? '双向' : '单向' }}</text></view>
         <view class="db-cell"><text class="db-k">名称</text><text class="db-v">{{ detail.name || detail.no }}</text></view>
-        <view class="db-cell"><text class="db-k">营运公司</text><text class="db-v">{{ companyFull(detail) }}</text></view>
+        <view class="db-cell db-cell-wide"><text class="db-k">营运公司</text><text class="db-v">{{ companyFull(detail) }}</text></view>
       </view>
       <view class="db-pop-note" v-if="statusOf(detail).key === 'off'">
         {{ offNote(detail) }}
@@ -175,8 +175,7 @@
       </view>
       <view class="db-pop-btns">
         <FavStar v-if="detail" :line="detail" />
-        <view class="db-pbtn" @click="closeDetail">关闭</view>
-        <view class="db-pbtn primary" v-if="detail.status !== '停运'" @click="openLive">在实时查询中打开 ›</view>
+        <view class="db-pbtn primary" v-if="detail.status !== '停运'" @click="openLive">📡 在实时查询中打开</view>
       </view>
     </view>
   </view>
@@ -963,4 +962,37 @@ export default {
 .db-mod:not(.plain)::before { content: ''; position: absolute; top: 0; left: 24rpx; right: 24rpx; height: 4rpx; border-radius: 0 0 6rpx 6rpx; pointer-events: none; z-index: 1; background: linear-gradient(90deg, rgba(var(--ac-rgb), 0.1), rgba(var(--ac-rgb), 0.9) 30%, rgba(var(--ac-rgb), 0.9) 70%, rgba(var(--ac-rgb), 0.1)); box-shadow: 0 0 12rpx rgba(var(--ac-rgb), 0.4); }
 .db-search { border-radius: 999rpx; transition: border-color 0.18s, background 0.18s, box-shadow 0.18s; }
 .db-search:focus-within { background: rgba(255, 255, 255, 0.09); border-color: rgba(var(--ac-rgb), 0.6); box-shadow: 0 0 0 4rpx rgba(var(--ac-rgb), 0.16); }
+
+/* —— 线路详情弹层：统一车辆详情窗风格（AGENTS.md 悬浮面板 UI 规范） —— */
+.db-pop { padding: 0 28rpx 26rpx; border-radius: 32rpx; overflow: hidden;
+  background: linear-gradient(180deg, rgba(255,255,255,0.065) 0, rgba(255,255,255,0.016) 68rpx, transparent 156rpx), rgba(11, 16, 32, 0.94);
+  border: 2rpx solid rgba(255, 255, 255, 0.16); box-shadow: 0 26rpx 70rpx rgba(0, 0, 0, 0.55), inset 0 1rpx 0 rgba(255, 255, 255, 0.18); }
+.db-pop::before { content: ''; position: absolute; top: 0; left: 24rpx; right: 24rpx; height: 4rpx; border-radius: 0 0 6rpx 6rpx; pointer-events: none;
+  background: linear-gradient(90deg, rgba(var(--ac-rgb), 0.1), rgba(var(--ac-rgb), 0.9) 30%, rgba(var(--ac-rgb), 0.9) 70%, rgba(var(--ac-rgb), 0.1)); box-shadow: 0 0 12rpx rgba(var(--ac-rgb), 0.4); }
+.db-pop.st-live::before { background: linear-gradient(90deg, rgba(52, 211, 153, 0.1), rgba(52, 211, 153, 0.9) 30%, rgba(52, 211, 153, 0.9) 70%, rgba(52, 211, 153, 0.1)); box-shadow: 0 0 12rpx rgba(52, 211, 153, 0.4); }
+.db-pop.st-ended::before { background: linear-gradient(90deg, rgba(251, 191, 36, 0.1), rgba(251, 191, 36, 0.9) 30%, rgba(251, 191, 36, 0.9) 70%, rgba(251, 191, 36, 0.1)); box-shadow: 0 0 12rpx rgba(251, 191, 36, 0.4); }
+.db-pop.st-off::before { background: linear-gradient(90deg, rgba(148, 163, 184, 0.1), rgba(148, 163, 184, 0.8) 30%, rgba(148, 163, 184, 0.8) 70%, rgba(148, 163, 184, 0.1)); box-shadow: none; }
+.db-pop-head { padding: 24rpx 0 18rpx; border-bottom: 1rpx solid rgba(255, 255, 255, 0.06); }
+.db-pop-close { width: 56rpx; height: 56rpx; line-height: 56rpx; padding: 0; text-align: center; border-radius: 50%; font-size: 26rpx; color: rgba(255, 255, 255, 0.66); background: rgba(255, 255, 255, 0.08); }
+.db-pop-close:hover { color: #fff; background: rgba(255, 255, 255, 0.16); }
+.db-pop-close:active { transform: scale(0.92); }
+.db-pop-route { margin-top: 0; padding: 16rpx 0 14rpx; flex-wrap: nowrap; gap: 10rpx; min-width: 0; font-size: 26rpx; border-bottom: 1rpx solid rgba(255, 255, 255, 0.06); }
+.pr-dot { flex: 0 0 auto; width: 18rpx; height: 18rpx; border-radius: 50%; }
+.pr-start { background: #22c55e; box-shadow: 0 0 0 3rpx rgba(34, 197, 94, 0.22); }
+.pr-end { background: #f59e0b; box-shadow: 0 0 0 3rpx rgba(245, 158, 11, 0.22); }
+.pr-name { flex: 0 1 auto; max-width: 42%; min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font-weight: 700; color: #eef1ff; }
+.pr-arrow { flex: 0 0 auto; font-weight: 700; color: var(--ac-text, #a5f3fc); }
+.db-pop-grid { margin-top: 0; gap: 0; }
+.db-pop-grid .db-cell { box-sizing: border-box; width: 50%; flex: 0 0 50%; min-width: 0; display: flex; flex-direction: column; gap: 8rpx; padding: 18rpx 20rpx; margin: 0; border: none; border-radius: 0; background: transparent; box-shadow: none; border-top: 1rpx solid rgba(255, 255, 255, 0.06); }
+.db-pop-grid .db-cell:nth-child(-n+2) { border-top: none; }
+.db-pop-grid .db-cell:nth-child(odd) { padding-left: 0; }
+.db-pop-grid .db-cell:nth-child(even) { border-left: 1rpx solid rgba(255, 255, 255, 0.06); padding-left: 24rpx; }
+.db-pop-grid .db-cell-wide { width: 100%; flex-basis: 100%; padding-left: 0 !important; border-left: none !important; }
+.db-pop-grid .db-k { font-size: 19rpx; font-weight: 500; color: rgba(255, 255, 255, 0.4); letter-spacing: 0.5rpx; }
+.db-pop-grid .db-v { font-size: 30rpx; font-weight: 800; color: #fff; font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.db-pop-note { margin-top: 14rpx; border-radius: 20rpx; border-width: 1rpx; background: rgba(255, 255, 255, 0.035); border-color: rgba(255, 255, 255, 0.08); color: rgba(255, 255, 255, 0.62); }
+.db-pop-btns { margin-top: 24rpx; align-items: center; }
+.db-pop-btns .db-pbtn { flex: 1; border-radius: 999rpx; padding: 18rpx 0; text-align: center; font-size: 26rpx; font-weight: 700; }
+.db-pop-btns .db-pbtn.primary { color: #fff; background: linear-gradient(135deg, var(--ac), var(--ac-2)); border: none; box-shadow: 0 6rpx 18rpx rgba(var(--ac-rgb), 0.35); }
+.db-pop-btns .db-pbtn:active { transform: scale(0.97); }
 </style>

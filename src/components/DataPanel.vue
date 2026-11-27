@@ -38,7 +38,7 @@
           placeholder-class="dp-search-ph"
           confirm-type="search"
           />
-          <view class="dv-btn" @click="loadVehicle">定位</view>
+          <view class="dv-btn" @click="loadVehicle">📍 定位</view>
       </view>
       <!-- 车辆选择列表：不知道自编号时可从列表挑选，输入关键词按编号/公司/线路过滤 -->
       <view class="dv-list-wrap" v-if="!vehicleProfile && !vehicleLoading">
@@ -1137,4 +1137,40 @@ export default {
   .dp-cell.speed { order: 6; }
   .dp-cell.over { order: 7; }
 }
+
+/* —— 数据面板：统一悬浮面板 UI 风格（AGENTS.md）· 胶囊分段 / 胶囊输入 / 渐变主按钮 / 细线分区 / 玻璃小卡 —— */
+.dp-toolbar { border-bottom: 1rpx solid rgba(255, 255, 255, 0.06); padding-bottom: 16rpx; margin-bottom: 14rpx; }
+.dp-mode { display: inline-flex; gap: 4rpx; padding: 5rpx; border-radius: 999rpx; background: rgba(255, 255, 255, 0.045); border: 1rpx solid rgba(255, 255, 255, 0.08); }
+.dp-mode-tab { border-radius: 999rpx; padding: 10rpx 24rpx; font-size: 22rpx; font-weight: 600; color: rgba(255, 255, 255, 0.58); background: transparent; cursor: pointer; transition: color 0.18s, background 0.18s, box-shadow 0.18s; }
+.dp-mode-tab:hover { color: #fff; background: rgba(255, 255, 255, 0.07); }
+.dp-mode-tab.on { color: #fff; font-weight: 800; background: linear-gradient(135deg, var(--ac), var(--ac-2)); box-shadow: 0 6rpx 18rpx rgba(var(--ac-rgb), 0.4), inset 0 1rpx 0 rgba(255, 255, 255, 0.3); }
+.dp-sync { border-radius: 999rpx; background: rgba(255, 255, 255, 0.06); border: 1rpx solid rgba(255, 255, 255, 0.12); }
+.dp-sync:hover { background: rgba(var(--ac-rgb), 0.16); border-color: rgba(var(--ac-rgb), 0.45); }
+.dp-search { border-radius: 999rpx; padding: 0 28rpx; background: rgba(255, 255, 255, 0.045); border: 1rpx solid rgba(255, 255, 255, 0.08); transition: border-color 0.18s, box-shadow 0.18s, background 0.18s; }
+.dp-search:focus { background: rgba(255, 255, 255, 0.09); border-color: rgba(var(--ac-rgb), 0.6); box-shadow: 0 0 0 4rpx rgba(var(--ac-rgb), 0.16); }
+.dv-btn { border-radius: 999rpx; font-weight: 700; background: linear-gradient(135deg, var(--ac), var(--ac-2)); box-shadow: 0 6rpx 18rpx rgba(var(--ac-rgb), 0.35), inset 0 1rpx 0 rgba(255, 255, 255, 0.28); }
+.dv-btn:active, .dp-sync:active, .dp-mode-tab:active, .dp-chip:active { transform: scale(0.97); }
+.dp-chip { border: 1rpx solid rgba(255, 255, 255, 0.08); background: rgba(255, 255, 255, 0.045); color: rgba(255, 255, 255, 0.62); transition: background 0.18s, color 0.18s; }
+.dp-chip:hover { color: #fff; background: rgba(255, 255, 255, 0.09); }
+.dp-chip.on { font-weight: 700; background: linear-gradient(135deg, var(--ac), var(--ac-2)); border-color: transparent; box-shadow: 0 4rpx 12rpx rgba(var(--ac-rgb), 0.35); }
+.dv-grp { border-bottom-color: rgba(255, 255, 255, 0.06); }
+.dv-grp-head { border-radius: 16rpx; margin: 6rpx 0; background: rgba(255, 255, 255, 0.035); }
+.dv-grp-l2 .dv-grp-head { background: rgba(255, 255, 255, 0.02); }
+.dv-grp-head:hover { background: rgba(var(--ac-rgb), 0.1); }
+.dv-pick { border-radius: 14rpx; border-bottom-color: rgba(255, 255, 255, 0.05); transition: background 0.15s; }
+.dv-pick:hover { background: rgba(var(--ac-rgb), 0.12); }
+.dv-pick-no { font-weight: 800; color: #fff; font-variant-numeric: tabular-nums; }
+.dv-head { border-bottom: 1rpx solid rgba(255, 255, 255, 0.06); }
+.dv-back { background: rgba(255, 255, 255, 0.06); border-color: rgba(255, 255, 255, 0.12); }
+.dv-back:hover { background: rgba(var(--ac-rgb), 0.16); border-color: rgba(var(--ac-rgb), 0.45); }
+.dp-head { border-radius: 14rpx; border-bottom: none; background: rgba(255, 255, 255, 0.04); }
+.dp-head .dp-cell { font-weight: 500; color: rgba(255, 255, 255, 0.4); letter-spacing: 0.5rpx; }
+.dp-item { border-bottom: 1rpx solid rgba(255, 255, 255, 0.06); }
+.dp-item-head { border-radius: 14rpx; }
+.dp-item-head:hover { background: rgba(var(--ac-rgb), 0.1); }
+.dp-item-detail { border-radius: 20rpx; margin: 4rpx 8rpx 12rpx; background: rgba(255, 255, 255, 0.035); border: 1rpx solid rgba(255, 255, 255, 0.08); box-shadow: inset 0 1rpx 0 rgba(255, 255, 255, 0.06); }
+.dp-pg-size-opt, .dp-pg-num, .dp-pg-arrow, .dp-pg-jump-input { border-radius: 999rpx; background: rgba(255, 255, 255, 0.05); border: 1rpx solid rgba(255, 255, 255, 0.08); }
+.dp-pg-num.gap { border-color: transparent; background: transparent; }
+.dp-pg-size-opt.on, .dp-pg-num.on { font-weight: 700; color: #fff; background: linear-gradient(135deg, var(--ac), var(--ac-2)); border-color: transparent; box-shadow: 0 4rpx 12rpx rgba(var(--ac-rgb), 0.35); }
+.dp-pg-arrow:hover, .dp-pg-num:hover { background: rgba(var(--ac-rgb), 0.16); }
 </style>

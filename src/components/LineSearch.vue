@@ -51,7 +51,7 @@
           @confirm="doSearch"
         />
         <text class="search-clear" v-if="lineNo" @click.stop="lineNo = ''; onInput()" title="清空">✕</text>
-        <view class="search-btn" @click="doSearch">查询</view>
+        <view class="search-btn" @click="doSearch">🔍 查询</view>
       </view>
       <!-- 线路库联想：本地匹配输入，点一条直达对应线路（不发试探请求） -->
       <view class="sug-panel" v-if="suggestOpen && suggestList.length">

@@ -219,8 +219,8 @@
               <view class="acct-eye" :class="{ on: pwdShowNew }" @click="pwdShowNew = !pwdShowNew" v-html="pwdShowNew ? svgEyeOn : svgEyeOff" />
             </view>
             <view class="acct-btns">
-              <view class="acct-btn ghost" v-if="pwdCustom" @click="onResetPwd">恢复默认口令</view>
-              <view class="acct-btn save" @click="onChangePwd">修改密码</view>
+              <view class="acct-btn ghost" v-if="pwdCustom" @click="onResetPwd">♻️ 恢复默认口令</view>
+              <view class="acct-btn save" @click="onChangePwd">🔑 修改密码</view>
             </view>
           </view>
 
@@ -281,7 +281,7 @@
             </view>
             <!-- 主题色分页 -->
             <view class="ac-pager" v-if="accentPageCount > 1">
-              <view class="ac-pager-btn" :class="{ disabled: accentPage === 0 }" @click="accentPage--">‹ 上一页</view>
+              <view class="ac-pager-btn" :class="{ disabled: accentPage === 0 }" @click="accentPage--">⬅️ 上一页</view>
               <text class="ac-pager-info">{{ accentPage + 1 }} / {{ accentPageCount }}</text>
               <view class="ac-pager-btn" :class="{ disabled: accentPage >= accentPageCount - 1 }" @click="accentPage++">下一页 ›</view>
             </view>
@@ -325,7 +325,7 @@
             </view>
             <!-- 字体分页 -->
             <view class="ac-pager" v-if="fontPageCount > 1">
-              <view class="ac-pager-btn" :class="{ disabled: fontPage === 0 }" @click="fontPage--">‹ 上一页</view>
+              <view class="ac-pager-btn" :class="{ disabled: fontPage === 0 }" @click="fontPage--">⬅️ 上一页</view>
               <text class="ac-pager-info">{{ fontPage + 1 }} / {{ fontPageCount }}</text>
               <view class="ac-pager-btn" :class="{ disabled: fontPage >= fontPageCount - 1 }" @click="fontPage++">下一页 ›</view>
             </view>
@@ -358,9 +358,9 @@
               <view class="acct-eye" :class="{ on: amapCookieShow }" @click="amapCookieShow = !amapCookieShow" v-html="amapCookieShow ? svgEyeOn : svgEyeOff" />
             </view>
             <view class="amap-btn-row">
-              <view class="amap-btn primary" @click="onAmapCookieSave">保存 Cookie</view>
-              <view class="amap-btn" @click="onAmapCookieCopy">复制仓库配置</view>
-              <view class="amap-btn" v-if="amapCookie" @click="onAmapCookieClear">清空</view>
+              <view class="amap-btn primary" @click="onAmapCookieSave">💾 保存 Cookie</view>
+              <view class="amap-btn" @click="onAmapCookieCopy">📋 复制仓库配置</view>
+              <view class="amap-btn" v-if="amapCookie" @click="onAmapCookieClear">🧹 清空</view>
             </view>
             <view class="amap-note">
               Cookie 是采集主方案：浏览器 F12 → Network → 任意 amap.com 请求 → Request Headers → Cookie 整段复制。「保存」仅存本机；「复制仓库配置」生成 scripts/amap-cookie.json 内容，粘贴到仓库并提交后 Actions 优先读它，留空回退 Secrets。Cookie 与账号绑定，请勿提交他人 Cookie。
@@ -402,8 +402,8 @@
               <view class="acct-eye" :class="{ on: amapSecretShow }" @click="amapSecretShow = !amapSecretShow" v-html="amapSecretShow ? svgEyeOn : svgEyeOff" />
             </view>
             <view class="amap-btn-row">
-              <view class="amap-btn primary" @click="onAmapKeySave">保存 KEY</view>
-              <view class="amap-btn" v-if="amapKey || amapSecretInput" @click="onAmapKeyClear">清空</view>
+              <view class="amap-btn primary" @click="onAmapKeySave">💾 保存 KEY</view>
+              <view class="amap-btn" v-if="amapKey || amapSecretInput" @click="onAmapKeyClear">🧹 清空</view>
             </view>
 
             <view class="amap-quota">
@@ -426,13 +426,13 @@
           <view class="acct-div"></view>
 
           <view class="acct-tip">注销后回到登录页，本机账号保留，下次可直接登录</view>
-          <view class="acct-logout" @click="acctConfirm = true">注销登录</view>
+          <view class="acct-logout" @click="acctConfirm = true">🚪 注销登录</view>
         </view>
         <view class="acct" v-else>
           <view class="acct-q">确定退出账号「{{ dispName || account }}」吗？</view>
           <view class="acct-btns">
-            <view class="acct-btn ghost" @click="acctConfirm = false">取消</view>
-            <view class="acct-btn main" @click="onLogout">注销</view>
+            <view class="acct-btn ghost" @click="acctConfirm = false">↩️ 取消</view>
+            <view class="acct-btn main" @click="onLogout">🚪 注销</view>
           </view>
         </view>
       </FloatWin>

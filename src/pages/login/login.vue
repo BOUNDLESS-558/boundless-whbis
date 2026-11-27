@@ -74,7 +74,7 @@
             @confirm="submitReset"
           />
         </view>
-        <view class="lc-btn" :class="{ busy }" @click="submitReset">重设并登录</view>
+        <view class="lc-btn" :class="{ busy }" @click="submitReset">🔐 重设并登录</view>
       </view>
     </view>
 

@@ -34,7 +34,7 @@
           @input="onLineTyping"
           @confirm="onLineInput"
         />
-        <text class="rk-line-go" :class="{ busy: lineFetching }" @click="onLineInput">{{ lineFetching ? '查询中' : '查询' }}</text>
+        <text class="rk-line-go" :class="{ busy: lineFetching }" @click="onLineInput">{{ lineFetching ? '⏳ 查询中' : '🔍 查询' }}</text>
       </view>
 
       <!-- 档位：10 / 20 / 50 名自由切换 -->

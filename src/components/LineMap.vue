@@ -221,7 +221,7 @@
           confirm-type="search"
           @confirm="doSearchMap"
         />
-        <view class="ctrl-go" @click="doSearchMap">查询</view>
+        <view class="ctrl-go" @click="doSearchMap">🔍 查询</view>
       </view>
 
       <!-- 走向提示：线路态计算中/失败时才显示，不占无效位置 -->
