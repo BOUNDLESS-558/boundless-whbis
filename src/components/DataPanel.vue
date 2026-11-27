@@ -49,19 +49,20 @@
           <view class="dv-grp" v-for="c in vehicleGroups" :key="c.company">
             <view class="dv-grp-head" @click="toggleCompany(c.company)">
               <text class="dv-grp-arrow">{{ expandedCompanies[c.company] ? '▾' : '▸' }}</text>
-              <text class="dv-grp-name">🏢 {{ c.short }}</text>
+              <image class="dv-grp-logo" :src="groupLogo" mode="aspectFit" />
+              <text class="dv-grp-name">{{ c.short }}</text>
               <text class="dv-grp-count">{{ c.fleets.length }} 条线路 · {{ c.count }} 辆</text>
             </view>
             <block v-if="expandedCompanies[c.company]">
               <!-- 第二级：车队（线路号） -->
-              <view class="dv-grp dv-grp-l2" v-for="f in c.fleets" :key="c.company + '|' + f.line">
-                <view class="dv-grp-head" @click="toggleFleet(c.company + '|' + f.line)">
-                  <text class="dv-grp-arrow">{{ expandedFleets[c.company + '|' + f.line] ? '▾' : '▸' }}</text>
+              <view class="dv-grp dv-grp-l2" v-for="f in c.fleets" :key="f.key">
+                <view class="dv-grp-head" @click="toggleFleet(f.key)">
+                  <text class="dv-grp-arrow">{{ expandedFleets[f.key] ? '▾' : '▸' }}</text>
                   <text class="dv-grp-name">🚏 {{ f.line }}</text>
                   <text class="dv-grp-count">{{ f.count }} 辆</text>
                 </view>
                 <!-- 第三级：车辆 -->
-                <block v-if="expandedFleets[c.company + '|' + f.line]">
+                <block v-if="expandedFleets[f.key]">
                   <view class="dv-pick" v-for="v in f.buses" :key="v.orgId"
                     :title="`${v.full || fmtNo(v.orgId)} · ${v.model || busModel(v.orgId) || '车型未知'} · ${f.line}路 · ${c.short}（点击查看该车档案）`"
                     @click="pickVehicle(v)"
@@ -385,6 +386,7 @@ export default {
     },
     filteredCount() { return this.apiMode ? this.total : this.localFiltered.length },
     // 车辆列表按输入过滤：完整编号 / 纯数字 / 公司 / 线路
+    groupLogo() { return assetUrl('/static/img/logo.png') },
     filteredVehicles() {
       const kw = String(this.vehicleQuery || '').trim().toLowerCase()
       if (!kw) return this.vehicleList
@@ -400,8 +402,7 @@ export default {
     allGroupsOpen() {
       const groups = this.vehicleGroups
       if (!groups.length) return false
-      return groups.every((c) => this.expandedCompanies[c.company]
-        && c.fleets.every((f) => this.expandedFleets[c.company + '|' + f.line]))
+      return groups.every((c) => this.expandedCompanies[c.company])
     },
     // 三级分组：营运公司 → 车队（线路号）→ 车辆。基于过滤后的列表生成，搜索时自动收窄。
     vehicleGroups() {
@@ -419,9 +420,11 @@ export default {
         }
         c.count++
         const line = String(v.lineNo || '').trim() || '未分配线路'
-        let f = c.fleets.find((x) => x.line === line)
+        if (!c._fm) c._fm = new Map()
+        let f = c._fm.get(line)
         if (!f) {
-          f = { line, count: 0, buses: [] }
+          f = { line, key: company + '|' + line, count: 0, buses: [] }
+          c._fm.set(line, f)
           c.fleets.push(f)
         }
         f.count++
@@ -568,7 +571,8 @@ export default {
             }
           } catch (e) { console.warn('[DataPanel] 运营数据合并失败，仅显示映射表清单', e) }
         }
-        this.vehicleList = Array.from(byId.values())
+        // 冻结：上万条只读记录不做深度响应式代理，避免展开/折叠时卡顿
+        this.vehicleList = Object.freeze(Array.from(byId.values()).map((v) => Object.freeze(v)))
       } catch (e) {
         console.warn('[DataPanel] 车辆列表加载失败', e)
         uni.showToast({ title: '车辆列表加载失败', icon: 'none' })
@@ -592,15 +596,15 @@ export default {
     },
     // 一键展开/收起全部分组
     toggleAllGroups() {
+      // 性能：只展开公司级（线路级按需点开），一次性整体替换对象，避免逐 key 触发响应式与上千行同时渲染
+      if (this._toggleLock) return
+      this._toggleLock = true
+      setTimeout(() => { this._toggleLock = false }, 250)
       const next = !this.allGroupsOpen
-      this.expandedCompanies = {}
+      const m = {}
+      if (next) for (const c of this.vehicleGroups) m[c.company] = true
       this.expandedFleets = {}
-      if (next) {
-        for (const c of this.vehicleGroups) {
-          this.expandedCompanies[c.company] = true
-          for (const k of c.keys) this.expandedFleets[k] = true
-        }
-      }
+      this.expandedCompanies = m
     },
     // 车辆档案查询：完整自编号 → 纯数字 orgId → API view=vehicle；也可直接传 orgId
     async loadVehicle(directOrgId) {
@@ -851,6 +855,7 @@ export default {
 .dv-grp-head { display: flex; align-items: center; gap: 10rpx; padding: 16rpx 10rpx; background: rgba(120,160,220,0.06); cursor: pointer; }
 .dv-grp-l2 .dv-grp-head { background: rgba(120,160,220,0.03); }
 .dv-grp-arrow { flex: 0 0 auto; color: var(--ac-hi); font-size: 20rpx; width: 24rpx; }
+.dv-grp-logo { width: 32rpx; height: 32rpx; margin-right: 8rpx; flex-shrink: 0; border-radius: 50%; }
 .dv-grp-name { flex: 0 1 auto; min-width: 0; font-size: 22rpx; font-weight: 700; color: #e8edf6; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .dv-grp-count { flex: 0 0 auto; margin-left: auto; font-size: 18rpx; color: #9aa6bd; }
 .dv-list-ops { display: flex; gap: 10rpx; }
