@@ -207,7 +207,7 @@ const COLUMNS = [
   { key: 'orgId', label: '自编号', cls: 'org' },
   { key: 'recordedAt', label: '记录时间', cls: 'record' },
   { key: 'maxSpeed', label: '最高车速', cls: 'speed' },
-  { key: 'speedCount', label: '超速', cls: 'over' },
+  { key: 'speedCount', label: '今日超速', cls: 'over', title: '当天被抓到超速的累计次数' },
 ]
 
 function normalize(r, daily = false) {
@@ -568,12 +568,12 @@ export default {
 .dp-item-head { display: flex; align-items: center; flex-wrap: wrap; gap: 8rpx 12rpx; padding: 14rpx 8rpx; cursor: pointer; }
 .dp-item-head:hover { background: rgba(120,160,220,0.06); }
 .dp-cell { font-size: 22rpx; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.dp-cell.company { flex: 1 1 150rpx; }
-.dp-cell.line { flex: 0 0 84rpx; font-weight: 700; }
-.dp-cell.org { flex: 0 0 150rpx; }
-.dp-cell.record { flex: 1 1 210rpx; font-size: 19rpx; color: #9aa6bd; }
-.dp-cell.speed { flex: 0 0 120rpx; font-weight: 700; }
-.dp-cell.over { flex: 0 0 210rpx; display: flex; align-items: center; gap: 6rpx; }
+.dp-cell.company { flex: 0 0 132rpx; }
+.dp-cell.line { flex: 0 0 100rpx; font-weight: 700; }
+.dp-cell.org { flex: 0 0 176rpx; }
+.dp-cell.record { flex: 1 1 200rpx; font-size: 19rpx; color: #9aa6bd; }
+.dp-cell.speed { flex: 0 0 132rpx; font-weight: 700; }
+.dp-cell.over { flex: 0 0 250rpx; display: flex; align-items: center; gap: 8rpx; }
 .dp-cell.arrow { flex: 0 0 28rpx; text-align: center; color: #9aa6bd; font-size: 20rpx; }
 /* 真表头：与 .dp-item-head 完全相同的 flex 布局 + 同一套 .dp-cell 宽度与窄屏 order，
    保证换行后表头列仍与数据格逐列对齐 */

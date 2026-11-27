@@ -193,12 +193,13 @@ const UPSERT_DAILY = `
     line_no = EXCLUDED.line_no,
     company = EXCLUDED.company,
     max_speed = GREATEST(vehicle_ops_daily.max_speed, EXCLUDED.max_speed),
-    speed_count = GREATEST(vehicle_ops_daily.speed_count, EXCLUDED.speed_count),
+    -- 天累计：每轮采集若超速则 +1（单轮 speed_count 为 0/1），不再取 MAX（永远只显示 1）
+    speed_count = vehicle_ops_daily.speed_count + EXCLUDED.speed_count,
     online_at = LEAST(
       COALESCE(NULLIF(vehicle_ops_daily.online_at, ''), EXCLUDED.online_at), EXCLUDED.online_at
     ),
     offline_at = GREATEST(vehicle_ops_daily.offline_at, EXCLUDED.offline_at),
-    departures = GREATEST(vehicle_ops_daily.departures, EXCLUDED.departures),
+    departures = vehicle_ops_daily.departures + EXCLUDED.departures,
     transfers = EXCLUDED.transfers,
     lines = EXCLUDED.lines,
     samples = GREATEST(vehicle_ops_daily.samples, EXCLUDED.samples),
