@@ -575,7 +575,7 @@
         <view class="sr-line">
           <text class="sr-dot sr-start" title="起点站"></text>
           <text class="sr-name sr-from" :title="sheetRoute.from">{{ sheetRoute.from }}</text>
-          <text class="sr-dash"></text>
+          <text class="sr-dash">→</text>
           <text class="sr-name sr-to" :title="sheetRoute.to">{{ sheetRoute.to }}</text>
           <text class="sr-dot sr-end" title="终点站"></text>
         </view>
@@ -635,7 +635,7 @@
 
     <!-- 站点详情窗：点站名 / 站点圆点弹出（与车辆详情窗同一套玻璃浮窗与拖拽交互，
          class 保留 bus-sheet 以复用 bindSheetDrag/clampSheetPos 的 DOM 查找；两窗互斥同显） -->
-    <view class="bus-sheet stop-sheet" v-if="selectedStop" :class="{ pinned: sheetPinned, dragging: sheetDragging }" :style="sheetStyle">
+    <view class="bus-sheet stop-sheet" v-if="selectedStop" :class="[stopDirCls, { pinned: sheetPinned, dragging: sheetDragging }]" :style="sheetStyle">
       <view
         class="sheet-head"
         :title="sheetPinned ? '已固定，点 📌 解锁后可拖动' : '按住标题栏拖动窗口'"
@@ -661,7 +661,7 @@
       </view>
       <!-- 方向 / 所属线路 / 换乘条数合并成一行元信息，省掉两行左右分栏 -->
       <view class="sheet-sub">
-        <text class="ss-tag">{{ dirLabel(selectedStop.dir) }} · {{ stopLineLabel }}</text>
+        <view class="ss-tag"><text class="ss-dot"></text><text class="ss-tag-t">{{ dirLabel(selectedStop.dir) }} · {{ stopLineLabel }}</text></view>
         <text class="ss-org">{{ stopLinesBusy ? '全市线网匹配中…' : stopLines.length + ' 条可换乘 · 点击切换' }}</text>
       </view>
       <!-- 换乘线路：两列卡片网格。10 条左右一屏看全，不必逐条滚动；
@@ -1213,6 +1213,13 @@ export default {
     },
     // 车辆窗方向类：顶缘方向光线 / 走向线颜色随上行青蓝、下行玫红、环线紫罗兰。
     // 全市态点开别线的车时宿主 lineName 为空，按车辆自己的线路号补判环线
+    // 站点窗与车辆窗同一套方向语言：顶部发光条 / 徽标 / 强调色随上行·下行·环线切换
+    stopDirCls() {
+      const s = this.selectedStop
+      if (!s) return ''
+      if (this.isLoop) return 'dir-loop'
+      return s.dir === 1 ? 'dir-1' : 'dir-0'
+    },
     sheetDirCls() {
       const b = this.selectedBus
       if (!b) return ''
@@ -6120,25 +6127,23 @@ export default {
   font-weight: 600;
   color: #eef1ff;
 }
-/* 起站名按内容宽排，虚线吃掉剩余宽度；终站名不被挤压（可换行截断） */
-.sr-from {
-  flex: 0 1 auto;
-  max-width: 40%;
-}
+/* 起讫站紧挨排列：起站 → 终站连成一句，长名各自截断 */
+.sr-from,
 .sr-to {
-  flex: 1 1 0;
-  text-align: right;
-}
-/* 行程虚线：填充起讫站之间的剩余空间，颜色随当前方向 */
-.sr-dash {
   flex: 0 1 auto;
-  width: 40rpx;
-  height: 0;
-  border-top: 2rpx dashed rgba(255, 255, 255, 0.28);
+  max-width: 45%;
 }
-.dir-0 .sr-dash { border-top-color: rgba(34, 211, 238, 0.55); }
-.dir-1 .sr-dash { border-top-color: rgba(251, 113, 133, 0.55); }
-.dir-loop .sr-dash { border-top-color: rgba(167, 139, 250, 0.55); }
+/* 行程箭头：紧贴起讫站，颜色随当前方向 */
+.sr-dash {
+  flex: 0 0 auto;
+  font-size: 22rpx;
+  font-weight: 700;
+  line-height: 1;
+  color: rgba(255, 255, 255, 0.45);
+}
+.dir-0 .sr-dash { color: rgba(34, 211, 238, 0.9); }
+.dir-1 .sr-dash { color: rgba(251, 113, 133, 0.9); }
+.dir-loop .sr-dash { color: rgba(167, 139, 250, 0.9); }
 /* —— 遥测主带：车速大数字 + 分档刻度尺 ｜ 呼吸状态灯 —— */
 .sheet-tele {
   display: flex;
@@ -6958,4 +6963,44 @@ export default {
     display: none;
   }
 }
+
+/* —— 站点换乘窗：与车辆详情窗统一风格（方向发光条 / 方向色元信息 / 分区细线 / 卡片化） —— */
+.stop-sheet .sheet-sub { padding: 14rpx 0 12rpx; border-bottom: 1rpx solid rgba(255, 255, 255, 0.06); }
+.stop-sheet .ss-tag { display: inline-flex; align-items: center; gap: 10rpx; background: transparent; border: none; padding: 0; color: #eef1ff; font-size: 22rpx; }
+.stop-sheet .ss-tag-t { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ss-dot { flex: 0 0 auto; width: 18rpx; height: 18rpx; border-radius: 50%; background: #22d3ee; box-shadow: 0 0 0 3rpx rgba(34, 211, 238, 0.22); }
+.stop-sheet.dir-1 .ss-dot { background: #fb7185; box-shadow: 0 0 0 3rpx rgba(251, 113, 133, 0.22); }
+.stop-sheet.dir-loop .ss-dot { background: #a78bfa; box-shadow: 0 0 0 3rpx rgba(167, 139, 250, 0.22); }
+.stop-sheet.dir-0 .ss-org { color: #a5f3fc; background: rgba(34, 211, 238, 0.12); border-color: rgba(34, 211, 238, 0.4); }
+.stop-sheet.dir-1 .ss-org { color: #fecdd3; background: rgba(251, 113, 133, 0.12); border-color: rgba(251, 113, 133, 0.4); }
+.stop-sheet.dir-loop .ss-org { color: #ddd6fe; background: rgba(167, 139, 250, 0.12); border-color: rgba(167, 139, 250, 0.4); }
+.stop-sheet .st-chip { border-radius: 20rpx; border-color: rgba(255, 255, 255, 0.08); background: rgba(255, 255, 255, 0.035); box-shadow: inset 0 1rpx 0 rgba(255, 255, 255, 0.06); }
+.stop-sheet .st-chip::before { display: none; }
+.stop-sheet .st-to { font-size: 19rpx; font-weight: 500; color: rgba(255, 255, 255, 0.4); letter-spacing: 0.5rpx; }
+.stop-sheet .st-dest { font-size: 24rpx; font-weight: 700; color: #ffffff; }
+.stop-sheet .st-chip.cur { border-color: rgba(252, 211, 77, 0.55); background: linear-gradient(145deg, rgba(252, 211, 77, 0.14), rgba(251, 191, 36, 0.04)); }
+
+/* —— 统一面板风格（见 AGENTS.md「悬浮面板 UI 风格规范」）：实时车辆 / 发车时刻 / 左上控制卡 —— */
+.panel,
+.plan-side,
+.ctrl { background: linear-gradient(180deg, rgba(255,255,255,0.065) 0, rgba(255,255,255,0.016) 68rpx, transparent 156rpx), rgba(11, 16, 32, 0.88); border: 2rpx solid rgba(255, 255, 255, 0.16); box-shadow: 0 24rpx 64rpx rgba(0, 0, 0, 0.5), inset 0 1rpx 0 rgba(255, 255, 255, 0.18); }
+.panel, .plan-side { border-radius: 32rpx; }
+.panel::before,
+.plan-side::before,
+.ctrl::before { content: ''; position: absolute; top: 0; left: 24rpx; right: 24rpx; height: 4rpx; border-radius: 0 0 6rpx 6rpx; pointer-events: none; z-index: 1; background: linear-gradient(90deg, rgba(var(--ac-rgb), 0.1), rgba(var(--ac-rgb), 0.9) 30%, rgba(var(--ac-rgb), 0.9) 70%, rgba(var(--ac-rgb), 0.1)); box-shadow: 0 0 12rpx rgba(var(--ac-rgb), 0.4); }
+.panel-title { font-size: 34rpx; font-weight: 800; letter-spacing: 0.5rpx; text-shadow: 0 2rpx 6rpx rgba(0, 0, 0, 0.3); }
+.panel-tools { padding-bottom: 14rpx; border-bottom: 1rpx solid rgba(255, 255, 255, 0.06); }
+
+/* 自编号查车：统一面板风格 */
+.org-search { background: linear-gradient(180deg, rgba(255,255,255,0.065) 0, rgba(255,255,255,0.016) 68rpx, transparent 156rpx), rgba(11, 16, 32, 0.88); border: 2rpx solid rgba(255, 255, 255, 0.16); border-radius: 32rpx; box-shadow: 0 24rpx 64rpx rgba(0, 0, 0, 0.5), inset 0 1rpx 0 rgba(255, 255, 255, 0.18); }
+.org-search::before { content: ''; position: absolute; top: 0; left: 24rpx; right: 24rpx; height: 4rpx; border-radius: 0 0 6rpx 6rpx; pointer-events: none; z-index: 1; background: linear-gradient(90deg, rgba(var(--ac-rgb), 0.1), rgba(var(--ac-rgb), 0.9) 30%, rgba(var(--ac-rgb), 0.9) 70%, rgba(var(--ac-rgb), 0.1)); box-shadow: 0 0 12rpx rgba(var(--ac-rgb), 0.4); }
+.os-head { border-bottom-width: 1rpx; border-bottom-color: rgba(255, 255, 255, 0.06); }
+.os-title { font-size: 34rpx; letter-spacing: 0.5rpx; text-shadow: 0 2rpx 6rpx rgba(0, 0, 0, 0.3); }
+.os-close { width: 56rpx; min-width: 56rpx; height: 56rpx; padding: 0; border-radius: 50%; font-size: 26rpx; border: 2rpx solid transparent; }
+.os-input { border-radius: 999rpx; padding: 0 28rpx; transition: border-color 0.18s, box-shadow 0.18s; }
+.os-input:focus { border-color: rgba(var(--ac-rgb), 0.6); box-shadow: 0 0 0 4rpx rgba(var(--ac-rgb), 0.16); background: rgba(255, 255, 255, 0.09); }
+.os-go { border-radius: 999rpx; }
+.os-row { border-radius: 20rpx; border-color: rgba(255, 255, 255, 0.08); background: rgba(255, 255, 255, 0.035); box-shadow: inset 0 1rpx 0 rgba(255, 255, 255, 0.06); }
+.os-row:active { transform: scale(0.985); }
+.os-count-key { border-radius: 999rpx; }
 </style>

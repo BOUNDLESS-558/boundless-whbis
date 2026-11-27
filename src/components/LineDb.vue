@@ -957,4 +957,10 @@ export default {
   border-color: transparent;
   background: linear-gradient(135deg, var(--ac), var(--ac-2));
 }
+
+/* 统一面板风格：玻璃底 + 顶部强调色发光条 + 搜索凹槽聚焦描边 */
+.db-mod:not(.plain) { background: linear-gradient(180deg, rgba(255,255,255,0.065) 0, rgba(255,255,255,0.016) 68rpx, transparent 156rpx), rgba(11, 16, 32, 0.88); border: 2rpx solid rgba(255, 255, 255, 0.16); box-shadow: 0 24rpx 64rpx rgba(0, 0, 0, 0.5), inset 0 1rpx 0 rgba(255, 255, 255, 0.18); border-radius: 32rpx; }
+.db-mod:not(.plain)::before { content: ''; position: absolute; top: 0; left: 24rpx; right: 24rpx; height: 4rpx; border-radius: 0 0 6rpx 6rpx; pointer-events: none; z-index: 1; background: linear-gradient(90deg, rgba(var(--ac-rgb), 0.1), rgba(var(--ac-rgb), 0.9) 30%, rgba(var(--ac-rgb), 0.9) 70%, rgba(var(--ac-rgb), 0.1)); box-shadow: 0 0 12rpx rgba(var(--ac-rgb), 0.4); }
+.db-search { border-radius: 999rpx; transition: border-color 0.18s, background 0.18s, box-shadow 0.18s; }
+.db-search:focus-within { background: rgba(255, 255, 255, 0.09); border-color: rgba(var(--ac-rgb), 0.6); box-shadow: 0 0 0 4rpx rgba(var(--ac-rgb), 0.16); }
 </style>

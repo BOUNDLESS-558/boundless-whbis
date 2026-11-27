@@ -785,4 +785,13 @@ export default {
   background: rgba(100, 116, 139, 0.16);
   border-color: rgba(148, 163, 184, 0.34);
 }
+
+/* 统一面板风格：玻璃底 + 顶部强调色发光条 + 胶囊搜索框 / 分段 */
+.mod:not(.is-plain) { background: linear-gradient(180deg, rgba(255,255,255,0.065) 0, rgba(255,255,255,0.016) 68rpx, transparent 156rpx), rgba(11, 16, 32, 0.88); border: 2rpx solid rgba(255, 255, 255, 0.16); box-shadow: 0 24rpx 64rpx rgba(0, 0, 0, 0.5), inset 0 1rpx 0 rgba(255, 255, 255, 0.18); border-radius: 32rpx; }
+.mod:not(.is-plain)::before { content: ''; position: absolute; top: 0; left: 24rpx; right: 24rpx; height: 4rpx; border-radius: 0 0 6rpx 6rpx; pointer-events: none; z-index: 1; background: linear-gradient(90deg, rgba(var(--ac-rgb), 0.1), rgba(var(--ac-rgb), 0.9) 30%, rgba(var(--ac-rgb), 0.9) 70%, rgba(var(--ac-rgb), 0.1)); box-shadow: 0 0 12rpx rgba(var(--ac-rgb), 0.4); }
+.search-groove, .seg-groove { border-radius: 999rpx; }
+.seg-tab, .search-btn { border-radius: 999rpx; }
+.search-groove { transition: border-color 0.18s, background 0.18s, box-shadow 0.18s; }
+.search-groove:focus-within { border-color: rgba(var(--ac-rgb), 0.6); box-shadow: 0 0 0 4rpx rgba(var(--ac-rgb), 0.16); }
+.seg-tab.on { box-shadow: 0 6rpx 16rpx rgba(var(--ac-rgb), 0.35), inset 0 1rpx 0 rgba(255, 255, 255, 0.25); }
 </style>

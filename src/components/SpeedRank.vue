@@ -759,4 +759,17 @@ export default {
   color: rgba(255, 255, 255, 0.36);
 }
 .rank-foot-warn { color: #fbbf24; }
+
+/* —— 统一面板风格（AGENTS.md「悬浮面板 UI 风格规范」） —— */
+.rank-card { background: linear-gradient(180deg, rgba(255,255,255,0.065) 0, rgba(255,255,255,0.016) 68rpx, transparent 156rpx), rgba(11, 16, 32, 0.88); border: 2rpx solid rgba(255, 255, 255, 0.16); border-radius: 32rpx; box-shadow: 0 24rpx 64rpx rgba(0, 0, 0, 0.5), inset 0 1rpx 0 rgba(255, 255, 255, 0.18); }
+.rank-card::before { content: ''; position: absolute; top: 0; left: 24rpx; right: 24rpx; height: 4rpx; border-radius: 0 0 6rpx 6rpx; pointer-events: none; z-index: 1; background: linear-gradient(90deg, rgba(var(--ac-rgb), 0.1), rgba(var(--ac-rgb), 0.9) 30%, rgba(var(--ac-rgb), 0.9) 70%, rgba(var(--ac-rgb), 0.1)); box-shadow: 0 0 12rpx rgba(var(--ac-rgb), 0.4); }
+.rank-head { border-bottom-width: 1rpx; border-bottom-color: rgba(255, 255, 255, 0.06); }
+.rank-title { font-size: 34rpx; letter-spacing: 0.5rpx; text-shadow: 0 2rpx 6rpx rgba(0, 0, 0, 0.3); }
+.rank-mini:not(.fold-btn) { width: 56rpx; min-width: 56rpx; height: 56rpx; padding: 0; border-radius: 50%; font-size: 26rpx; border: 2rpx solid transparent; }
+.rank-mode, .rank-limit { border-radius: 999rpx; }
+.rank-mode.on, .rank-limit.on { box-shadow: 0 6rpx 16rpx rgba(var(--ac-rgb), 0.3), inset 0 1rpx 0 rgba(255, 255, 255, 0.22); }
+.rk-line-input { border-radius: 999rpx; transition: border-color 0.18s, box-shadow 0.18s; }
+.rk-line-input:focus { border-color: rgba(var(--ac-rgb), 0.6); box-shadow: 0 0 0 4rpx rgba(var(--ac-rgb), 0.16); background: rgba(255, 255, 255, 0.09); }
+.rk-line-go { border-radius: 999rpx; background: linear-gradient(135deg, var(--ac), var(--ac-2)); border: none; color: #fff; }
+.rank-row { border-bottom-width: 1rpx; }
 </style>

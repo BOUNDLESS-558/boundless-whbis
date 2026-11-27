@@ -22,8 +22,8 @@
           :class="{ on: pinned }"
           @click.stop="togglePin"
           :title="pinned ? '取消固定（恢复原拖动）' : '固定位置（锁定拖动）'"
-        >📌 {{ pinned ? '解锁' : '固定' }}</view>
-        <view class="fw-close" @click.stop="close" title="关闭">✕ 关闭</view>
+        >📌</view>
+        <view class="fw-close" @click.stop="close" title="关闭">✕</view>
       </view>
     </view>
     <view class="fw-body">
@@ -407,4 +407,21 @@ export default {
   padding: 20rpx 12rpx 24rpx;
   box-sizing: border-box;
 }
+
+/* —— 与车辆详情窗（.bus-sheet）统一：顶部强调色发光条 / 大号白色标题 / 圆形图标按钮 —— */
+.float-win::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 24rpx;
+  right: 24rpx;
+  height: 4rpx;
+  border-radius: 0 0 6rpx 6rpx;
+  pointer-events: none;
+  background: linear-gradient(90deg, rgba(var(--ac-rgb), 0.1), rgba(var(--ac-rgb), 0.9) 30%, rgba(var(--ac-rgb), 0.9) 70%, rgba(var(--ac-rgb), 0.1));
+  box-shadow: 0 0 12rpx rgba(var(--ac-rgb), 0.4);
+}
+.fw-title { font-size: 34rpx; text-shadow: 0 2rpx 6rpx rgba(0, 0, 0, 0.3); }
+.fw-pin,
+.fw-close { width: 56rpx; padding: 0; border-radius: 50%; font-size: 26rpx; }
 </style>

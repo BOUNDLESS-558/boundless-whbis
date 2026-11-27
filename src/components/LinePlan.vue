@@ -603,4 +603,7 @@ export default {
   color: rgba(255, 255, 255, 0.5);
   font-size: 26rpx;
 }
+
+/* 统一面板风格：大号白色标题 + 细线分区 */
+.plan-title { font-size: 34rpx; font-weight: 800; letter-spacing: 0.5rpx; text-shadow: 0 2rpx 6rpx rgba(0, 0, 0, 0.3); }
 </style>
