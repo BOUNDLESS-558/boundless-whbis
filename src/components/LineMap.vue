@@ -710,6 +710,7 @@
 </template>
 
 <script>
+import { markRaw as _markRaw } from 'vue'
 import { fetchRealTime, fetchLine, decryptBusId, onBusIdReady } from '../utils/api.js'
 import { fetchRoadRoute } from '../utils/osrm.js'
 import { APP_CONFIG, buildLineCode, useNativeMap } from '../config.js'
@@ -733,6 +734,9 @@ import {
 } from '../utils/settings.js'
 import { cleanStops, dedupLegacyStops, pointsOf, fromFlat } from '../utils/routeClean.js'
 import { loadLineAsset, assetDir } from '../utils/lineAsset.js'
+// 渲染层数组每次整体替换、从不就地修改：跳过 Vue 深度代理，减少大数组的响应式开销（卡顿主因之一）。
+// 冻结/不可扩展对象无法打标记，原样返回。
+const markRaw = (v) => (v && typeof v === 'object' && Object.isExtensible(v) ? _markRaw(v) : v)
 import { orgCompanyOf, routeOf } from '../utils/speedRank.js'
 import { formatBusNo, getBusModel, onBusNumberReady } from '../utils/busNumber.js'
 import { copyTable } from '../utils/clipboard.js'
@@ -2208,7 +2212,7 @@ export default {
       const sig = next.map((t) => `${t.key}@${t.left},${t.top},${t.size}`).join('|')
       if (sig !== this._tileSig) {
         this._tileSig = sig
-        this.tiles = next
+        this.tiles = markRaw(next)
       }
     },
     // 高德官方公交线路真实轨迹：LineSearch 按线路名搜索，用各方向首站坐标就近匹配，返回 {0: pts, 1: pts}（GCJ-02）
@@ -2775,7 +2779,7 @@ export default {
           }
         }
       }
-      this.cityNetPaths = paths
+      this.cityNetPaths = markRaw(paths)
     },
     // 自编号标签（自绘模式）：只在近景出现，并做像素级避让，数量封顶。
     // mode 0=关闭 1=仅自编号 2=自编号+线路号（337 · 319N2379）
@@ -2881,7 +2885,7 @@ export default {
         count: snap.count,
         partial: !!snap.partial,
       }
-      this.cityBuses = snap.buses || []
+      this.cityBuses = markRaw((snap.buses || []).map((b) => markRaw(b)))
       // 常驻查车窗：快照刷新后按当前输入重算（首屏恢复的输入此时才有数据可匹配）
       if (this.orgSearchInput) this.doOrgSearch()
       // 详情窗可能开着上一批的对象，跟到新对象上，跟不到就关掉
@@ -3665,7 +3669,7 @@ export default {
           d: smoothPath(sampled, snapped),
         })
       })
-      this.svgRoutes = routes
+      this.svgRoutes = markRaw(routes)
 
       // 2) 车辆标签位置先算：车号在圆点上方且彼此错开，站名避让需要用到最终位置
       const usedBusLabel = []
@@ -3765,8 +3769,8 @@ export default {
           })
         })
       })
-      this.svgStops = stops
-      this.labelStops = labels
+      this.svgStops = markRaw(stops)
+      this.labelStops = markRaw(labels)
 
       // 箭头位置：按屏幕像素间距等距放置（放大后自动变密），间隔 70px。
       // 放在站点算好之后：若箭头中心正落在任一站点圆点上就跳过，避免与站点标记重叠。
@@ -3795,10 +3799,10 @@ export default {
           cumDist += segLen / 2
         }
       })
-      this.routeArrows = arrows
+      this.routeArrows = markRaw(arrows)
 
       // 4) 车辆（圆点 + 已算好的车号位置）
-      this.svgBuses = this.shownBuses.map((b, i) => {
+      this.svgBuses = markRaw(this.shownBuses.map((b, i) => {
         const p = busPts[i]
         const dirTxt = b.dir === 0 ? '上行' : '下行'
         return {
@@ -3815,7 +3819,7 @@ export default {
           located: this.locatedBus === b,
           bus: b,
         }
-      })
+      }))
 
       // 5) 兜底避让：站名文本框与车号、其他站名重叠时让位（首末站上下微移保留，其余直接丢弃）
       const busBoxes = this.svgBuses.map((b) => {
@@ -3825,7 +3829,7 @@ export default {
         // .bus-label 已设 line-height:1，-200% 位移后占据 [labelY-22, labelY-11]
         return { x1, x2: x1 + bw, y1: b.labelY - 23, y2: b.labelY - 10 }
       })
-      this.labelStops = (() => {
+      this.labelStops = markRaw((() => {
         const out = []
         const taken = []
         const boxOf = (s, ly) => {
@@ -3850,9 +3854,9 @@ export default {
           out.push(s)
         })
         return out
-      })()
+      })())
 
-      this.gridLines = this.buildGrid(s, w, h)
+      this.gridLines = markRaw(this.buildGrid(s, w, h))
     },
     // 经纬网格：间距换算到像素后再取整档，随相机移动。
     // 有底图时不画（底图自带路网背景），免得两层线打架；线路态与全市态共用。
@@ -3910,7 +3914,7 @@ export default {
         located: !!c.bus && this.locatedBus === c.bus,
       }))
       this.cityTags = this.buildCityTags(this.cityDots)
-      this.gridLines = this.buildGrid(s, w, h)
+      this.gridLines = markRaw(this.buildGrid(s, w, h))
     },
     // 原生地图的标记点击（单击 / 双击都可，双击就是连点两次）。
     // ⚠ uni-h5 的 markertap 是自定义事件：normalizeCustomEvent 只返回 { type, timeStamp, target, currentTarget, detail }，
