@@ -995,4 +995,13 @@ export default {
 .db-pop-btns .db-pbtn { flex: 1; border-radius: 999rpx; padding: 18rpx 0; text-align: center; font-size: 26rpx; font-weight: 700; }
 .db-pop-btns .db-pbtn.primary { color: #fff; background: linear-gradient(135deg, var(--ac), var(--ac-2)); border: none; box-shadow: 0 6rpx 18rpx rgba(var(--ac-rgb), 0.35); }
 .db-pop-btns .db-pbtn:active { transform: scale(0.97); }
+
+/* 线路编号徽标跟随主题色（取代固定青色渐变）；营运中/已收班/已停运的状态色不变 */
+.db-no,
+.db-pop-no {
+  color: #fff !important;
+  background: linear-gradient(135deg, var(--ac), var(--ac-2)) !important;
+  box-shadow: 0 4rpx 14rpx rgba(var(--ac-rgb), 0.35), inset 0 1rpx 0 rgba(255, 255, 255, 0.28);
+  text-shadow: 0 1rpx 3rpx rgba(0, 0, 0, 0.25);
+}
 </style>

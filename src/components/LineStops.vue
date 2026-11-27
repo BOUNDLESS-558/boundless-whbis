@@ -910,10 +910,10 @@ export default {
   line-height: 1.1;
   letter-spacing: 1rpx;
   font-variant-numeric: tabular-nums;
-  color: #062a33;
+  color: #fff;
   border-radius: 20rpx;
-  background: linear-gradient(135deg, #67e8f9, #06b6d4);
-  box-shadow: 0 10rpx 26rpx rgba(6, 182, 212, 0.32), inset 0 1rpx 0 rgba(255, 255, 255, 0.34);
+  background: linear-gradient(135deg, var(--ac), var(--ac-2));
+  box-shadow: 0 10rpx 26rpx rgba(var(--ac-rgb), 0.35), inset 0 1rpx 0 rgba(255, 255, 255, 0.34);
 }
 .line-badge.down {
   color: #fff;
