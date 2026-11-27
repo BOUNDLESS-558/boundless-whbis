@@ -295,7 +295,7 @@ import { attachDropdown } from '../utils/dropdown.js'
 import { companyKeyOfNo, orgInfo } from '../utils/companies.js'
 import { isLoopLine } from '../utils/lineIndex.js'
 import { assetUrl } from '../utils/asset.js'
-import { formatBusNo, onBusNumberReady } from '../utils/busNumber.js'
+import { formatBusNo, getBusModel, onBusNumberReady } from '../utils/busNumber.js'
 import FavStar from './FavStar.vue'
 import CopyPill from './CopyPill.vue'
 
@@ -475,6 +475,10 @@ export default {
       void this.mapVersion
       return formatBusNo(orgId)
     },
+    busModel(orgId) {
+      void this.mapVersion
+      return getBusModel(orgId)
+    },
     // 刷新间隔下拉：展开权交给全站仲裁器，点复制胶囊等其它菜单时自动收起
     toggleRefreshMenu() { if (this._dd) this._dd.toggle() },
     closeRefreshMenu() { if (this._dd) this._dd.close() },
@@ -540,7 +544,7 @@ export default {
       const state = b.arrived === '1' ? '已到站' : '行驶中'
       const coord = b.lat != null && b.lng != null ? `${b.lat}, ${b.lng}` : '经纬度未知'
       return (
-        `${b.orgId ? this.fmtNo(b.orgId) : (b.busNo || '?')} · ${this.companyOf(b.orgId || b.busNo)}\n` +
+        `${b.orgId ? this.fmtNo(b.orgId) : (b.busNo || '?')} · ${this.busModel(b.orgId) || '车型未知'} · ${this.companyOf(b.orgId || b.busNo)}\n` +
         `所在站点：${stop.stopName || '未知站点'}\n` +
         `${b.time || '--'} · ${b.gpsSpeed != null ? b.gpsSpeed + 'km/h' : '--'} · ${state}\n` +
         coord
