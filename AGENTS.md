@@ -126,7 +126,6 @@ npm run build:h5       # 本地构建验证（部署由 Vercel 自动完成）
 | `probe-refresh.mjs 337 [PROBE_VIEW=stops]` | 刷新控件体检（map/stops 两视图），含结构/存储/真实请求节奏 |
 | `probe-osrm-legs.mjs 337 0` | 逐段垂距明细，调 OSRM 阈值时用 |
 | `probe-line-suggest.mjs` | 地图页线路号联想：面板定位/排序/命中总数/白名单（J1、G73 必须"未收录"）。**改 `lineIndex.js` 或搜索区后必跑** |
-| `probe-646-*.mjs` | 646 路专项（direct/offset/quality/render/v4/verify），排查该线路走向/回环 |
 
 ## 线路库与线路号联想
 
