@@ -635,13 +635,13 @@ export const ACCENT_PRESETS = [
 ]
 
 /**
- * 扩展色：程序化铺满 HSL 色环，补足到总数 999 种。
+ * 扩展色：程序化铺满 HSL 色环，补足到总数 1500 种。
  * 手工精选项（上面 537 条）全部保留在前；扩展项 key 为 xNNN、label「扩展 NNN」，
  * 每项按 HSL 自动打上 cat 分类标签，融入设置面板现有颜色分类（不再单列「扩展」）。
- * 生成在模块加载时完成（462 次简单 HSL→RGB，耗时可忽略），不写死进源码。
+ * 生成在模块加载时完成（963 次简单 HSL→RGB，耗时可忽略），不写死进源码。
  */
-;(function fillAccentTo999() {
-  const TARGET = 999
+;(function fillAccentTo1500() {
+  const TARGET = 1500
   // hsl → hex：h 0~360、s/l 0~100
   const hslHex = (h, s, l) => {
     s /= 100; l /= 100
@@ -673,12 +673,12 @@ export const ACCENT_PRESETS = [
   const seenHex = new Set(ACCENT_PRESETS.map((p) => p.hex.toLowerCase()))
   let i = 0
   // 12 个色相 × 多档饱和度/明度，循环直到补满；跳过与手工项重复的 hex
-  const LIGHTS = [88, 76, 64, 52, 40, 28]
-  const SATS = [95, 78, 60, 42]
-  outer: for (let round = 0; round < 12; round++) {
+  const LIGHTS = [92, 88, 82, 76, 70, 64, 58, 52, 46, 40, 34, 28]
+  const SATS = [98, 88, 78, 68, 60, 50, 42, 32]
+  outer: for (let round = 0; round < 24; round++) {
     for (const l of LIGHTS) {
       for (const s of SATS) {
-        for (let hue = 0; hue < 360; hue += 30) {
+        for (let hue = 0; hue < 360; hue += 15) {
           if (ACCENT_PRESETS.length >= TARGET) break outer
           const h = (hue + round * 7) % 360
           const hex = hslHex(h, s, l)
@@ -1358,6 +1358,35 @@ export const FONT_OPTS = [
     key: 'en-round-hind', label: 'Hind', note: '英文圆体 · 柔和现代', family: "'Hind'",
     css: [FS5 + 'hind@5.1.0/400.css', FS5 + 'hind@5.1.0/700.css'],
   },
+
+  // ── 字体扩充（2026-11-27）：英文几何 / 衬线 / 等宽 / 展示 + 中文标题体 ──
+  // 英文无衬线（几何 / 人文）
+  { key: 'en-outfit', label: 'Outfit', note: '几何无衬线 · 现代清爽', family: "'Outfit'", css: [FS5 + 'outfit@5.2.0/400.css', FS5 + 'outfit@5.2.0/700.css'] },
+  { key: 'en-urbanist', label: 'Urbanist', note: '几何无衬线 · 都市感', family: "'Urbanist'", css: [FS5 + 'urbanist@5.2.0/400.css', FS5 + 'urbanist@5.2.0/700.css'] },
+  { key: 'en-manrope', label: 'Manrope', note: '人文无衬线 · 均衡易读', family: "'Manrope'", css: [FS5 + 'manrope@5.2.0/400.css', FS5 + 'manrope@5.2.0/700.css'] },
+  { key: 'en-dm-sans', label: 'DM Sans', note: '几何无衬线 · 简洁', family: "'DM Sans'", css: [FS5 + 'dm-sans@5.2.0/400.css', FS5 + 'dm-sans@5.2.0/700.css'] },
+  { key: 'en-plus-jakarta', label: 'Plus Jakarta Sans', note: '几何无衬线 · 圆润精致', family: "'Plus Jakarta Sans'", css: [FS5 + 'plus-jakarta-sans@5.2.0/400.css', FS5 + 'plus-jakarta-sans@5.2.0/700.css'] },
+  // 英文衬线
+  { key: 'en-lora', label: 'Lora', note: '衬线 · 优雅阅读', family: "'Lora'", css: [FS5 + 'lora@5.2.0/400.css', FS5 + 'lora@5.2.0/700.css'] },
+  { key: 'en-merriweather', label: 'Merriweather', note: '衬线 · 屏幕易读', family: "'Merriweather'", css: [FS5 + 'merriweather@5.2.0/400.css', FS5 + 'merriweather@5.2.0/700.css'] },
+  { key: 'en-source-serif', label: 'Source Serif 4', note: '衬线 · 现代编辑风', family: "'Source Serif 4'", css: [FS5 + 'source-serif-4@5.2.0/400.css', FS5 + 'source-serif-4@5.2.0/700.css'] },
+  // 英文等宽
+  { key: 'en-jetbrains', label: 'JetBrains Mono', note: '等宽 · 编程风', family: "'JetBrains Mono'", css: [FS5 + 'jetbrains-mono@5.2.0/400.css', FS5 + 'jetbrains-mono@5.2.0/700.css'] },
+  { key: 'en-ibm-plex', label: 'IBM Plex Mono', note: '等宽 · 工整清晰', family: "'IBM Plex Mono'", css: [FS5 + 'ibm-plex-mono@5.2.0/400.css', FS5 + 'ibm-plex-mono@5.2.0/700.css'] },
+  { key: 'en-source-code', label: 'Source Code Pro', note: '等宽 · 经典', family: "'Source Code Pro'", css: [FS5 + 'source-code-pro@5.2.0/400.css', FS5 + 'source-code-pro@5.2.0/700.css'] },
+  // 英文展示 / 手写
+  { key: 'en-fredoka', label: 'Fredoka', note: '圆润展示 · 活泼', family: "'Fredoka'", css: [FS5 + 'fredoka@5.2.0/400.css', FS5 + 'fredoka@5.2.0/700.css'] },
+  { key: 'en-righteous', label: 'Righteous', note: '展示粗体 · 复古未来', family: "'Righteous'", css: [FS5 + 'righteous@5.1.0/400.css'] },
+  { key: 'en-bungee-shade', label: 'Bungee Shade', note: '展示 · 街头风', family: "'Bungee Shade'", css: [FS5 + 'bungee-shade@5.2.0/400.css'] },
+  // 中文标题 / 特色（cn-fontsource 分片）
+  { key: 'cn-title-zcool', label: '站酷快乐体', note: '中文标题 · 圆润活泼', family: "'ZCOOL KuaiLe'", css: [FS5 + 'zcool-kuaile@5.1.0/400.css'] },
+  { key: 'cn-title-ma-shan', label: '马善政毛笔', note: '中文书法 · 大气', family: "'Ma Shan Zheng'", css: [FS5 + 'ma-shan-zheng@5.1.0/400.css'] },
+  { key: 'cn-title-zhi-mang', label: '志莽行书', note: '中文行书 · 洒脱', family: "'Zhi Mang Xing'", css: [FS5 + 'zhi-mang-xing@5.1.0/400.css'] },
+  { key: 'cn-title-liu-jian', label: '刘建毛楷', note: '中文楷书 · 古朴', family: "'Liu Jian Mao Cao'", css: [FS5 + 'liu-jian-mao-cao@5.1.0/400.css'] },
+  { key: 'cn-title-long-cang', label: '龙藏体', note: '中文标题 · 粗犷', family: "'Long Cang'", css: [FS5 + 'long-cang@5.1.0/400.css'] },
+  // 日文（免费商用，丰富多语言场景）
+  { key: 'jp-noto-sans', label: 'Noto Sans JP', note: '日文黑体 · 清晰', family: "'Noto Sans JP'", css: [FS5 + 'noto-sans-jp@5.1.0/400.css', FS5 + 'noto-sans-jp@5.1.0/700.css'] },
+  { key: 'jp-noto-serif', label: 'Noto Serif JP', note: '日文衬线 · 典雅', family: "'Noto Serif JP'", css: [FS5 + 'noto-serif-jp@5.1.0/400.css', FS5 + 'noto-serif-jp@5.1.0/700.css'] },
 ]
 
 export function getFont() {

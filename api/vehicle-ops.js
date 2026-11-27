@@ -267,9 +267,15 @@ export default async function handler(req, res) {
       if (token && req.headers['x-api-key'] !== token) {
         return res.status(401).json({ error: 'invalid api key' })
       }
+      // ?all=1 清空两张表（累计表 + 按日表），用于重新采集前重置数据
+      if (req.query?.all === '1') {
+        await sql`TRUNCATE TABLE vehicle_ops, vehicle_ops_daily`
+        return res.status(200).json({ ok: true, truncated: ['vehicle_ops', 'vehicle_ops_daily'] })
+      }
       const orgId = String((req.body && req.body.orgId) || req.query?.orgId || '')
       if (!orgId) return res.status(400).json({ error: 'orgId required' })
       await sql`DELETE FROM vehicle_ops WHERE org_id = ${orgId}`
+      await sql`DELETE FROM vehicle_ops_daily WHERE org_id = ${orgId}`
       return res.status(200).json({ ok: true, deleted: orgId })
     }
 
