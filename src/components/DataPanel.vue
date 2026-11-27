@@ -106,7 +106,11 @@
             <text>累计发车 {{ vehicleProfile.totalDepartures }} 次</text>
           </view>
         </view>
-        <scroll-view class="dv-timeline" scroll-y>
+        <view class="dv-empty" v-if="!vehicleProfile.days.length">
+          <text>📡 车辆信息暂未捕获到</text>
+          <text class="dv-empty-sub">该车尚未被采集到营运数据，上线运行后会自动回填</text>
+        </view>
+        <scroll-view class="dv-timeline" scroll-y v-else>
           <view class="dv-day" v-for="(d, i) in vehicleProfile.days" :key="d.date + '-' + i">
             <view class="dv-day-head">
               <text class="dv-date">{{ d.date }}</text>
@@ -630,13 +634,12 @@ export default {
         if (!api) throw new Error('未配置 API')
         const res = await fetch(`${api}?view=vehicle&orgId=${encodeURIComponent(orgId)}`, { cache: 'no-store' })
         if (!res.ok) throw new Error('HTTP ' + res.status)
-        this.vehicleProfile = await res.json()
-        if (!this.vehicleProfile.days || !this.vehicleProfile.days.length) {
-          uni.showToast({ title: '该车暂无记录', icon: 'none' })
-        }
+        const p = await res.json()
+        this.vehicleProfile = { ...p, orgId: p.orgId || orgId, days: Array.isArray(p.days) ? p.days : [] }
       } catch (e) {
-        console.warn('[DataPanel] 车辆档案查询失败', e)
-        uni.showToast({ title: '查询失败，请稍后重试', icon: 'none' })
+        // 未捕获过营运数据的车辆（库中无记录 / 接口暂不可用）统一展示空档案，不当作错误
+        console.warn('[DataPanel] 车辆档案暂无数据', e)
+        this.vehicleProfile = { orgId, company: '', maxSpeed: 0, totalSpeedCount: 0, totalDepartures: 0, days: [] }
       } finally {
         this.vehicleLoading = false
       }
@@ -870,6 +873,7 @@ export default {
 .dv-search .dp-search { flex: 1 1 auto; }
 .dv-btn { flex: 0 0 auto; padding: 0 30rpx; height: 68rpx; line-height: 68rpx; border-radius: 12rpx; background: var(--ac); color: #fff; font-size: 22rpx; cursor: pointer; }
 .dv-empty, .dv-loading { display: flex; flex-direction: column; align-items: center; padding: 60rpx 20rpx; color: #9aa6bd; font-size: 22rpx; }
+.dv-empty-sub { margin-top: 10rpx; font-size: 19rpx; color: #6b7891; }
 /* 车辆选择列表 */
 .dv-list-wrap { padding-top: 4rpx; }
 .dv-list-head { display: flex; justify-content: space-between; align-items: center; font-size: 19rpx; color: #9aa6bd; padding: 6rpx 0 12rpx; }
@@ -973,11 +977,12 @@ export default {
 .dp-unit { font-size: 17rpx; color: #7f8aa3; margin-left: 4rpx; font-weight: 400; }
 .dp-badge { display: inline-block; min-width: 36rpx; padding: 2rpx 10rpx; border-radius: 999rpx; text-align: center; font-size: 19rpx; }
 .dp-driver-tag { display: inline-block; padding: 2rpx 8rpx; border-radius: 8rpx; border: 1rpx solid; font-size: 17rpx; white-space: nowrap; }
-.dp-item-detail { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8rpx 20rpx; padding: 12rpx 18rpx 16rpx; background: rgba(120,160,220,0.05); }
-.dp-dcell { display: flex; justify-content: space-between; gap: 12rpx; font-size: 19rpx; min-width: 0; }
+.dp-item-detail { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10rpx; padding: 14rpx 16rpx 18rpx; margin: 0 8rpx 8rpx; border-radius: 0 0 14rpx 14rpx; background: rgba(120,160,220,0.06); border-top: 1rpx dashed rgba(120,160,220,0.18); }
+.dp-dcell { display: flex; flex-direction: column; gap: 6rpx; padding: 12rpx 14rpx; border-radius: 10rpx; background: rgba(10,18,34,0.45); border: 1rpx solid rgba(120,160,220,0.12); min-width: 0; }
 .dp-dcell.full { grid-column: 1 / -1; }
-.dp-dk { color: #9aa6bd; flex: 0 0 auto; }
-.dp-dv { color: #e8edf6; text-align: right; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dp-dk { color: #8592ab; font-size: 18rpx; letter-spacing: 1rpx; }
+.dp-dv { color: #e8edf6; font-size: 22rpx; font-weight: 600; line-height: 1.4; word-break: break-all; }
+.dp-dcell:not(.full) .dp-dv { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .dp-empty { display: flex; flex-direction: column; align-items: center; padding: 80rpx 40rpx; text-align: center; }
 .dp-empty-big { font-size: 72rpx; opacity: 0.5; }
 .dp-empty-txt { font-size: 24rpx; color: #9aa6bd; margin-top: 16rpx; }
