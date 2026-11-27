@@ -6,14 +6,24 @@
  * GET  /api/vehicle-ops?view=vehicle&orgId=... → 车辆档案：按自编号查跨日超速/调配历史
  * POST /api/vehicle-ops                       → upsert 本轮采集的车辆档案（Actions 写入）
  * DELETE /api/vehicle-ops?orgId=...           → 删除累计档案
+ * DELETE /api/vehicle-ops?before=YYYY-MM-DD  → 手动清理早于该日的按日明细（自动窗口清理的兜底）
+ *
+ * 明细保留：每次 POST 写入后自动删除超过 VEHICLE_OPS_KEEP_DAYS（默认 31）天的
+ * vehicle_ops_daily 行，保证按日明细最多保留约一个月；累计表 vehicle_ops 不受影响。
  *
  * 环境变量（Vercel 面板 → Settings → Environment Variables）：
  *   DATABASE_URL       Neon Postgres 连接串（Marketplace 集成自动注入）
  *   VEHICLE_OPS_TOKEN  自定义 API 密钥（POST/DELETE 鉴权用，必须与 GitHub Secret 同值）
+ *   VEHICLE_OPS_KEEP_DAYS（可选）按日明细保留天数，默认 31
  *
  * 数据库表：首次请求时自动 CREATE TABLE IF NOT EXISTS（api/init.sql 仅作留档参考）。
  */
 import { neon } from '@neondatabase/serverless'
+
+// 按日明细保留窗口（天）：每次采集写入后自动删除早于窗口的 vehicle_ops_daily 行，
+// 保证明细最多保留约一个月；累计表 vehicle_ops（历史最高/累计超速等）不清。
+// 可用环境变量 VEHICLE_OPS_KEEP_DAYS 覆盖（默认 31，即「今天往前 30 天」）。
+const KEEP_DAYS = Math.max(1, parseInt(process.env.VEHICLE_OPS_KEEP_DAYS, 10) || 31)
 
 const CORS = {
   'Access-Control-Allow-Origin': '*',
@@ -83,6 +93,26 @@ function parseAt(at) {
     date: `${bj.getUTCFullYear()}-${p(bj.getUTCMonth() + 1)}-${p(bj.getUTCDate())}`,
     recordedAt: `${p(bj.getUTCHours())}:${p(bj.getUTCMinutes())}`,
   }
+}
+
+/** 北京时间日期字符串，offsetDays 天前（0 = 今天） */
+function bjDate(offsetDays = 0) {
+  const bj = new Date(Date.now() + 8 * 3600 * 1000 - offsetDays * 86400 * 1000)
+  const p = (n) => String(n).padStart(2, '0')
+  return `${bj.getUTCFullYear()}-${p(bj.getUTCMonth() + 1)}-${p(bj.getUTCDate())}`
+}
+
+/**
+ * 清理按日明细：删除早于 before（YYYY-MM-DD）的行。
+ * 命中索引 idx_vod_date，幂等；累计表 vehicle_ops 不受影响。
+ * 返回本次删除的行数（WITH ... RETURNING + count 一次查询完成）。
+ */
+async function purgeDaily(sql, before) {
+  const r = await sql.query(
+    'WITH del AS (DELETE FROM vehicle_ops_daily WHERE date < $1::date RETURNING 1) SELECT count(*)::int AS n FROM del',
+    [before],
+  )
+  return (r[0] && Number(r[0].n)) || 0
 }
 
 /** 旧结构行 → 数据面板 camelCase 行 */
@@ -340,6 +370,13 @@ export default async function handler(req, res) {
         await sql`TRUNCATE TABLE vehicle_ops, vehicle_ops_daily`
         return res.status(200).json({ ok: true, truncated: ['vehicle_ops', 'vehicle_ops_daily'] })
       }
+      // ?before=YYYY-MM-DD：手动清理早于该日的按日明细（自动窗口清理的兜底 / 手工归档用）
+      if (req.query?.before) {
+        const before = String(req.query.before)
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(before)) return res.status(400).json({ error: 'before must be YYYY-MM-DD' })
+        const purged = await purgeDaily(sql, before)
+        return res.status(200).json({ ok: true, before, purged })
+      }
       // ?dirMissing=1：删除旧版无营运方向的记录（两张表），让下一轮采集能重新写入真实 dir
       if (req.query?.dirMissing === '1') {
         const cum = await sql`DELETE FROM vehicle_ops WHERE dir IS NULL`
@@ -381,13 +418,19 @@ export default async function handler(req, res) {
           affiliated = rows.length
         }
       }
-      if (!buses.length) return res.status(200).json({ ok: true, upserted: 0, affiliated })
+      if (!buses.length) {
+        // 无车辆数据（仅配属登记轮）也顺手滚动明细窗口，保证清理不被空数据轮次跳过
+        const purged = await purgeDaily(sql, bjDate(KEEP_DAYS))
+        return res.status(200).json({ ok: true, upserted: 0, affiliated, purged })
+      }
       // 回填历史快照时只写按日表，避免把历史数据重复累加进累计表 vehicle_ops
       const dailyOnly = body.dailyOnly === true
 
       // 整轮 2 条批量 SQL，替代旧的逐车 2N 条串行写入
       const upserted = await upsertBuses(sql, buses, { date, recordedAt, dailyOnly })
-      return res.status(200).json({ ok: true, upserted, affiliated })
+      // 明细窗口滚动：删除早于保留期的按日行（累计表 vehicle_ops 不动）
+      const purged = await purgeDaily(sql, bjDate(KEEP_DAYS))
+      return res.status(200).json({ ok: true, upserted, affiliated, purged })
     }
 
     return res.status(405).json({ error: 'method not allowed' })
