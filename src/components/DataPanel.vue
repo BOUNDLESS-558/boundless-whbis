@@ -34,8 +34,14 @@
         <view class="dv-list-head">
           <text>车辆分组：公司 › 线路 › 车辆（{{ filteredVehicles.length }} / {{ vehicleList.length }}）</text>
           <view class="dv-list-ops">
-            <text class="dv-back" @click="toggleAllGroups">展开/收起</text>
-            <text class="dv-back" v-if="vehicleList.length" @click="refreshVehicleList">↻ 刷新</text>
+            <view class="dv-op-btn" @click="toggleAllGroups" title="展开或收起全部分组">
+              <text class="dv-op-ico">{{ allGroupsOpen ? '⊟' : '⊞' }}</text>
+              <text class="dv-op-txt">{{ allGroupsOpen ? '收起' : '展开' }}</text>
+            </view>
+            <view class="dv-op-btn" v-if="vehicleList.length" @click="refreshVehicleList" title="重新加载车辆列表">
+              <text class="dv-op-ico" :class="{ spin: vehicleListLoading }">↻</text>
+              <text class="dv-op-txt">刷新</text>
+            </view>
           </view>
         </view>
         <scroll-view class="dv-pick-list" scroll-y v-if="vehicleList.length">
@@ -390,15 +396,24 @@ export default {
           || String(v.lineNo || '').includes(kw)
       })
     },
+    // 全部分组是否展开（驱动「展开/收起」按钮文案与图标）
+    allGroupsOpen() {
+      const groups = this.vehicleGroups
+      if (!groups.length) return false
+      return groups.every((c) => this.expandedCompanies[c.company]
+        && c.fleets.every((f) => this.expandedFleets[c.company + '|' + f.line]))
+    },
     // 三级分组：营运公司 → 车队（线路号）→ 车辆。基于过滤后的列表生成，搜索时自动收窄。
     vehicleGroups() {
       const groups = []
       const byCompany = new Map()
       for (const v of this.filteredVehicles) {
-        const company = String(v.company || '').trim() || '未知公司'
+        // 用统一短名作分组 key，避免「第一营运公司」/「有限责任公司一营运公司」拆成两组
+        const short = this.shortCompany(v.company)
+        const company = short
         let c = byCompany.get(company)
         if (!c) {
-          c = { company, short: this.shortCompany(company), companyNo: Number(v.companyNo) || 99, count: 0, fleets: [], keys: [] }
+          c = { company, short, companyNo: Number(v.companyNo) || 99, count: 0, fleets: [], keys: [] }
           byCompany.set(company, c)
           groups.push(c)
         }
@@ -536,10 +551,14 @@ export default {
                   base.maxSpeed = Number(op.maxSpeed) || 0
                 } else {
                   // 映射表未收录的在运车也加入（避免遗漏）；批次未知按 99 归到末尾
+                  // 公司名统一用标准格式，避免与映射表的车分成两个「第X公司」组
                   const c = Number(String(id).charAt(0)) || 0
+                  const stdCompany = c >= 1 && c <= 9
+                    ? `武汉市公共交通集团${CN[c]}营运公司`
+                    : (op.company || '未知公司')
                   byId.set(id, {
                     orgId: id, full: this.fmtNo(id), companyNo: c,
-                    company: op.company || (c >= 1 && c <= 9 ? `武汉市公共交通集团${CN[c]}营运公司` : '未知公司'),
+                    company: stdCompany,
                     model: '', batch: 99,
                     lineNo: op.lineNo || '', speedCount: Number(op.speedCount) || 0,
                     departures: Number(op.departures) || 0, maxSpeed: Number(op.maxSpeed) || 0,
@@ -573,8 +592,7 @@ export default {
     },
     // 一键展开/收起全部分组
     toggleAllGroups() {
-      const anyOpen = Object.values(this.expandedCompanies).some(Boolean) || Object.values(this.expandedFleets).some(Boolean)
-      const next = !anyOpen
+      const next = !this.allGroupsOpen
       this.expandedCompanies = {}
       this.expandedFleets = {}
       if (next) {
@@ -610,13 +628,18 @@ export default {
     },
     fmtNo(v) { void this.mapVersion; return formatBusNo(v) },
     busModel(v) { void this.mapVersion; return getBusModel(v) },
+    // 公司短名统一为「武汉公交集团第X公司」，兼容两种原始数据格式：
+    //   映射表：武汉市公共交通集团第一营运公司
+    //   API：   武汉市公共交通集团有限责任公司三营运公司
     shortCompany(c) {
       const s = String(c || '')
-      if (s.includes('蔡城')) return '蔡城'
-      if (s.includes('木兰')) return '木兰'
-      if (s.includes('汉奇')) return '汉奇'
-      const m = s.match(/第([一二三四五六七八九])营运公司/)
-      return m ? `第${m[1]}公司` : (s || '—')
+      if (s.includes('蔡城')) return '蔡城客运'
+      if (s.includes('木兰')) return '木兰客运'
+      if (s.includes('汉奇')) return '汉奇客运'
+      let m = s.match(/第([一二三四五六七八九])营运公司/)
+      if (!m) m = s.match(/有限责任公司([一二三四五六七八九])营运公司/)
+      if (m) return `武汉公交集团第${m[1]}公司`
+      return s || '未知公司'
     },
     shortTime(t) { return String(t || '—').slice(5) },
     recordText(r) { return r.date ? `${r.date} ${r.recordedAt || ''}`.trim() : (r.recordedAt || '—') },
@@ -830,7 +853,14 @@ export default {
 .dv-grp-arrow { flex: 0 0 auto; color: var(--ac-hi); font-size: 20rpx; width: 24rpx; }
 .dv-grp-name { flex: 0 1 auto; min-width: 0; font-size: 22rpx; font-weight: 700; color: #e8edf6; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .dv-grp-count { flex: 0 0 auto; margin-left: auto; font-size: 18rpx; color: #9aa6bd; }
-.dv-list-ops { display: flex; gap: 16rpx; }
+.dv-list-ops { display: flex; gap: 10rpx; }
+/* 展开/收起、刷新：胶囊按钮（图标 + 文案），与全站玻璃风一致 */
+.dv-op-btn { display: inline-flex; align-items: center; gap: 6rpx; padding: 8rpx 18rpx; border-radius: 999rpx; background: rgba(120,160,220,0.1); border: 1rpx solid rgba(120,160,220,0.22); cursor: pointer; transition: background 0.16s, border-color 0.16s; }
+.dv-op-btn:hover { background: rgba(var(--ac-rgb), 0.16); border-color: rgba(var(--ac-rgb), 0.45); }
+.dv-op-ico { font-size: 22rpx; color: var(--ac-hi); line-height: 1; }
+.dv-op-txt { font-size: 19rpx; color: rgba(255,255,255,0.82); white-space: nowrap; }
+.dv-op-ico.spin { display: inline-block; animation: dv-spin 1s linear infinite; }
+@keyframes dv-spin { to { transform: rotate(360deg); } }
 .dv-pick { display: flex; align-items: center; gap: 12rpx; padding: 14rpx 10rpx 14rpx 48rpx; border-bottom: 1rpx solid rgba(120,160,220,0.08); cursor: pointer; }
 .dv-pick:hover { background: rgba(120,160,220,0.06); }
 .dv-pick-left { flex: 0 0 auto; display: flex; flex-direction: column; }
