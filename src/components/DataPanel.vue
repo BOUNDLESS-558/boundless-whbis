@@ -753,6 +753,7 @@ export default {
       return list.map((t) => `${t.from || '—'}路 → ${t.to || '—'}路（${t.at || '—'}）`).join('\n')
     },
     // 详情只渲染有内容的项：空值不再显示「—」占位置。
+    // 半宽字段两两成对（记录/型号 + 方向/超速），通栏字段（走向/调配）独占一行，避免出现空半格。
     detailCells(r) {
       const out = []
       const record = this.recordText(r)
@@ -760,11 +761,10 @@ export default {
       const model = this.busModel(r.orgId)
       if (model) out.push({ k: '车辆型号', v: model })
       out.push({ k: '营运方向', v: this.dirText(r) || '待采集', cls: 'dp-dir ' + this.dirCls(r) })
+      const t = this.tierOf(r)
+      out.push({ k: '超速情况', v: `${r.speedCount} 次 · ${t.emoji} ${t.label}`, color: t.color })
       const route = this.routeText(r)
       if (route) out.push({ k: '线路走向', v: route, full: true })
-      out.push({ k: '超速次数', v: `${r.speedCount} 次` })
-      const t = this.tierOf(r)
-      out.push({ k: '超速评价', v: `${t.emoji} ${t.label}`, color: t.color })
       out.push({ k: '车辆调配', v: this.transferText(r), full: true })
       return out
     },
