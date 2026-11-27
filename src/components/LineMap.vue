@@ -499,6 +499,8 @@
                 <view class="bus-left">
                   <!-- ★ 自编号（由 MD5 加密值还原，补全车型字母，如 325F311） -->
                   <view class="bus-org">{{ bus.orgId ? fmtNo(bus.orgId) : '未知' }}</view>
+                  <!-- 车辆具体型号（来自 buspedia 自编号映射，无数据显示「车型未知」） -->
+                  <view class="bus-model">🚌 {{ busModel(bus.orgId) || '车型未知' }}</view>
                   <!-- 所在站点：K-d Tree 最近一站，与复制/Tooltip 同口径；MD5 沉底作备查 -->
                   <view class="bus-stop">📍 {{ nearStopOf(bus) }}</view>
                   <view class="bus-hash">{{ bus.busNo }}</view>
@@ -599,6 +601,10 @@
         <view class="sg-cell">
           <text class="sg-k">GPS 时间</text>
           <view class="sg-v">{{ selectedBus.time }}</view>
+        </view>
+        <view class="sg-cell sg-cell-wide" v-if="busModel(selectedBus.orgId)">
+          <text class="sg-k">车辆型号</text>
+          <view class="sg-v sg-model">🚌 {{ busModel(selectedBus.orgId) }}</view>
         </view>
       </view>
       <!-- 坐标精度收敛到 6 位（≈0.1m，高于 GPS 自身精度），原始 17 位小数会折成两行 -->
@@ -729,7 +735,7 @@ import {
 import { cleanStops, dedupLegacyStops, pointsOf, fromFlat } from '../utils/routeClean.js'
 import { loadLineAsset, assetDir } from '../utils/lineAsset.js'
 import { orgCompanyOf, routeOf } from '../utils/speedRank.js'
-import { formatBusNo, onBusNumberReady } from '../utils/busNumber.js'
+import { formatBusNo, getBusModel, onBusNumberReady } from '../utils/busNumber.js'
 import { copyTable } from '../utils/clipboard.js'
 import { attachDropdown } from '../utils/dropdown.js'
 import { orgInfo, COMPANIES, companyKeyOfNo, companyOf } from '../utils/companies.js'
@@ -1753,6 +1759,11 @@ export default {
     fmtNo(orgId) {
       void this.mapVersion
       return formatBusNo(orgId)
+    },
+    // 车辆具体型号（来自 buspedia 自编号映射的 model 字段，映射就绪后重渲染）
+    busModel(orgId) {
+      void this.mapVersion
+      return getBusModel(orgId)
     },
     // 刷新间隔下拉：展开权交给全站仲裁器，点复制 / 搜索联想等其它菜单时自动收起
     toggleRefreshMenu() { if (this._dd) this._dd.toggle() },
@@ -4599,6 +4610,7 @@ export default {
       const coord = b.lat != null && b.lng != null ? `${b.lat}, ${b.lng}` : '经纬度未知'
       return (
         `${dir} · ${b.orgId ? this.fmtNo(b.orgId) : (b.busNo || '?')} · ${this.busCompanyText(b)}\n` +
+        `车辆型号：${this.busModel(b.orgId) || '未知'}\n` +
         `所在站点：${this.nearStopOf(b)}\n` +
         `${String(b.time || '--').slice(0, 5)} · ${b.gpsSpeed}km/h · ${state}\n` +
         coord
@@ -4626,6 +4638,7 @@ export default {
         const dirName = this.dirLabel(dir)
         const cells = buses.map((b) => [
           b.orgId ? this.fmtNo(b.orgId) : (b.busNo || '?'),
+          this.busModel(b.orgId) || '',
           companyOf(b),
           this.nearStopOf(b),
           String(b.time || '--').slice(0, 5),
@@ -4637,7 +4650,7 @@ export default {
         total += cells.length
         blocks.push(
           `${this.lineName || this.lineNo}（${dirName}） 在线 ${cells.length} 辆\n` +
-            '编号\t营运公司\t所在站点\t时间\t速度\t状态\t经纬度\n' +
+            '编号\t车辆型号\t营运公司\t所在站点\t时间\t速度\t状态\t经纬度\n' +
             cells.map((c) => c.join('\t')).join('\n')
         )
       }
@@ -4647,7 +4660,7 @@ export default {
       }
       copyTable({
         title: `${this.lineName || this.lineNo} 在线车辆（共 ${total} 辆）`,
-        columns: ['方向', '编号', '营运公司', '所在站点', '时间', '速度', '状态', '经纬度'],
+        columns: ['方向', '编号', '车辆型号', '营运公司', '所在站点', '时间', '速度', '状态', '经纬度'],
         rows: allRows,
         text: blocks.join('\n'), // 文本模式保留原有的上行/下行分段格式
         toast: `已复制 ${total} 辆车信息`,
@@ -5531,6 +5544,15 @@ export default {
   color: var(--ac-hi);
   font-variant-numeric: tabular-nums;
 }
+/* 车辆型号：紧跟自编号下方的小字，过长省略不撑破卡片 */
+.bus-model {
+  font-size: 19rpx;
+  color: rgba(var(--ac-rgb), 0.85);
+  margin-top: 2rpx;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 /* 所在站点：介于自编号与 MD5 之间的次要信息，青灰醒目但不抢主色 */
 .bus-stop {
   font-size: 21rpx;
@@ -6025,6 +6047,17 @@ export default {
 }
 .sg-cell:nth-child(n+3) {
   border-top: 1rpx solid rgba(255, 255, 255, 0.06);
+}
+/* 车型名较长：独占整行，避免与相邻指标挤压 */
+.sg-cell-wide {
+  width: 100%;
+  padding-left: 0 !important;
+  border-left: none !important;
+}
+.sg-model {
+  font-size: 24rpx;
+  white-space: normal;
+  word-break: break-all;
 }
 .sg-k {
   font-size: 19rpx;

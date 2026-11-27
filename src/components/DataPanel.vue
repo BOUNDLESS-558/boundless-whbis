@@ -172,7 +172,7 @@
 
 <script>
 import { copyTable } from '../utils/clipboard.js'
-import { formatBusNo } from '../utils/busNumber.js'
+import { formatBusNo, getBusModel, onBusNumberReady } from '../utils/busNumber.js'
 import { APP_CONFIG } from '../config.js'
 import { assetUrl } from '../utils/asset.js'
 import { SPEED_BANDS, speedBandOf } from '../utils/cityBus.js'
@@ -207,7 +207,7 @@ const COLUMNS = [
   { key: 'orgId', label: '自编号', cls: 'org' },
   { key: 'recordedAt', label: '记录时间', cls: 'record' },
   { key: 'maxSpeed', label: '最高车速', cls: 'speed' },
-  { key: 'speedCount', label: '超速', cls: 'over' },
+  { key: 'speedCount', label: '今日超速', cls: 'over', title: '当天被抓到超速的累计次数' },
 ]
 
 function normalize(r, daily = false) {
@@ -229,6 +229,7 @@ export default {
       all: [],          // API：当前页；静态：全部
       localAll: [],     // 静态兜底的全量行
       apiMode: false,
+      mapVersion: 0,   // 自编号映射就绪版本号，驱动 fmtNo/busModel 重渲染
       stamp: '',
       speedLimit: 60,
       loading: false,
@@ -326,9 +327,14 @@ export default {
     page() { if (this.apiMode) this.load() },
     pageSize() { this.page = 1; if (this.apiMode) this.load() },
   },
-  mounted() { this.load() },
+  mounted() {
+    this.load()
+    // 自编号映射加载完成后刷新车型显示（映射表懒加载，首次可能晚于面板挂载）
+    onBusNumberReady(() => { this.mapVersion++ })
+  },
   methods: {
-    fmtNo(v) { return formatBusNo(v) },
+    fmtNo(v) { void this.mapVersion; return formatBusNo(v) },
+    busModel(v) { void this.mapVersion; return getBusModel(v) },
     shortCompany(c) {
       const s = String(c || '')
       if (s.includes('蔡城')) return '蔡城'
@@ -351,6 +357,8 @@ export default {
       const out = []
       const record = this.recordText(r)
       if (record && record !== '—') out.push({ k: '记录时间', v: record })
+      const model = this.busModel(r.orgId)
+      if (model) out.push({ k: '车辆型号', v: model })
       out.push({ k: '超速次数', v: `${r.speedCount} 次` })
       const t = this.tierOf(r)
       out.push({ k: '超速评价', v: `${t.emoji} ${t.label}`, color: t.color })
@@ -481,12 +489,12 @@ export default {
     exportRows(r) {
       return [
         r.company || '', r.lineNo || (r.lines || [])[0] || '', this.fmtNo(r.orgId),
-        this.recordText(r), String(r.maxSpeed),
+        this.busModel(r.orgId) || '', this.recordText(r), String(r.maxSpeed),
         String(r.speedCount), this.transferText(r).replace(/\n/g, '; '),
       ]
     },
     async onCopy() {
-      const columns = ['所属营运公司', '营运线路号', '自编号', '记录时间', '最高车速', '超速次数', '车辆调配记录']
+      const columns = ['所属营运公司', '营运线路号', '自编号', '车辆型号', '记录时间', '最高车速', '超速次数', '车辆调配记录']
       let list = []
       if (this.apiMode) {
         const q = this.queryParams({ all: '1' })
@@ -560,12 +568,12 @@ export default {
 .dp-item-head { display: flex; align-items: center; flex-wrap: wrap; gap: 8rpx 12rpx; padding: 14rpx 8rpx; cursor: pointer; }
 .dp-item-head:hover { background: rgba(120,160,220,0.06); }
 .dp-cell { font-size: 22rpx; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.dp-cell.company { flex: 1 1 150rpx; }
-.dp-cell.line { flex: 0 0 84rpx; font-weight: 700; }
-.dp-cell.org { flex: 0 0 150rpx; }
-.dp-cell.record { flex: 1 1 210rpx; font-size: 19rpx; color: #9aa6bd; }
-.dp-cell.speed { flex: 0 0 120rpx; font-weight: 700; }
-.dp-cell.over { flex: 0 0 210rpx; display: flex; align-items: center; gap: 6rpx; }
+.dp-cell.company { flex: 0 0 132rpx; }
+.dp-cell.line { flex: 0 0 100rpx; font-weight: 700; }
+.dp-cell.org { flex: 0 0 176rpx; }
+.dp-cell.record { flex: 1 1 200rpx; font-size: 19rpx; color: #9aa6bd; }
+.dp-cell.speed { flex: 0 0 132rpx; font-weight: 700; }
+.dp-cell.over { flex: 0 0 250rpx; display: flex; align-items: center; gap: 8rpx; }
 .dp-cell.arrow { flex: 0 0 28rpx; text-align: center; color: #9aa6bd; font-size: 20rpx; }
 /* 真表头：与 .dp-item-head 完全相同的 flex 布局 + 同一套 .dp-cell 宽度与窄屏 order，
    保证换行后表头列仍与数据格逐列对齐 */

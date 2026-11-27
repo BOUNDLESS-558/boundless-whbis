@@ -60,6 +60,7 @@ uni-app（Vue 3 + Vite 5）跨端应用：H5 网页版 + Android App，查询武
 ### 8. 移动端响应式
 - `src/components/LineSearch.vue`：≤720px 时视图分段凹槽横向滚动（`seg-groove` overflow-x auto）、`seg-tab` 不压缩、隐藏 `vr-meta`、缩小 padding；PC 端不受影响。
 - `FloatWin` 已有 `max-width: calc(100vw - 40rpx)`，`.ctrl` 已有 `max-width: calc(100vw - 24rpx)`，小屏不会溢出。
+- **面板尺寸固定能力（所有面板统一）**：`FloatWin` 的 `resizeAxis` 默认 `'both'`（右下角手柄调宽+高，`heightProp:'height'` 固定高度），拖动后写入 localStorage、刷新内容不改变面板尺寸。LineMap 内 `.panel`（实时车辆）/ `.plan-side`（发车时刻）同样用 `heightProp:'height'` + `clip:true`。`panelResize.js` 的 `refit()` 只放大不收缩，尊重用户设定。新增面板应沿用这套机制（传 `resize-key` 即可）。
 **部署不依赖本地构建**：推 `main` 即触发 Vercel 构建部署；本地 `build:h5` 只用于验证产物能否编译。
 
 日常验证**不要主动构建**：`build:h5` / `build:app` 只在交付或用户明确要求出包时执行，日常验证用 `dev:h5` + 探针/单测（用户原话：「没有必要每次都构建一下生成的产物」）。
