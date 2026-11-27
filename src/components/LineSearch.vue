@@ -50,8 +50,9 @@
           @input="onInput"
           @confirm="doSearch"
         />
+        <text class="search-clear" v-if="lineNo" @click.stop="lineNo = ''; onInput()" title="清空">✕</text>
+        <view class="search-btn" @click="doSearch">查询</view>
       </view>
-      <view class="search-btn" @click="doSearch">查询</view>
       <!-- 线路库联想：本地匹配输入，点一条直达对应线路（不发试探请求） -->
       <view class="sug-panel" v-if="suggestOpen && suggestList.length">
         <view class="sug-head">
@@ -794,4 +795,27 @@ export default {
 .search-groove { transition: border-color 0.18s, background 0.18s, box-shadow 0.18s; }
 .search-groove:focus-within { border-color: rgba(var(--ac-rgb), 0.6); box-shadow: 0 0 0 4rpx rgba(var(--ac-rgb), 0.16); }
 .seg-tab.on { box-shadow: 0 6rpx 16rpx rgba(var(--ac-rgb), 0.35), inset 0 1rpx 0 rgba(255, 255, 255, 0.25); }
+
+/* —— 顶部控制卡重设计（2026-11-27）：单卡两行 · 分段页签 + 账号头像同一条轨道 · 查询键嵌入搜索胶囊 —— */
+.seg-groove { background: rgba(255, 255, 255, 0.045); border: 1rpx solid rgba(255, 255, 255, 0.08); padding: 5rpx; gap: 4rpx; }
+.seg-tab { color: rgba(255, 255, 255, 0.58); font-weight: 600; transition: color 0.18s, background 0.18s, box-shadow 0.18s; }
+.seg-tab:hover { color: #fff; background: rgba(255, 255, 255, 0.07); }
+.seg-tab.on { color: #fff; font-weight: 800; letter-spacing: 1rpx; background: linear-gradient(135deg, var(--ac), var(--ac-2)); box-shadow: 0 6rpx 18rpx rgba(var(--ac-rgb), 0.4), inset 0 1rpx 0 rgba(255, 255, 255, 0.3); }
+.vr-acct { background: rgba(255, 255, 255, 0.045); border: 1rpx solid rgba(255, 255, 255, 0.08); gap: 10rpx; padding: 0 18rpx 0 6rpx; }
+.vr-acct-ico { width: 42rpx; height: 42rpx; display: inline-flex; align-items: center; justify-content: center; border-radius: 50%; background: rgba(var(--ac-rgb), 0.22); opacity: 1; font-size: 22rpx; }
+.vr-acct-avatar { width: 42rpx; height: 42rpx; }
+.vr-acct-t { font-weight: 700; color: #eef1ff; }
+.search-groove { padding: 0 6rpx 0 22rpx; background: rgba(255, 255, 255, 0.045); border: 1rpx solid rgba(255, 255, 255, 0.08); }
+.search-icon { opacity: 0.55; }
+.search-input { font-weight: 700; letter-spacing: 0.5rpx; }
+.search-clear { flex: 0 0 auto; width: 40rpx; height: 40rpx; line-height: 40rpx; text-align: center; border-radius: 50%; font-size: 20rpx; color: rgba(255, 255, 255, 0.5); background: rgba(255, 255, 255, 0.08); cursor: pointer; }
+.search-clear:hover { color: #fff; background: rgba(255, 255, 255, 0.16); }
+.search-groove .search-btn { height: calc(100% - 12rpx); line-height: normal; display: inline-flex; align-items: center; padding: 0 30rpx; box-shadow: 0 4rpx 14rpx rgba(var(--ac-rgb), 0.4), inset 0 1rpx 0 rgba(255, 255, 255, 0.3); cursor: pointer; }
+.search-groove .search-btn:hover { box-shadow: 0 6rpx 20rpx rgba(var(--ac-rgb), 0.5), inset 0 1rpx 0 rgba(255, 255, 255, 0.3); }
+.mod-main.is-plain { gap: 12rpx; }
+.mod-main.is-plain .vr-acct { height: 58rpx; }
+.mod-main.is-plain .seg-tab { height: 48rpx; }
+.mod-main.is-plain .search-groove { height: 64rpx; padding: 0 6rpx 0 20rpx; border-radius: 999rpx; }
+.mod-main.is-plain .search-input { height: 60rpx; line-height: 60rpx; }
+.mod-main.is-plain .search-btn { height: 52rpx; line-height: normal; padding: 0 26rpx; border-radius: 999rpx; letter-spacing: 1rpx; }
 </style>

@@ -7003,4 +7003,7 @@ export default {
 .os-row { border-radius: 20rpx; border-color: rgba(255, 255, 255, 0.08); background: rgba(255, 255, 255, 0.035); box-shadow: inset 0 1rpx 0 rgba(255, 255, 255, 0.06); }
 .os-row:active { transform: scale(0.985); }
 .os-count-key { border-radius: 999rpx; }
+
+/* 顶部控制卡：内边距加大、圆角与面板一致，内部两行由 LineSearch 自排 */
+.ctrl { padding: 16rpx 16rpx 14rpx; border-radius: 30rpx; }
 </style>
