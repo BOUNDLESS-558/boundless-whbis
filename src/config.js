@@ -29,6 +29,9 @@ export const APP_CONFIG = {
   // GitHub Pages 等纯静态托管无法代理请求，直连 customized.wuhanbus.com 会被浏览器 CORS 预检拦截；
   // 部署 Worker 后填入其地址（如 https://whbis-proxy.xxx.workers.dev，末尾不带斜杠）。
   // 留空时回退直连真实域名（仅对无 CORS 限制的环境——如本地预览其他代理源——有用）。
+  // 主线路：Vercel 同域转发（vercel.json rewrites /bus-api/* → 武汉公交接口），无 CORS、无 Worker 日配额
+  apiPrimary: '/bus-api',
+  // 备用线路：Cloudflare Worker，主线路网络错误 / 429 / 5xx 时自动切换
   apiProxy: 'https://whbis-proxy.lwu584742.workers.dev',
 
   // 车辆营运信息 API（Vercel Serverless Function + Neon 数据库）。

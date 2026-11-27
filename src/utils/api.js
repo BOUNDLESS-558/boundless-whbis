@@ -27,8 +27,20 @@ const isH5 = false
 
 // H5 开发环境走 vite 代理（/api）规避跨域；H5 生产（Pages 等静态托管）优先用反代地址 apiProxy
 // （直连会被浏览器 CORS 预检拦截），未配置时回退直连；非 H5（App/小程序）无 CORS 限制，直连
-const PROD_BASE = APP_CONFIG.apiProxy ? String(APP_CONFIG.apiProxy).replace(/\/+$/, '') : DIRECT_BASE
-const BASE_URL = isH5 ? (process.env.NODE_ENV !== 'production' ? PROXY_PREFIX : PROD_BASE) : DIRECT_BASE
+// 生产 H5：主线路 = Vercel 同域转发（vercel.json rewrites），备用 = Cloudflare Worker
+const trimBase = (u) => String(u).replace(/\/+$/, '')
+const PROD_BASES = [APP_CONFIG.apiPrimary, APP_CONFIG.apiProxy].filter(Boolean).map(trimBase)
+if (!PROD_BASES.length) PROD_BASES.push(DIRECT_BASE)
+const BASES = isH5 ? (process.env.NODE_ENV !== 'production' ? [PROXY_PREFIX] : PROD_BASES) : [DIRECT_BASE]
+// 某条线路失败后暂时降级（毫秒），期间优先走下一条，到期再试回主线路
+const DEMOTE_MS = 5 * 60 * 1000
+const demotedUntil = {}
+function orderedBases() {
+  const now = Date.now()
+  const ok = BASES.filter((b) => !(demotedUntil[b] > now))
+  const bad = BASES.filter((b) => demotedUntil[b] > now)
+  return ok.concat(bad)
+}
 
 /** 通用请求体字段（来自真实抓包；除 cityCode 外其余服务端均可缺省） */
 function baseBody() {
@@ -49,10 +61,26 @@ function baseBody() {
  * @param {Object} body 业务参数（会与通用字段合并）
  * @returns {Promise<Object>} 返回响应的 data 字段
  */
-function post(path, body = {}) {
+async function post(path, body = {}) {
+  const bases = orderedBases()
+  let lastErr = null
+  for (let i = 0; i < bases.length; i++) {
+    try {
+      return await postOnce(bases[i], path, body)
+    } catch (e) {
+      lastErr = e
+      // 只有线路层故障（网络错误 / 429 / 5xx / CORS）才换线；业务错误直接抛出
+      if (!e || !e.transport) throw e
+      if (bases.length > 1) demotedUntil[bases[i]] = Date.now() + DEMOTE_MS
+    }
+  }
+  throw lastErr
+}
+
+function postOnce(base, path, body) {
   return new Promise((resolve, reject) => {
     uni.request({
-      url: BASE_URL + path,
+      url: base + path,
       method: 'POST',
       header: {
         'Content-Type': 'application/json',
@@ -62,6 +90,11 @@ function post(path, body = {}) {
       data: Object.assign(baseBody(), body),
       timeout: 15000,
       success: (res) => {
+        if (res.statusCode === 429 || res.statusCode >= 500) {
+          const err = new Error('代理线路不可用（HTTP ' + res.statusCode + '）')
+          err.transport = true
+          return reject(err)
+        }
         const payload = res.data
         if (payload && payload.success === true && payload.msg && payload.msg.code === '20000') {
           resolve(payload.data)
@@ -70,7 +103,11 @@ function post(path, body = {}) {
           reject(new Error(msg))
         }
       },
-      fail: (err) => reject(new Error(err.errMsg || '网络错误')),
+      fail: (err) => {
+        const e = new Error((err && err.errMsg) || '网络错误')
+        e.transport = true
+        reject(e)
+      },
     })
   })
 }
