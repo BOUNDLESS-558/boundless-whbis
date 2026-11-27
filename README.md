@@ -38,6 +38,7 @@
 
 ### 2026-11-27（最新）
 
+- **车辆列表覆盖全集团约 1.8 万台**：此前列表只有数据库的 1777 辆在运车，集团实际有五六千台。改为从 `bus-number-map.json`（buspedia 映射表，byFull 18614 条）取全量车辆清单（`getAllVehicles()`），API `view=vehicles` 的在运数据（线路/超速/发车）按 orgId 合并补充；未收录的在运车也加入避免遗漏。映射表懒加载时用 `onBusNumberReady` 等待。三级分组默认全折叠、子级用 `v-if` 按需渲染，避免 1.8 万行一次性进 DOM。
 - **车辆列表改为三级分组**：按车辆模式的车辆选择列表从平铺改为「营运公司 → 车队（线路号）→ 目标编号车辆」三级折叠分组。新增 `vehicleGroups` computed（基于过滤结果按 company / lineNo 嵌套分组，公司按短名、车队按线路号自然排序），`expandedCompanies`/`expandedFleets` 展开状态 + 「展开/收起」一键切换；各级显示车辆/车队数量，搜索仍按编号/公司/线路实时过滤。
 - **所有自编号悬停补全车型**：5 个组件（SpeedRank / LineStops / LinePlan / LineMap / DataPanel）统一在自编号显示的 `:title` 或 Tooltip 文案里加入车型（如「122F3123 · XMQ6127GHEV4」），无映射显示「车型未知」。各组件已有 `busModel(orgId)`（来自 `busNumber.js` 的 `getBusModel`）与 `mapVersion` 重渲染机制。
 - **车辆档案支持列表选择（无需知道自编号）**：API 新增 `view=vehicles`（从累计表返回 orgId/线路/公司/超速/发车，前端用 buspedia 映射补全完整自编号与车型）。按车辆模式默认展示可查询车辆列表（按超速降序），支持输入关键词按自编号/公司/线路过滤，点列表项直接查档案；档案头加「返回车辆列表」，列表头加「↻ 刷新列表」。输入完整自编号点「定位」仍可直接查（兼容已知编号的用户）。

@@ -54,6 +54,32 @@ export function warmUpBusNumber() {
 }
 
 /**
+ * 全量车辆清单（来自 buspedia 自编号映射表，约 1.8 万台）。
+ * 每项：{ orgId 纯数字, full 完整编号, company 公司号, model 车型, batch 批次年份 }
+ * 用于「按车辆」模式的全量车辆列表；数据库在运数据作为运营补充（线路/超速）合并。
+ * @returns {Array} 全量车辆；未就绪返回空数组
+ */
+export function getAllVehicles() {
+  if (!MAP || !MAP.__byFull) return []
+  const out = []
+  for (const full in MAP.__byFull) {
+    const m = MAP.__byFull[full]
+    if (!m || !m.num) continue
+    const orgId = String(m.company || '') + String(Number(m.num))
+    out.push({
+      orgId,
+      full,
+      company: Number(m.company) || 0,
+      model: m.model || '',
+      batch: Number(m.batch) || 0,
+    })
+  }
+  // 按公司号 + 车号自然排序
+  out.sort((a, b) => (a.company - b.company) || (Number(a.orgId) - Number(b.orgId)))
+  return out
+}
+
+/**
  * 把纯数字自编号格式化为完整编号（用于显示）
  * @param {string} orgId 纯数字自编号，如 325311
  * @returns {string} 完整编号（如 325F311）；无映射或未就绪时返回原值

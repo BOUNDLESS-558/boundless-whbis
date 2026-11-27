@@ -55,16 +55,18 @@
                   <text class="dv-grp-count">{{ f.count }} 辆</text>
                 </view>
                 <!-- 第三级：车辆 -->
-                <view class="dv-pick" v-for="v in f.buses" :key="v.orgId" v-show="expandedFleets[c.company + '|' + f.line]"
-                  :title="`${fmtNo(v.orgId)} · ${busModel(v.orgId) || '车型未知'} · ${f.line}路 · ${c.short}（点击查看该车档案）`"
-                  @click="pickVehicle(v)"
-                >
-                  <view class="dv-pick-left">
-                    <text class="dv-pick-no">{{ fmtNo(v.orgId) }}</text>
-                    <text class="dv-pick-model">{{ busModel(v.orgId) || '车型未知' }}</text>
+                <block v-if="expandedFleets[c.company + '|' + f.line]">
+                  <view class="dv-pick" v-for="v in f.buses" :key="v.orgId"
+                    :title="`${v.full || fmtNo(v.orgId)} · ${v.model || busModel(v.orgId) || '车型未知'} · ${f.line}路 · ${c.short}（点击查看该车档案）`"
+                    @click="pickVehicle(v)"
+                  >
+                    <view class="dv-pick-left">
+                      <text class="dv-pick-no">{{ v.full || fmtNo(v.orgId) }}</text>
+                      <text class="dv-pick-model">{{ v.model || busModel(v.orgId) || '车型未知' }}</text>
+                    </view>
+                    <text class="dv-pick-arrow">›</text>
                   </view>
-                  <text class="dv-pick-arrow">›</text>
-                </view>
+                </block>
               </view>
             </block>
           </view>
@@ -273,7 +275,7 @@
 
 <script>
 import { copyTable } from '../utils/clipboard.js'
-import { formatBusNo, getBusModel, parseBusNo, onBusNumberReady } from '../utils/busNumber.js'
+import { formatBusNo, getBusModel, getAllVehicles, parseBusNo, onBusNumberReady } from '../utils/busNumber.js'
 import { APP_CONFIG } from '../config.js'
 import { assetUrl } from '../utils/asset.js'
 import { SPEED_BANDS, speedBandOf } from '../utils/cityBus.js'
@@ -382,7 +384,8 @@ export default {
       if (!kw) return this.vehicleList
       return this.vehicleList.filter((v) => {
         return String(v.orgId).includes(kw)
-          || this.fmtNo(v.orgId).toLowerCase().includes(kw)
+          || String(v.full || this.fmtNo(v.orgId)).toLowerCase().includes(kw)
+          || String(v.model || '').toLowerCase().includes(kw)
           || String(v.company || '').toLowerCase().includes(kw)
           || String(v.lineNo || '').includes(kw)
       })
@@ -493,14 +496,57 @@ export default {
     },
     // 加载车辆清单（view=vehicles），供用户点选
     async refreshVehicleList() {
-      const api = APP_CONFIG.vehicleOpsApi
-      if (!api) return
       this.vehicleListLoading = true
       try {
-        const res = await fetch(`${api}?view=vehicles`, { cache: 'no-store' })
-        if (!res.ok) throw new Error('HTTP ' + res.status)
-        const j = await res.json()
-        this.vehicleList = Array.isArray(j.vehicles) ? j.vehicles : []
+        // 第一步：从 buspedia 映射表取全量车辆（约 1.8 万台，含所有集团车辆）
+        let all = getAllVehicles()
+        if (!all.length) {
+          // 映射表懒加载中：等就绪后再取一次
+          await new Promise((resolve) => onBusNumberReady(resolve))
+          all = getAllVehicles()
+        }
+        const CN = ['', '第一', '第二', '第三', '第四', '第五', '第六', '第七', '第八', '第九']
+        const byId = new Map()
+        for (const v of all) {
+          const no = Number(v.company)
+          byId.set(v.orgId, {
+            orgId: v.orgId,
+            full: v.full,
+            company: no >= 1 && no <= 9 ? `武汉市公共交通集团${CN[no]}营运公司` : (no ? `第${no}营运公司` : '未知公司'),
+            model: v.model || '',
+            batch: v.batch || 0,
+            lineNo: '', speedCount: 0, departures: 0, maxSpeed: 0,
+          })
+        }
+        // 第二步：API 在运数据作为补充（线路 / 超速 / 发车），按 orgId 合并
+        const api = APP_CONFIG.vehicleOpsApi
+        if (api) {
+          try {
+            const res = await fetch(`${api}?view=vehicles`, { cache: 'no-store' })
+            if (res.ok) {
+              const j = await res.json()
+              for (const op of (Array.isArray(j.vehicles) ? j.vehicles : [])) {
+                const id = String(op.orgId || '')
+                const base = byId.get(id)
+                if (base) {
+                  base.lineNo = op.lineNo || ''
+                  base.speedCount = Number(op.speedCount) || 0
+                  base.departures = Number(op.departures) || 0
+                  base.maxSpeed = Number(op.maxSpeed) || 0
+                } else {
+                  // 映射表未收录的在运车也加入（避免遗漏）
+                  byId.set(id, {
+                    orgId: id, full: this.fmtNo(id), company: op.company || '未知公司',
+                    model: '', batch: 0,
+                    lineNo: op.lineNo || '', speedCount: Number(op.speedCount) || 0,
+                    departures: Number(op.departures) || 0, maxSpeed: Number(op.maxSpeed) || 0,
+                  })
+                }
+              }
+            }
+          } catch (e) { console.warn('[DataPanel] 运营数据合并失败，仅显示映射表清单', e) }
+        }
+        this.vehicleList = Array.from(byId.values())
       } catch (e) {
         console.warn('[DataPanel] 车辆列表加载失败', e)
         uni.showToast({ title: '车辆列表加载失败', icon: 'none' })
