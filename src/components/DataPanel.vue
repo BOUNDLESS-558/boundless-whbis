@@ -1,27 +1,30 @@
 <template>
   <!-- 数据面板：按日营运档案。优先读 Vercel 按日表 API，失败回退静态 profile.json -->
   <view class="dp-body">
-    <!-- 顶部：数据时次 + 导出 / 同步 -->
-    <view class="dp-actions">
-      <view class="dp-stat" :title="'当前在线统计车辆数 · 数据时次 ' + stampTime">
-        <view class="dp-stat-badge">
-          <text class="dp-stat-dot"></text>
-          <text class="dp-stat-lbl">当前在线统计</text>
-          <text class="dp-stat-num">{{ filteredCount }}</text>
-          <text class="dp-stat-unit">辆</text>
+    <!-- 顶部工具栏：左 模式分段切换 + 在线统计；右 导出 / 同步（窄屏自动换行） -->
+    <view class="dp-toolbar">
+      <view class="dp-tb-left">
+        <view class="dp-mode">
+          <view class="dp-mode-tab" :class="{ on: mode === 'day' }" @click="switchMode('day')">📅 按日</view>
+          <view class="dp-mode-tab" :class="{ on: mode === 'vehicle' }" @click="switchMode('vehicle')">🚌 按车辆</view>
         </view>
-        <text class="dp-stamp">🕒 更新于 {{ stampTime }}</text>
+        <view class="dp-stat" :title="'当前在线统计车辆数 · 数据时次 ' + stampTime">
+          <view class="dp-stat-badge">
+            <text class="dp-stat-dot"></text>
+            <text class="dp-stat-lbl">当前在线</text>
+            <text class="dp-stat-num">{{ filteredCount }}</text>
+            <text class="dp-stat-unit">辆</text>
+          </view>
+          <text class="dp-stamp">更新于 {{ stampTime }}</text>
+        </view>
       </view>
       <view class="dp-ops">
         <CopyPill label="导出" :disabled="!filteredCount" @copy="onCopy" />
-        <view class="dp-mini" :title="loading ? '同步中' : '同步最新数据'" @click="onSync">{{ loading ? '⏳ 同步中' : '🔄 同步' }}</view>
+        <view class="dp-sync" :class="{ busy: loading }" :title="loading ? '同步中' : '同步最新数据'" @click="onSync">
+          <text class="dp-sync-ico">↻</text>
+          <text>{{ loading ? '同步中' : '同步' }}</text>
+        </view>
       </view>
-    </view>
-
-    <!-- 模式切换：按日（全车队排名）/ 按车辆（单车跨日档案） -->
-    <view class="dp-mode">
-      <view class="dp-mode-tab" :class="{ on: mode === 'day' }" @click="switchMode('day')">📅 按日</view>
-      <view class="dp-mode-tab" :class="{ on: mode === 'vehicle' }" @click="switchMode('vehicle')">🚌 按车辆</view>
     </view>
 
     <!-- 车辆档案模式：输完整自编号（如 122F3123）查该车的跨日超速/调配轨迹 -->
@@ -840,7 +843,6 @@ export default {
 <style scoped>
 .dp-body { width: 100%; color: #e8edf6; }
 /* 顶部 */
-.dp-actions { display: flex; align-items: center; justify-content: space-between; gap: 12rpx; padding: 4rpx 0 12rpx; }
 .dp-stat { display: flex; align-items: center; gap: 14rpx; min-width: 0; flex-wrap: wrap; }
 .dp-stat-badge { display: inline-flex; align-items: center; gap: 8rpx; padding: 6rpx 16rpx; border-radius: 999rpx; background: rgba(34, 197, 94, 0.12); border: 1px solid rgba(34, 197, 94, 0.45); flex-shrink: 0; }
 .dp-stat-dot { width: 12rpx; height: 12rpx; border-radius: 50%; background: #22c55e; box-shadow: 0 0 8rpx #22c55e; animation: dp-pulse 1.6s ease-in-out infinite; }
@@ -851,9 +853,17 @@ export default {
 .dp-stamp { font-size: 19rpx; color: #9aa6bd; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .dp-ops { display: flex; align-items: center; gap: 12rpx; flex: 0 0 auto; }
 /* 模式切换 */
-.dp-mode { display: flex; gap: 10rpx; padding: 4rpx 0 14rpx; }
-.dp-mode-tab { padding: 10rpx 28rpx; border-radius: 999rpx; background: rgba(120,160,220,0.08); color: #9aa6bd; font-size: 22rpx; cursor: pointer; }
-.dp-mode-tab.on { background: var(--ac); color: #fff; }
+.dp-toolbar { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12rpx 16rpx; padding: 4rpx 0 14rpx; }
+.dp-tb-left { display: flex; align-items: center; flex-wrap: wrap; gap: 12rpx 18rpx; min-width: 0; }
+.dp-mode { display: inline-flex; padding: 4rpx; border-radius: 999rpx; background: rgba(120,160,220,0.08); border: 1px solid rgba(120,160,220,0.16); }
+.dp-mode-tab { padding: 8rpx 24rpx; border-radius: 999rpx; color: #9aa6bd; font-size: 22rpx; cursor: pointer; white-space: nowrap; transition: background .15s, color .15s; }
+.dp-mode-tab:hover { color: #e8edf6; }
+.dp-mode-tab.on { background: var(--ac); color: #fff; box-shadow: 0 2rpx 8rpx rgba(0,0,0,0.3); }
+.dp-sync { display: inline-flex; align-items: center; gap: 6rpx; height: 52rpx; padding: 0 20rpx; border-radius: 999rpx; background: rgba(120,160,220,0.1); border: 1px solid rgba(120,160,220,0.22); color: #e8edf6; font-size: 21rpx; cursor: pointer; white-space: nowrap; box-sizing: border-box; transition: background .15s, border-color .15s; }
+.dp-sync:hover { background: rgba(120,160,220,0.2); border-color: rgba(120,160,220,0.4); }
+.dp-sync-ico { font-size: 24rpx; line-height: 1; }
+.dp-sync.busy { opacity: .7; pointer-events: none; }
+.dp-sync.busy .dp-sync-ico { animation: dv-spin 0.9s linear infinite; }
 /* 车辆档案模式 */
 .dp-vehicle { padding-bottom: 8rpx; }
 .dv-search { display: flex; align-items: center; gap: 12rpx; }
