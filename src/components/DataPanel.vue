@@ -796,6 +796,11 @@ export default {
       const dir = this.desc ? -1 : 1
       return [...list].sort((a, b) => {
         const av = a[key] || '', bv = b[key] || ''
+        if (key === 'company') {
+          // 按公司序号（一、二、三…）排，而不是按中文字符串字典序
+          const na = Number(a.companyNo) || 99, nb = Number(b.companyNo) || 99
+          return ((na - nb) || String(av).localeCompare(String(bv), 'zh')) * dir
+        }
         if (key === 'lineNo' || key === 'orgId') return ((Number(av) || 0) - (Number(bv) || 0)) * dir
         if (key === 'recordedAt') return String((a.date || '') + av).localeCompare(String((b.date || '') + bv)) * dir
         if (typeof av === 'number' && typeof bv === 'number') return (av - bv) * dir

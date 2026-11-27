@@ -765,6 +765,8 @@ const LOOP_STYLE = {
 // 自动跟随档位（分钟）：0 = 手动。一轮扫描 ≈ 1535 个请求（生产环境全部走 Worker 反代），
 // 所以不给 15/30 秒这种线路态档位，最低 5 分钟且默认关闭，配额代价写在按钮提示里。
 const CITY_FOLLOW_OPTS = [0, 5, 15, 30]
+// 进行中的全市扫描（模块级单例，跨组件实例存活）
+let _cityJob = null
 const CITY_FOLLOW_KEY = 'whbis:city-follow-sec'
 // 车速榜 / 自编号查车开启态：本机记忆。两窗常驻——默认打开，只有点浮窗右上角 ✕ 才清除；
 // 切视图 / LineMap 被卸载重建都不该让它们自动消失（全市态专属，回到全市态自动复现）
@@ -1792,8 +1794,7 @@ export default {
       this.unbindSheetDrag()
       if (this._resizers) { this._resizers.forEach((r) => r && r.destroy && r.destroy()); this._resizers = null }
       if (this._locTimer) clearTimeout(this._locTimer)
-      // 在途的全网扫描：卸载后没人再消费它的结果，直接停掉（已扫到的部分不写缓存）
-      if (this._cityToken) this._cityToken.cancelled = true
+      // 在途的全网扫描不随卸载中止：任务是模块级单例，跑完写入快照缓存，重新进入全市态时接上进度或直接复用
       if (this._offRefresh) {
         this._offRefresh()
         this._offRefresh = null
@@ -2551,7 +2552,7 @@ export default {
       await this.runCity(false)
     },
     exitCity() {
-      this.cancelCity()
+      // 不中止扫描：切走视图后扫描在后台继续，完成后写入快照缓存，回到全市态直接复用
       this.cityOn = false
       // 不重置 rankOpen：切出全市态只是把浮窗藏起来（v-if 带 cityOn），
       // 回到全市态要自动复现；只有浮窗右上角 ✕ 才会真正关闭
@@ -2829,16 +2830,25 @@ export default {
       this.cityBusy = true
       this.cityProgress = 0
       this.cityFound = 0
-      const token = { cancelled: false }
-      this._cityToken = token
-      try {
-        const snap = await sweepCity({
+      // 扫描任务挂在模块级：组件被卸载重建（切视图）也不中断，重进时接上同一轮进度
+      let job = _cityJob
+      if (!job) {
+        const token = { cancelled: false }
+        job = _cityJob = { token, progress: null, listeners: new Set(), promise: null }
+        job.promise = sweepCity({
           token,
-          onProgress: (p) => {
-            this.cityProgress = Math.round((p.done / p.total) * 100)
-            this.cityFound = p.buses
-          },
-        })
+          onProgress: (p) => { job.progress = p; job.listeners.forEach((f) => f(p)) },
+        }).finally(() => { if (_cityJob === job) _cityJob = null })
+      }
+      this._cityToken = job.token
+      const onP = (p) => {
+        this.cityProgress = Math.round((p.done / (p.total || 1)) * 100)
+        this.cityFound = p.buses
+      }
+      job.listeners.add(onP)
+      if (job.progress) onP(job.progress)
+      try {
+        const snap = await job.promise
         // 中途已退出全市（或切了线路）就别把结果往线路上盖
         if (!this.cityOn) return
         this.applyCity(snap)
@@ -2851,6 +2861,7 @@ export default {
       } catch (e) {
         uni.showToast({ title: '扫描失败：' + ((e && e.message) || e), icon: 'none' })
       } finally {
+        job.listeners.delete(onP)
         this.cityBusy = false
         this.cityProgress = 0
         this._cityToken = null
