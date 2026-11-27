@@ -41,6 +41,9 @@ CREATE INDEX IF NOT EXISTS idx_vod_date ON vehicle_ops_daily (date DESC);
 CREATE INDEX IF NOT EXISTS idx_vod_company_date ON vehicle_ops_daily (company, date DESC);
 CREATE INDEX IF NOT EXISTS idx_vod_line_date ON vehicle_ops_daily (line_no, date DESC);
 
+-- 明细保留窗口：api/vehicle-ops.js 每次采集写入后自动删除超过 31 天
+-- （环境变量 VEHICLE_OPS_KEEP_DAYS 可调）的 vehicle_ops_daily 行；累计表 vehicle_ops 不受影响。
+
 -- 账号与会话（本地预置账号 seed 由 /api/auth 首次请求时写入）
 CREATE TABLE IF NOT EXISTS app_accounts (
   norm_account TEXT PRIMARY KEY,
