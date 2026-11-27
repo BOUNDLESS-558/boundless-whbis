@@ -38,6 +38,7 @@
 
 ### 2026-11-27（最新）
 
+- **车辆列表改为三级分组**：按车辆模式的车辆选择列表从平铺改为「营运公司 → 车队（线路号）→ 目标编号车辆」三级折叠分组。新增 `vehicleGroups` computed（基于过滤结果按 company / lineNo 嵌套分组，公司按短名、车队按线路号自然排序），`expandedCompanies`/`expandedFleets` 展开状态 + 「展开/收起」一键切换；各级显示车辆/车队数量，搜索仍按编号/公司/线路实时过滤。
 - **所有自编号悬停补全车型**：5 个组件（SpeedRank / LineStops / LinePlan / LineMap / DataPanel）统一在自编号显示的 `:title` 或 Tooltip 文案里加入车型（如「122F3123 · XMQ6127GHEV4」），无映射显示「车型未知」。各组件已有 `busModel(orgId)`（来自 `busNumber.js` 的 `getBusModel`）与 `mapVersion` 重渲染机制。
 - **车辆档案支持列表选择（无需知道自编号）**：API 新增 `view=vehicles`（从累计表返回 orgId/线路/公司/超速/发车，前端用 buspedia 映射补全完整自编号与车型）。按车辆模式默认展示可查询车辆列表（按超速降序），支持输入关键词按自编号/公司/线路过滤，点列表项直接查档案；档案头加「返回车辆列表」，列表头加「↻ 刷新列表」。输入完整自编号点「定位」仍可直接查（兼容已知编号的用户）。
 - **数据面板新增「按车辆」档案模式**：API 新增 `GET /api/vehicle-ops?view=vehicle&orgId=<纯数字>`（`getVehicleHistory`，按 `vehicle_ops_daily` 查该车跨日记录 + 从 `vehicle_ops` 取累计统计）。DataPanel 顶部加「📅 按日 / 🚌 按车辆」切换；车辆模式输入完整自编号（如 `122F3123`，`parseBusNo` 转纯数字）查询，展示车辆头（公司/车型/历史最高车速/累计超速/累计发车）+ 按日时间线（每日线路/最高车速/超速次数/调配记录，相邻日期线路变化自动标注调配）。原按日模式完整保留。

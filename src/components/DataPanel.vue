@@ -32,26 +32,41 @@
       <!-- 车辆选择列表：不知道自编号时可从列表挑选，输入关键词按编号/公司/线路过滤 -->
       <view class="dv-list-wrap" v-if="!vehicleProfile && !vehicleLoading">
         <view class="dv-list-head">
-          <text>可查询车辆（{{ filteredVehicles.length }} / {{ vehicleList.length }}）</text>
-          <text class="dv-back" v-if="vehicleList.length" @click="refreshVehicleList">↻ 刷新列表</text>
+          <text>车辆分组：公司 › 车队 › 车辆（{{ filteredVehicles.length }} / {{ vehicleList.length }}）</text>
+          <view class="dv-list-ops">
+            <text class="dv-back" @click="toggleAllGroups">展开/收起</text>
+            <text class="dv-back" v-if="vehicleList.length" @click="refreshVehicleList">↻ 刷新</text>
+          </view>
         </view>
         <scroll-view class="dv-pick-list" scroll-y v-if="vehicleList.length">
-          <view
-            class="dv-pick"
-            v-for="v in filteredVehicles"
-            :key="v.orgId"
-            :title="`${fmtNo(v.orgId)} · ${busModel(v.orgId) || '车型未知'} · ${v.lineNo || '—'}路 · ${v.company || '营运公司未知'}（点击查看该车档案）`"
-            @click="pickVehicle(v)"
-          >
-            <view class="dv-pick-left">
-              <text class="dv-pick-no">{{ fmtNo(v.orgId) }}</text>
-              <text class="dv-pick-model">{{ busModel(v.orgId) || '车型未知' }}</text>
+          <!-- 第一级：营运公司 -->
+          <view class="dv-grp" v-for="c in vehicleGroups" :key="c.company">
+            <view class="dv-grp-head" @click="toggleCompany(c.company)">
+              <text class="dv-grp-arrow">{{ expandedCompanies[c.company] ? '▾' : '▸' }}</text>
+              <text class="dv-grp-name">🏢 {{ c.short }}</text>
+              <text class="dv-grp-count">{{ c.fleets.length }} 个车队 · {{ c.count }} 辆</text>
             </view>
-            <view class="dv-pick-right">
-              <text class="dv-pick-line">{{ v.lineNo || '—' }} 路</text>
-              <text class="dv-pick-company">{{ shortCompany(v.company) }}</text>
-            </view>
-            <text class="dv-pick-arrow">›</text>
+            <block v-if="expandedCompanies[c.company]">
+              <!-- 第二级：车队（线路号） -->
+              <view class="dv-grp dv-grp-l2" v-for="f in c.fleets" :key="c.company + '|' + f.line">
+                <view class="dv-grp-head" @click="toggleFleet(c.company + '|' + f.line)">
+                  <text class="dv-grp-arrow">{{ expandedFleets[c.company + '|' + f.line] ? '▾' : '▸' }}</text>
+                  <text class="dv-grp-name">🚏 {{ f.line }} 路车队</text>
+                  <text class="dv-grp-count">{{ f.count }} 辆</text>
+                </view>
+                <!-- 第三级：车辆 -->
+                <view class="dv-pick" v-for="v in f.buses" :key="v.orgId" v-show="expandedFleets[c.company + '|' + f.line]"
+                  :title="`${fmtNo(v.orgId)} · ${busModel(v.orgId) || '车型未知'} · ${f.line}路 · ${c.short}（点击查看该车档案）`"
+                  @click="pickVehicle(v)"
+                >
+                  <view class="dv-pick-left">
+                    <text class="dv-pick-no">{{ fmtNo(v.orgId) }}</text>
+                    <text class="dv-pick-model">{{ busModel(v.orgId) || '车型未知' }}</text>
+                  </view>
+                  <text class="dv-pick-arrow">›</text>
+                </view>
+              </view>
+            </block>
           </view>
         </scroll-view>
         <view class="dv-empty" v-else>
@@ -319,6 +334,9 @@ export default {
       vehicleQuery: '',
       vehicleList: [],
       vehicleListLoading: false,
+      // 三级分组展开状态（key: 公司名 / 公司名|线路号）
+      expandedCompanies: {},
+      expandedFleets: {},
       vehicleProfile: null,
       vehicleLoading: false,
       mapVersion: 0,   // 自编号映射就绪版本号，驱动 fmtNo/busModel 重渲染
@@ -368,6 +386,36 @@ export default {
           || String(v.company || '').toLowerCase().includes(kw)
           || String(v.lineNo || '').includes(kw)
       })
+    },
+    // 三级分组：营运公司 → 车队（线路号）→ 车辆。基于过滤后的列表生成，搜索时自动收窄。
+    vehicleGroups() {
+      const groups = []
+      const byCompany = new Map()
+      for (const v of this.filteredVehicles) {
+        const company = String(v.company || '').trim() || '未知公司'
+        let c = byCompany.get(company)
+        if (!c) {
+          c = { company, short: this.shortCompany(company), count: 0, fleets: [], keys: [] }
+          byCompany.set(company, c)
+          groups.push(c)
+        }
+        c.count++
+        const line = String(v.lineNo || '').trim() || '未分配线路'
+        let f = c.fleets.find((x) => x.line === line)
+        if (!f) {
+          f = { line, count: 0, buses: [] }
+          c.fleets.push(f)
+        }
+        f.count++
+        f.buses.push(v)
+      }
+      // 公司按短名排序、车队按线路号自然排序
+      groups.sort((a, b) => a.short.localeCompare(b.short, 'zh'))
+      for (const c of groups) {
+        c.fleets.sort((a, b) => a.line.localeCompare(b.line, 'zh', { numeric: true }))
+        c.keys = c.fleets.map((f) => c.company + '|' + f.line)
+      }
+      return groups
     },
     // 数据时次：统一中文格式「2026年11月27日 08:29:58 · 649 辆」，避免英文 Date.toString()
     stampText() {
@@ -464,6 +512,28 @@ export default {
     pickVehicle(v) {
       this.vehicleQuery = this.fmtNo(v.orgId)
       this.loadVehicle(v.orgId)
+    },
+    // 三级分组展开/折叠
+    toggleCompany(name) {
+      this.$set ? this.$set(this.expandedCompanies, name, !this.expandedCompanies[name])
+        : (this.expandedCompanies[name] = !this.expandedCompanies[name])
+    },
+    toggleFleet(key) {
+      this.$set ? this.$set(this.expandedFleets, key, !this.expandedFleets[key])
+        : (this.expandedFleets[key] = !this.expandedFleets[key])
+    },
+    // 一键展开/收起全部分组
+    toggleAllGroups() {
+      const anyOpen = Object.values(this.expandedCompanies).some(Boolean) || Object.values(this.expandedFleets).some(Boolean)
+      const next = !anyOpen
+      this.expandedCompanies = {}
+      this.expandedFleets = {}
+      if (next) {
+        for (const c of this.vehicleGroups) {
+          this.expandedCompanies[c.company] = true
+          for (const k of c.keys) this.expandedFleets[k] = true
+        }
+      }
     },
     // 车辆档案查询：完整自编号 → 纯数字 orgId → API view=vehicle；也可直接传 orgId
     async loadVehicle(directOrgId) {
@@ -703,7 +773,16 @@ export default {
 .dv-list-wrap { padding-top: 4rpx; }
 .dv-list-head { display: flex; justify-content: space-between; align-items: center; font-size: 19rpx; color: #9aa6bd; padding: 6rpx 0 12rpx; }
 .dv-pick-list { max-height: 46vh; overflow-y: auto; }
-.dv-pick { display: flex; align-items: center; gap: 12rpx; padding: 14rpx 10rpx; border-bottom: 1rpx solid rgba(120,160,220,0.1); cursor: pointer; }
+/* 三级分组头 */
+.dv-grp { border-bottom: 1rpx solid rgba(120,160,220,0.1); }
+.dv-grp-l2 { padding-left: 24rpx; }
+.dv-grp-head { display: flex; align-items: center; gap: 10rpx; padding: 16rpx 10rpx; background: rgba(120,160,220,0.06); cursor: pointer; }
+.dv-grp-l2 .dv-grp-head { background: rgba(120,160,220,0.03); }
+.dv-grp-arrow { flex: 0 0 auto; color: var(--ac-hi); font-size: 20rpx; width: 24rpx; }
+.dv-grp-name { flex: 0 1 auto; min-width: 0; font-size: 22rpx; font-weight: 700; color: #e8edf6; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dv-grp-count { flex: 0 0 auto; margin-left: auto; font-size: 18rpx; color: #9aa6bd; }
+.dv-list-ops { display: flex; gap: 16rpx; }
+.dv-pick { display: flex; align-items: center; gap: 12rpx; padding: 14rpx 10rpx 14rpx 48rpx; border-bottom: 1rpx solid rgba(120,160,220,0.08); cursor: pointer; }
 .dv-pick:hover { background: rgba(120,160,220,0.06); }
 .dv-pick-left { flex: 0 0 auto; display: flex; flex-direction: column; }
 .dv-pick-no { font-size: 24rpx; font-weight: 700; color: var(--ac-hi); }
