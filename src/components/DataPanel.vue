@@ -40,6 +40,7 @@
             class="dv-pick"
             v-for="v in filteredVehicles"
             :key="v.orgId"
+            :title="`${fmtNo(v.orgId)} · ${busModel(v.orgId) || '车型未知'} · ${v.lineNo || '—'}路 · ${v.company || '营运公司未知'}（点击查看该车档案）`"
             @click="pickVehicle(v)"
           >
             <view class="dv-pick-left">
@@ -203,7 +204,7 @@
             </view>
           </view>
           <text class="dp-cell line" :title="'历史线路：' + (r.lines || []).join(' / ')">{{ r.lineNo || (r.lines || [])[0] || '—' }}</text>
-          <text class="dp-cell org" :title="r.orgId">{{ fmtNo(r.orgId) }}</text>
+          <text class="dp-cell org" :title="`${fmtNo(r.orgId)} · ${busModel(r.orgId) || '车型未知'}`">{{ fmtNo(r.orgId) }}</text>
           <text class="dp-cell record">{{ recordText(r) }}</text>
           <text class="dp-cell speed" :style="{ color: speedColor(r.maxSpeed) }">{{ r.maxSpeed }}<text class="dp-unit">km/h</text></text>
           <text class="dp-cell over">
