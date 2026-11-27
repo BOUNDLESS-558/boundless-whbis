@@ -23,20 +23,46 @@
           class="dp-search"
           v-model="vehicleQuery"
           type="text"
-          placeholder="输入完整自编号，如 122F3123"
+          placeholder="筛选自编号 / 公司 / 线路号"
           placeholder-class="dp-search-ph"
           confirm-type="search"
-          @confirm="loadVehicle"
-        />
-        <view class="dv-btn" @click="loadVehicle">查询</view>
+          />
+          <view class="dv-btn" @click="loadVehicle">定位</view>
       </view>
-      <view class="dv-empty" v-if="!vehicleProfile && !vehicleLoading">
-        <text class="dp-empty-big">🚌</text>
-        <text class="dp-empty-txt">输入自编号查询该车的每日超速与调配记录</text>
+      <!-- 车辆选择列表：不知道自编号时可从列表挑选，输入关键词按编号/公司/线路过滤 -->
+      <view class="dv-list-wrap" v-if="!vehicleProfile && !vehicleLoading">
+        <view class="dv-list-head">
+          <text>可查询车辆（{{ filteredVehicles.length }} / {{ vehicleList.length }}）</text>
+          <text class="dv-back" v-if="vehicleList.length" @click="refreshVehicleList">↻ 刷新列表</text>
+        </view>
+        <scroll-view class="dv-pick-list" scroll-y v-if="vehicleList.length">
+          <view
+            class="dv-pick"
+            v-for="v in filteredVehicles"
+            :key="v.orgId"
+            :title="`${fmtNo(v.orgId)} · ${busModel(v.orgId) || '车型未知'} · ${v.lineNo || '—'}路 · ${v.company || '营运公司未知'}（点击查看该车档案）`"
+            @click="pickVehicle(v)"
+          >
+            <view class="dv-pick-left">
+              <text class="dv-pick-no">{{ fmtNo(v.orgId) }}</text>
+              <text class="dv-pick-model">{{ busModel(v.orgId) || '车型未知' }}</text>
+            </view>
+            <view class="dv-pick-right">
+              <text class="dv-pick-line">{{ v.lineNo || '—' }} 路</text>
+              <text class="dv-pick-company">{{ shortCompany(v.company) }}</text>
+            </view>
+            <text class="dv-pick-arrow">›</text>
+          </view>
+        </scroll-view>
+        <view class="dv-empty" v-else>
+          <text class="dp-empty-big">🚌</text>
+          <text class="dp-empty-txt">{{ vehicleListLoading ? '正在加载车辆列表…' : '暂无车辆数据，请点「同步」后重试' }}</text>
+        </view>
       </view>
       <view class="dv-loading" v-if="vehicleLoading">正在查询车辆档案…</view>
       <block v-if="vehicleProfile">
         <view class="dv-head">
+          <text class="dv-back" @click="vehicleProfile = null">‹ 返回车辆列表</text>
           <view class="dv-title">{{ fmtNo(vehicleProfile.orgId) }}</view>
           <text class="dv-meta">{{ vehicleProfile.company || '营运公司未知' }} · {{ busModel(vehicleProfile.orgId) || '车型未知' }}</text>
           <view class="dv-stats">
@@ -178,7 +204,7 @@
             </view>
           </view>
           <text class="dp-cell line" :title="'历史线路：' + (r.lines || []).join(' / ')">{{ r.lineNo || (r.lines || [])[0] || '—' }}</text>
-          <text class="dp-cell org" :title="r.orgId">{{ fmtNo(r.orgId) }}</text>
+          <text class="dp-cell org" :title="`${fmtNo(r.orgId)} · ${busModel(r.orgId) || '车型未知'}`">{{ fmtNo(r.orgId) }}</text>
           <text class="dp-cell record">{{ recordText(r) }}</text>
           <text class="dp-cell speed" :style="{ color: speedColor(r.maxSpeed) }">{{ r.maxSpeed }}<text class="dp-unit">km/h</text></text>
           <text class="dp-cell over">
@@ -291,6 +317,8 @@ export default {
       apiMode: false,
       mode: 'day',     // 'day' 按日排名 / 'vehicle' 单车跨日档案
       vehicleQuery: '',
+      vehicleList: [],
+      vehicleListLoading: false,
       vehicleProfile: null,
       vehicleLoading: false,
       mapVersion: 0,   // 自编号映射就绪版本号，驱动 fmtNo/busModel 重渲染
@@ -330,6 +358,17 @@ export default {
       })
     },
     filteredCount() { return this.apiMode ? this.total : this.localFiltered.length },
+    // 车辆列表按输入过滤：完整编号 / 纯数字 / 公司 / 线路
+    filteredVehicles() {
+      const kw = String(this.vehicleQuery || '').trim().toLowerCase()
+      if (!kw) return this.vehicleList
+      return this.vehicleList.filter((v) => {
+        return String(v.orgId).includes(kw)
+          || this.fmtNo(v.orgId).toLowerCase().includes(kw)
+          || String(v.company || '').toLowerCase().includes(kw)
+          || String(v.lineNo || '').includes(kw)
+      })
+    },
     // 数据时次：统一中文格式「2026年11月27日 08:29:58 · 649 辆」，避免英文 Date.toString()
     stampText() {
       if (!this.stamp) return '尚未同步 · 0 辆'
@@ -401,13 +440,36 @@ export default {
     switchMode(m) {
       if (this.mode === m) return
       this.mode = m
-      if (m === 'vehicle' && this.vehicleQuery && !this.vehicleProfile) this.loadVehicle()
+      // 进入车辆模式：自动加载车辆列表供选择（用户可能不知道自编号）
+      if (m === 'vehicle' && !this.vehicleList.length) this.refreshVehicleList()
     },
-    // 车辆档案查询：完整自编号 → 纯数字 orgId → API view=vehicle
-    async loadVehicle() {
-      const q = String(this.vehicleQuery || '').trim()
-      if (!q) { uni.showToast({ title: '请输入自编号', icon: 'none' }); return }
-      const orgId = parseBusNo(q)
+    // 加载车辆清单（view=vehicles），供用户点选
+    async refreshVehicleList() {
+      const api = APP_CONFIG.vehicleOpsApi
+      if (!api) return
+      this.vehicleListLoading = true
+      try {
+        const res = await fetch(`${api}?view=vehicles`, { cache: 'no-store' })
+        if (!res.ok) throw new Error('HTTP ' + res.status)
+        const j = await res.json()
+        this.vehicleList = Array.isArray(j.vehicles) ? j.vehicles : []
+      } catch (e) {
+        console.warn('[DataPanel] 车辆列表加载失败', e)
+        uni.showToast({ title: '车辆列表加载失败', icon: 'none' })
+      } finally {
+        this.vehicleListLoading = false
+      }
+    },
+    // 点列表项查档案
+    pickVehicle(v) {
+      this.vehicleQuery = this.fmtNo(v.orgId)
+      this.loadVehicle(v.orgId)
+    },
+    // 车辆档案查询：完整自编号 → 纯数字 orgId → API view=vehicle；也可直接传 orgId
+    async loadVehicle(directOrgId) {
+      const q = directOrgId || String(this.vehicleQuery || '').trim()
+      if (!q) { uni.showToast({ title: '请选择或输入自编号', icon: 'none' }); return }
+      const orgId = directOrgId || parseBusNo(q)
       if (!/^\d+$/.test(String(orgId))) { uni.showToast({ title: '自编号格式不正确', icon: 'none' }); return }
       this.vehicleLoading = true
       this.vehicleProfile = null
@@ -637,7 +699,21 @@ export default {
 .dv-search .dp-search { flex: 1 1 auto; }
 .dv-btn { flex: 0 0 auto; padding: 0 30rpx; height: 68rpx; line-height: 68rpx; border-radius: 12rpx; background: var(--ac); color: #fff; font-size: 22rpx; cursor: pointer; }
 .dv-empty, .dv-loading { display: flex; flex-direction: column; align-items: center; padding: 60rpx 20rpx; color: #9aa6bd; font-size: 22rpx; }
+/* 车辆选择列表 */
+.dv-list-wrap { padding-top: 4rpx; }
+.dv-list-head { display: flex; justify-content: space-between; align-items: center; font-size: 19rpx; color: #9aa6bd; padding: 6rpx 0 12rpx; }
+.dv-pick-list { max-height: 46vh; overflow-y: auto; }
+.dv-pick { display: flex; align-items: center; gap: 12rpx; padding: 14rpx 10rpx; border-bottom: 1rpx solid rgba(120,160,220,0.1); cursor: pointer; }
+.dv-pick:hover { background: rgba(120,160,220,0.06); }
+.dv-pick-left { flex: 0 0 auto; display: flex; flex-direction: column; }
+.dv-pick-no { font-size: 24rpx; font-weight: 700; color: var(--ac-hi); }
+.dv-pick-model { font-size: 17rpx; color: #9aa6bd; }
+.dv-pick-right { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; align-items: flex-end; }
+.dv-pick-line { font-size: 20rpx; color: rgba(255,255,255,0.8); }
+.dv-pick-company { font-size: 17rpx; color: #9aa6bd; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 100%; }
+.dv-pick-arrow { flex: 0 0 auto; font-size: 26rpx; color: #9aa6bd; }
 .dv-head { padding: 20rpx 0 16rpx; border-bottom: 2rpx solid rgba(120,160,220,0.14); }
+.dv-back { display: inline-block; font-size: 20rpx; color: var(--ac-hi); cursor: pointer; margin-bottom: 8rpx; }
 .dv-title { font-size: 36rpx; font-weight: 800; color: var(--ac-hi); }
 .dv-meta { display: block; font-size: 20rpx; color: #9aa6bd; margin-top: 6rpx; }
 .dv-stats { display: flex; flex-wrap: wrap; gap: 12rpx 24rpx; margin-top: 12rpx; font-size: 19rpx; color: rgba(255,255,255,0.75); }

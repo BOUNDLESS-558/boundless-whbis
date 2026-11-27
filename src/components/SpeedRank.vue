@@ -84,7 +84,7 @@
               <text class="rk-line">{{ r.no }}</text>
               <text class="rk-line-unit">路</text>
               <text class="rk-dir" :class="'d' + r.dir">{{ r.dir === 0 ? '上行' : '下行' }}</text>
-              <text class="rk-org" :title="'自编号 ' + (r.orgId ? fmtNo(r.orgId) : '还原中')">{{ r.orgId ? fmtNo(r.orgId) : '编号还原中' }}</text>
+              <text class="rk-org" :title="r.orgId ? (fmtNo(r.orgId) + ' · ' + (busModel(r.orgId) || '车型未知')) : '编号还原中'">{{ r.orgId ? fmtNo(r.orgId) : '编号还原中' }}</text>
             </view>
             <view class="rk-line2">
               <text class="rk-route" :title="r.routeText">{{ r.routeText }}</text>
@@ -115,7 +115,7 @@
 import { RANK_LIMITS, DEFAULT_RANK_LIMIT, DRIFT_SPEED, rankBySpeed, rankByLine } from '../utils/speedRank.js'
 import { bindFloatDrag } from '../utils/panelPos.js'
 import { SPEED_BANDS, fetchLineVehicles } from '../utils/cityBus.js'
-import { formatBusNo, onBusNumberReady } from '../utils/busNumber.js'
+import { formatBusNo, getBusModel, onBusNumberReady } from '../utils/busNumber.js'
 import { loadLineAsset, assetDir } from '../utils/lineAsset.js'
 import { distance } from '../utils/geo.js'
 import { copyTable } from '../utils/clipboard.js'
@@ -303,6 +303,10 @@ export default {
     fmtNo(orgId) {
       void this.mapVersion // 依赖版本号，映射就绪后重渲染
       return formatBusNo(orgId)
+    },
+    busModel(orgId) {
+      void this.mapVersion
+      return getBusModel(orgId)
     },
     // 异步预取榜单车辆的站点明细：按线路号去重，命中静态资产分片（内存缓存，不重复请求）。
     // 与自编号查车 fillOrgStopNames 同源同口径，复制到来的瞬间只做同步查表。

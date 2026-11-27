@@ -234,11 +234,12 @@ export default {
     // 计划发车无实时位置/速度，展示方向 / 完整自编号 / 营运公司 / 发车时刻 / MD5 原值备查。
     planTip(p, g) {
       const no = p.bus ? this.fmtNo(p.bus) : (p.orgBusNo || '未知编号')
+      const model = p.bus ? (this.busModel(p.bus) || '车型未知') : ''
       const company = p.bus ? orgCompanyOf({ orgId: p.bus }) : '未知公司'
       const dir = g && g.name ? g.name : this.dirLabel(p.dir)
       const time = p.planStartTime || '--'
       const hash = p.busId ? `\n车辆编号：${p.busId}` : ''
-      return `${dir} · ${no} · ${company}\n计划发车：${time}${hash}`
+      return `${dir} · ${no} · ${model} · ${company}\n计划发车：${time}${hash}`
     },
     // 单个方向的计划发车（/detailPlanTime 用 lineId，格式与 lineCode 相同）
     async fetchDir(no, dir) {

@@ -410,7 +410,7 @@
               <view class="osr-top">
                 <text class="osr-no">{{ b.no }} 路</text>
                 <text class="osr-dir" :class="'d' + b.dir">{{ b.dir === 0 ? '上行' : '下行' }}</text>
-                <text class="osr-org">{{ fmtNo(b.orgId) }}</text>
+                <text class="osr-org" :title="`${fmtNo(b.orgId)} · ${busModel(b.orgId) || '车型未知'}`">{{ fmtNo(b.orgId) }}</text>
                 <text class="osr-locate">定位 ›</text>
               </view>
               <view class="osr-sub">
@@ -498,7 +498,7 @@
               <view class="bus-item" v-for="(bus, i) in g.buses" :key="bus.dir + '-' + i" @click="selectBus(bus)" :title="busTip(bus)">
                 <view class="bus-left">
                   <!-- ★ 自编号（由 MD5 加密值还原，补全车型字母，如 325F311） -->
-                  <view class="bus-org">{{ bus.orgId ? fmtNo(bus.orgId) : '未知' }}</view>
+                  <view class="bus-org" :title="bus.orgId ? (fmtNo(bus.orgId) + ' · ' + (busModel(bus.orgId) || '车型未知')) : '未知'">{{ bus.orgId ? fmtNo(bus.orgId) : '未知' }}</view>
                   <!-- 车辆具体型号（来自 buspedia 自编号映射，无数据显示「车型未知」） -->
                   <view class="bus-model">🚌 {{ busModel(bus.orgId) || '车型未知' }}</view>
                   <!-- 所在站点：K-d Tree 最近一站，与复制/Tooltip 同口径；MD5 沉底作备查 -->
@@ -585,7 +585,7 @@
       <view class="sheet-grid">
         <view class="sg-cell">
           <text class="sg-k">自编号</text>
-          <view class="sg-v">{{ selectedBus.orgId ? fmtNo(selectedBus.orgId) : '编号还原中…' }}</view>
+          <view class="sg-v" :title="selectedBus.orgId ? (fmtNo(selectedBus.orgId) + ' · ' + (busModel(selectedBus.orgId) || '车型未知')) : '编号还原中…'">{{ selectedBus.orgId ? fmtNo(selectedBus.orgId) : '编号还原中…' }}</view>
         </view>
         <view class="sg-cell">
           <text class="sg-k">车速</text>
