@@ -3,7 +3,15 @@
   <view class="dp-body">
     <!-- 顶部：数据时次 + 导出 / 同步 -->
     <view class="dp-actions">
-      <text class="dp-stamp">{{ stampText }}</text>
+      <view class="dp-stat" :title="'当前在线统计车辆数 · 数据时次 ' + stampTime">
+        <view class="dp-stat-badge">
+          <text class="dp-stat-dot"></text>
+          <text class="dp-stat-lbl">当前在线统计</text>
+          <text class="dp-stat-num">{{ filteredCount }}</text>
+          <text class="dp-stat-unit">辆</text>
+        </view>
+        <text class="dp-stamp">🕒 更新于 {{ stampTime }}</text>
+      </view>
       <view class="dp-ops">
         <CopyPill label="导出" :disabled="!filteredCount" @copy="onCopy" />
         <view class="dp-mini" :title="loading ? '同步中' : '同步最新数据'" @click="onSync">{{ loading ? '⏳ 同步中' : '🔄 同步' }}</view>
@@ -34,8 +42,14 @@
         <view class="dv-list-head">
           <text>车辆分组：公司 › 线路 › 车辆（{{ filteredVehicles.length }} / {{ vehicleList.length }}）</text>
           <view class="dv-list-ops">
-            <text class="dv-back" @click="toggleAllGroups">展开/收起</text>
-            <text class="dv-back" v-if="vehicleList.length" @click="refreshVehicleList">↻ 刷新</text>
+            <view class="dv-op-btn" @click="toggleAllGroups" title="展开或收起全部分组">
+              <text class="dv-op-ico">{{ allGroupsOpen ? '⊟' : '⊞' }}</text>
+              <text class="dv-op-txt">{{ allGroupsOpen ? '收起' : '展开' }}</text>
+            </view>
+            <view class="dv-op-btn" v-if="vehicleList.length" @click="refreshVehicleList" title="重新加载车辆列表">
+              <text class="dv-op-ico" :class="{ spin: vehicleListLoading }">↻</text>
+              <text class="dv-op-txt">刷新</text>
+            </view>
           </view>
         </view>
         <scroll-view class="dv-pick-list" scroll-y v-if="vehicleList.length">
@@ -43,19 +57,20 @@
           <view class="dv-grp" v-for="c in vehicleGroups" :key="c.company">
             <view class="dv-grp-head" @click="toggleCompany(c.company)">
               <text class="dv-grp-arrow">{{ expandedCompanies[c.company] ? '▾' : '▸' }}</text>
-              <text class="dv-grp-name">🏢 {{ c.short }}</text>
+              <image class="dv-grp-logo" :src="groupLogo" mode="aspectFit" />
+              <text class="dv-grp-name">{{ c.short }}</text>
               <text class="dv-grp-count">{{ c.fleets.length }} 条线路 · {{ c.count }} 辆</text>
             </view>
             <block v-if="expandedCompanies[c.company]">
               <!-- 第二级：车队（线路号） -->
-              <view class="dv-grp dv-grp-l2" v-for="f in c.fleets" :key="c.company + '|' + f.line">
-                <view class="dv-grp-head" @click="toggleFleet(c.company + '|' + f.line)">
-                  <text class="dv-grp-arrow">{{ expandedFleets[c.company + '|' + f.line] ? '▾' : '▸' }}</text>
+              <view class="dv-grp dv-grp-l2" v-for="f in c.fleets" :key="f.key">
+                <view class="dv-grp-head" @click="toggleFleet(f.key)">
+                  <text class="dv-grp-arrow">{{ expandedFleets[f.key] ? '▾' : '▸' }}</text>
                   <text class="dv-grp-name">🚏 {{ f.line }}</text>
                   <text class="dv-grp-count">{{ f.count }} 辆</text>
                 </view>
                 <!-- 第三级：车辆 -->
-                <block v-if="expandedFleets[c.company + '|' + f.line]">
+                <block v-if="expandedFleets[f.key]">
                   <view class="dv-pick" v-for="v in f.buses" :key="v.orgId"
                     :title="`${v.full || fmtNo(v.orgId)} · ${v.model || busModel(v.orgId) || '车型未知'} · ${f.line}路 · ${c.short}（点击查看该车档案）`"
                     @click="pickVehicle(v)"
@@ -379,6 +394,7 @@ export default {
     },
     filteredCount() { return this.apiMode ? this.total : this.localFiltered.length },
     // 车辆列表按输入过滤：完整编号 / 纯数字 / 公司 / 线路
+    groupLogo() { return assetUrl('/static/img/logo.png') },
     filteredVehicles() {
       const kw = String(this.vehicleQuery || '').trim().toLowerCase()
       if (!kw) return this.vehicleList
@@ -390,23 +406,33 @@ export default {
           || String(v.lineNo || '').includes(kw)
       })
     },
+    // 全部分组是否展开（驱动「展开/收起」按钮文案与图标）
+    allGroupsOpen() {
+      const groups = this.vehicleGroups
+      if (!groups.length) return false
+      return groups.every((c) => this.expandedCompanies[c.company])
+    },
     // 三级分组：营运公司 → 车队（线路号）→ 车辆。基于过滤后的列表生成，搜索时自动收窄。
     vehicleGroups() {
       const groups = []
       const byCompany = new Map()
       for (const v of this.filteredVehicles) {
-        const company = String(v.company || '').trim() || '未知公司'
+        // 用统一短名作分组 key，避免「第一营运公司」/「有限责任公司一营运公司」拆成两组
+        const short = this.shortCompany(v.company)
+        const company = short
         let c = byCompany.get(company)
         if (!c) {
-          c = { company, short: this.shortCompany(company), companyNo: Number(v.companyNo) || 99, count: 0, fleets: [], keys: [] }
+          c = { company, short, companyNo: Number(v.companyNo) || 99, count: 0, fleets: [], keys: [] }
           byCompany.set(company, c)
           groups.push(c)
         }
         c.count++
         const line = String(v.lineNo || '').trim() || '未分配线路'
-        let f = c.fleets.find((x) => x.line === line)
+        if (!c._fm) c._fm = new Map()
+        let f = c._fm.get(line)
         if (!f) {
-          f = { line, count: 0, buses: [] }
+          f = { line, key: company + '|' + line, count: 0, buses: [] }
+          c._fm.set(line, f)
           c.fleets.push(f)
         }
         f.count++
@@ -421,17 +447,17 @@ export default {
       return groups
     },
     // 数据时次：统一中文格式「2026年11月27日 08:29:58 · 649 辆」，避免英文 Date.toString()
-    stampText() {
-      if (!this.stamp) return '尚未同步 · 0 辆'
+    stampTime() {
+      if (!this.stamp) return '尚未同步'
       const d = new Date(this.stamp)
-      let t = String(this.stamp)
-      if (!isNaN(d.getTime())) {
-        // 按北京时间显示（UTC+8），与采集端时刻口径一致
-        const bj = new Date(d.getTime() + 8 * 3600 * 1000)
-        const p = (n) => String(n).padStart(2, '0')
-        t = `${bj.getUTCFullYear()}年${p(bj.getUTCMonth() + 1)}月${p(bj.getUTCDate())}日 ${p(bj.getUTCHours())}:${p(bj.getUTCMinutes())}:${p(bj.getUTCSeconds())}`
-      }
-      return `${t} · ${this.filteredCount} 辆`
+      if (isNaN(d.getTime())) return String(this.stamp)
+      // 按北京时间显示（UTC+8），与采集端时刻口径一致
+      const bj = new Date(d.getTime() + 8 * 3600 * 1000)
+      const p = (n) => String(n).padStart(2, '0')
+      return `${bj.getUTCFullYear()}年${p(bj.getUTCMonth() + 1)}月${p(bj.getUTCDate())}日 ${p(bj.getUTCHours())}:${p(bj.getUTCMinutes())}:${p(bj.getUTCSeconds())}`
+    },
+    stampText() {
+      return `${this.stampTime} · 当前在线统计 ${this.filteredCount} 辆`
     },
     pageCount() { return calcPageCount(this.filteredCount, this.pageSize) },
     pageList() { return calcPageList(this.pageCount, this.page) },
@@ -536,10 +562,14 @@ export default {
                   base.maxSpeed = Number(op.maxSpeed) || 0
                 } else {
                   // 映射表未收录的在运车也加入（避免遗漏）；批次未知按 99 归到末尾
+                  // 公司名统一用标准格式，避免与映射表的车分成两个「第X公司」组
                   const c = Number(String(id).charAt(0)) || 0
+                  const stdCompany = c >= 1 && c <= 9
+                    ? `武汉市公共交通集团${CN[c]}营运公司`
+                    : (op.company || '未知公司')
                   byId.set(id, {
                     orgId: id, full: this.fmtNo(id), companyNo: c,
-                    company: op.company || (c >= 1 && c <= 9 ? `武汉市公共交通集团${CN[c]}营运公司` : '未知公司'),
+                    company: stdCompany,
                     model: '', batch: 99,
                     lineNo: op.lineNo || '', speedCount: Number(op.speedCount) || 0,
                     departures: Number(op.departures) || 0, maxSpeed: Number(op.maxSpeed) || 0,
@@ -549,7 +579,8 @@ export default {
             }
           } catch (e) { console.warn('[DataPanel] 运营数据合并失败，仅显示映射表清单', e) }
         }
-        this.vehicleList = Array.from(byId.values())
+        // 冻结：上万条只读记录不做深度响应式代理，避免展开/折叠时卡顿
+        this.vehicleList = Object.freeze(Array.from(byId.values()).map((v) => Object.freeze(v)))
       } catch (e) {
         console.warn('[DataPanel] 车辆列表加载失败', e)
         uni.showToast({ title: '车辆列表加载失败', icon: 'none' })
@@ -573,16 +604,15 @@ export default {
     },
     // 一键展开/收起全部分组
     toggleAllGroups() {
-      const anyOpen = Object.values(this.expandedCompanies).some(Boolean) || Object.values(this.expandedFleets).some(Boolean)
-      const next = !anyOpen
-      this.expandedCompanies = {}
+      // 性能：只展开公司级（线路级按需点开），一次性整体替换对象，避免逐 key 触发响应式与上千行同时渲染
+      if (this._toggleLock) return
+      this._toggleLock = true
+      setTimeout(() => { this._toggleLock = false }, 250)
+      const next = !this.allGroupsOpen
+      const m = {}
+      if (next) for (const c of this.vehicleGroups) m[c.company] = true
       this.expandedFleets = {}
-      if (next) {
-        for (const c of this.vehicleGroups) {
-          this.expandedCompanies[c.company] = true
-          for (const k of c.keys) this.expandedFleets[k] = true
-        }
-      }
+      this.expandedCompanies = m
     },
     // 车辆档案查询：完整自编号 → 纯数字 orgId → API view=vehicle；也可直接传 orgId
     async loadVehicle(directOrgId) {
@@ -610,13 +640,18 @@ export default {
     },
     fmtNo(v) { void this.mapVersion; return formatBusNo(v) },
     busModel(v) { void this.mapVersion; return getBusModel(v) },
+    // 公司短名统一为「武汉公交集团第X公司」，兼容两种原始数据格式：
+    //   映射表：武汉市公共交通集团第一营运公司
+    //   API：   武汉市公共交通集团有限责任公司三营运公司
     shortCompany(c) {
       const s = String(c || '')
-      if (s.includes('蔡城')) return '蔡城'
-      if (s.includes('木兰')) return '木兰'
-      if (s.includes('汉奇')) return '汉奇'
-      const m = s.match(/第([一二三四五六七八九])营运公司/)
-      return m ? `第${m[1]}公司` : (s || '—')
+      if (s.includes('蔡城')) return '蔡城客运'
+      if (s.includes('木兰')) return '木兰客运'
+      if (s.includes('汉奇')) return '汉奇客运'
+      let m = s.match(/第([一二三四五六七八九])营运公司/)
+      if (!m) m = s.match(/有限责任公司([一二三四五六七八九])营运公司/)
+      if (m) return `武汉公交集团第${m[1]}公司`
+      return s || '未知公司'
     },
     shortTime(t) { return String(t || '—').slice(5) },
     recordText(r) { return r.date ? `${r.date} ${r.recordedAt || ''}`.trim() : (r.recordedAt || '—') },
@@ -806,6 +841,13 @@ export default {
 .dp-body { width: 100%; color: #e8edf6; }
 /* 顶部 */
 .dp-actions { display: flex; align-items: center; justify-content: space-between; gap: 12rpx; padding: 4rpx 0 12rpx; }
+.dp-stat { display: flex; align-items: center; gap: 14rpx; min-width: 0; flex-wrap: wrap; }
+.dp-stat-badge { display: inline-flex; align-items: center; gap: 8rpx; padding: 6rpx 16rpx; border-radius: 999rpx; background: rgba(34, 197, 94, 0.12); border: 1px solid rgba(34, 197, 94, 0.45); flex-shrink: 0; }
+.dp-stat-dot { width: 12rpx; height: 12rpx; border-radius: 50%; background: #22c55e; box-shadow: 0 0 8rpx #22c55e; animation: dp-pulse 1.6s ease-in-out infinite; }
+@keyframes dp-pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.35; } }
+.dp-stat-lbl { font-size: 20rpx; color: #86efac; }
+.dp-stat-num { font-size: 30rpx; font-weight: 700; color: #4ade80; line-height: 1; }
+.dp-stat-unit { font-size: 20rpx; color: #86efac; }
 .dp-stamp { font-size: 19rpx; color: #9aa6bd; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .dp-ops { display: flex; align-items: center; gap: 12rpx; flex: 0 0 auto; }
 /* 模式切换 */
@@ -828,9 +870,17 @@ export default {
 .dv-grp-head { display: flex; align-items: center; gap: 10rpx; padding: 16rpx 10rpx; background: rgba(120,160,220,0.06); cursor: pointer; }
 .dv-grp-l2 .dv-grp-head { background: rgba(120,160,220,0.03); }
 .dv-grp-arrow { flex: 0 0 auto; color: var(--ac-hi); font-size: 20rpx; width: 24rpx; }
+.dv-grp-logo { width: 32rpx; height: 32rpx; margin-right: 8rpx; flex-shrink: 0; border-radius: 50%; }
 .dv-grp-name { flex: 0 1 auto; min-width: 0; font-size: 22rpx; font-weight: 700; color: #e8edf6; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .dv-grp-count { flex: 0 0 auto; margin-left: auto; font-size: 18rpx; color: #9aa6bd; }
-.dv-list-ops { display: flex; gap: 16rpx; }
+.dv-list-ops { display: flex; gap: 10rpx; }
+/* 展开/收起、刷新：胶囊按钮（图标 + 文案），与全站玻璃风一致 */
+.dv-op-btn { display: inline-flex; align-items: center; gap: 6rpx; padding: 8rpx 18rpx; border-radius: 999rpx; background: rgba(120,160,220,0.1); border: 1rpx solid rgba(120,160,220,0.22); cursor: pointer; transition: background 0.16s, border-color 0.16s; }
+.dv-op-btn:hover { background: rgba(var(--ac-rgb), 0.16); border-color: rgba(var(--ac-rgb), 0.45); }
+.dv-op-ico { font-size: 22rpx; color: var(--ac-hi); line-height: 1; }
+.dv-op-txt { font-size: 19rpx; color: rgba(255,255,255,0.82); white-space: nowrap; }
+.dv-op-ico.spin { display: inline-block; animation: dv-spin 1s linear infinite; }
+@keyframes dv-spin { to { transform: rotate(360deg); } }
 .dv-pick { display: flex; align-items: center; gap: 12rpx; padding: 14rpx 10rpx 14rpx 48rpx; border-bottom: 1rpx solid rgba(120,160,220,0.08); cursor: pointer; }
 .dv-pick:hover { background: rgba(120,160,220,0.06); }
 .dv-pick-left { flex: 0 0 auto; display: flex; flex-direction: column; }
