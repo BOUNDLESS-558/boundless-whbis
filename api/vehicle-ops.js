@@ -299,6 +299,19 @@ export default async function handler(req, res) {
       const q = req.query || {}
       if (q.view === 'daily') return await getDaily(sql, res, q)
       if (q.view === 'vehicle') return await getVehicleHistory(sql, res, q)
+      if (q.view === 'vehicles') {
+        // 车辆选择列表：累计表全量（轻量字段），前端用 buspedia 映射补全完整编号/车型
+        const rows = await sql`SELECT org_id, line_no, company, max_speed, speed_count,
+          departures, updated_at FROM vehicle_ops ORDER BY speed_count DESC, max_speed DESC`
+        return res.status(200).json({
+          updated: rows[0] ? String(rows[0].updated_at || '') : '',
+          vehicles: rows.map((r) => ({
+            orgId: r.org_id, lineNo: r.line_no, company: r.company,
+            maxSpeed: Number(r.max_speed) || 0, speedCount: Number(r.speed_count) || 0,
+            departures: Number(r.departures) || 0,
+          })),
+        })
+      }
       const rows = await sql`SELECT * FROM vehicle_ops ORDER BY updated_at DESC`
       return res.status(200).json({
         updated: rows[0] ? rows[0].updated_at : '',
