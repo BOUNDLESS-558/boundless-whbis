@@ -540,7 +540,7 @@
 
     <!-- 车辆详情窗：单击地图标记 / 示意图车辆 / 右侧列表项弹出。可拖动、可固定位置、可关闭；
          不带全屏遮罩 —— 窗口开着时地图仍可拖拽缩放，不遮挡操作 -->
-    <view class="bus-sheet" v-if="selectedBus" :class="{ pinned: sheetPinned, dragging: sheetDragging }" :style="sheetStyle">
+    <view class="bus-sheet" v-if="selectedBus" :class="[sheetDirCls, { pinned: sheetPinned, dragging: sheetDragging }]" :style="sheetStyle">
       <view
         class="sheet-head"
         :title="sheetPinned ? '已固定，点 📌 解锁后可拖动' : '按住标题栏拖动窗口'"
@@ -570,49 +570,64 @@
         </view>
       </view>
       <!-- 营运公司已并入标题行（方向徽标右侧），不再单独占行 -->
-      <!-- 当前走向：起绿点 / 终琥珀点，站名 → 箭头；方向只在标题栏徽标出现一次，不再重复 -->
+      <!-- 当前走向：连线行程条（起点→车辆→终点），细线 + 渐进填充代替干巴巴的箭头 -->
       <view class="sheet-route" v-if="sheetRoute">
         <view class="sr-line">
           <text class="sr-dot sr-start" title="起点站"></text>
           <text class="sr-name sr-from" :title="sheetRoute.from">{{ sheetRoute.from }}</text>
-          <text class="sr-arrow">→</text>
-          <text class="sr-dot sr-end" title="终点站"></text>
+          <text class="sr-dash"></text>
           <text class="sr-name sr-to" :title="sheetRoute.to">{{ sheetRoute.to }}</text>
+          <text class="sr-dot sr-end" title="终点站"></text>
         </view>
       </view>
-      <!-- 2×2 指标网格：小标签在上、数值在下，短值各占半行宽度，省掉四行横排 -->
-      <view class="sheet-grid">
-        <view class="sg-cell">
-          <text class="sg-k">自编号</text>
-          <view class="sg-v" :title="selectedBus.orgId ? (fmtNo(selectedBus.orgId) + ' · ' + (busModel(selectedBus.orgId) || '车型未知')) : '编号还原中…'">{{ selectedBus.orgId ? fmtNo(selectedBus.orgId) : '编号还原中…' }}</view>
+      <!-- 遥测主带：车速大数字 + 四段分档刻度尺（与车速榜同一套分档色）｜呼吸状态灯 + 状态大字。
+           这是这辆车"现在怎么样"的一句话答案，从普通网格里提出来做成主视觉 -->
+      <view class="sheet-tele">
+        <view class="stx-speed">
+          <view class="stx-num-row" :title="'GPS 车速 ' + (selectedBus.gpsSpeed ?? '—') + ' km/h'">
+            <text class="stx-num" :style="{ color: speedBandColor }">{{ selectedBus.gpsSpeed ?? '—' }}</text>
+            <text class="stx-unit">km/h</text>
+          </view>
+          <view class="stx-scale" title="速度分档：静止 / 低速 / 中速 / 快速（与车速榜同一套色）">
+            <view
+              v-for="(band, bi) in cityBands"
+              :key="band.key"
+              class="stx-seg"
+              :class="{ on: speedBandIdx === bi }"
+              :style="{ '--band': band.color }"
+            ></view>
+          </view>
+          <view class="stx-band-label">{{ speedBandLabel }}档</view>
         </view>
-        <view class="sg-cell">
-          <text class="sg-k">车速</text>
-          <view class="sg-v">
-            <text class="sg-num" :style="{ color: speedBandColor }">{{ selectedBus.gpsSpeed }}</text>
-            <text class="sg-u">km/h</text>
+        <view class="stx-div"></view>
+        <view class="stx-state">
+          <view class="stx-lamp-wrap">
+            <text class="stx-lamp" :class="busStateCls(selectedBus)" :style="{ '--lamp': busStateColor }"></text>
+          </view>
+          <view class="stx-state-txt">
+            <text class="stx-state-v" :style="{ color: busStateColor }">{{ busStateText(selectedBus) }}</text>
+            <text class="stx-state-k">运行状态</text>
           </view>
         </view>
-        <view class="sg-cell">
-          <text class="sg-k">运行状态</text>
-          <view class="sg-v"><text class="sg-num" :style="{ color: busStateColor }">{{ busStateText(selectedBus) }}</text></view>
+      </view>
+      <!-- 身份档案：自编号（大）+ 车型副行、GPS 时间、坐标（GCJ-02），统一「标签上 / 值下」 -->
+      <view class="sheet-grid">
+        <view class="sg-cell sg-id">
+          <text class="sg-k">自编号</text>
+          <view class="sg-v sg-no" :title="selectedBus.orgId ? (fmtNo(selectedBus.orgId) + ' · ' + (busModel(selectedBus.orgId) || '车型未知')) : '编号还原中…'">{{ selectedBus.orgId ? fmtNo(selectedBus.orgId) : '编号还原中…' }}</view>
+          <view class="sg-model" v-if="busModel(selectedBus.orgId)">🚌 {{ busModel(selectedBus.orgId) }}</view>
         </view>
         <view class="sg-cell">
           <text class="sg-k">GPS 时间</text>
-          <view class="sg-v">{{ selectedBus.time }}</view>
+          <view class="sg-v sg-time">{{ selectedBus.time }}</view>
         </view>
-        <view class="sg-cell sg-cell-wide" v-if="busModel(selectedBus.orgId)">
-          <text class="sg-k">车辆型号</text>
-          <view class="sg-v sg-model">🚌 {{ busModel(selectedBus.orgId) }}</view>
-        </view>
-        <!-- 坐标并入指标网格：与其它指标同一套「标签上 / 值下」排版，等宽 6 位小数 -->
         <view class="sg-cell sg-cell-wide">
           <text class="sg-k">坐标 · GCJ-02</text>
           <view class="sg-v sg-coord" :title="busCoord">{{ busCoord }}</view>
         </view>
       </view>
       <view class="sheet-btns">
-        <view class="sheet-btn" @click="focusBus(selectedBus)" title="居中并把地图放到最大，精确查看这辆车">📍 在地图上定位</view>
+        <view class="sheet-btn primary" @click="focusBus(selectedBus)" title="居中并把地图放到最大，精确查看这辆车">📍 在地图上定位</view>
         <!-- 全市态下的出口：从一辆车跳到它所属的线路（看得到走向、站点与同线其他车） -->
         <view class="sheet-btn go" v-if="cityOn && selectedBus.code" @click="openCityLine(selectedBus)" :title="'切换到 ' + selectedBus.no + ' 路地图'">🗺 打开 {{ selectedBus.no }} 路</view>
       </view>
@@ -1187,6 +1202,22 @@ export default {
       const v = Number(this.selectedBus && this.selectedBus.gpsSpeed) || 0
       const band = speedBandOf(v)
       return SPEED_BANDS[band] ? SPEED_BANDS[band].color : '#e2e8f0'
+    },
+    // 车速分档下标 / 标签：遥测主带刻度尺高亮当前档位
+    speedBandIdx() {
+      return speedBandOf(Number(this.selectedBus && this.selectedBus.gpsSpeed) || 0)
+    },
+    speedBandLabel() {
+      const b = SPEED_BANDS[this.speedBandIdx]
+      return b ? b.label : '—'
+    },
+    // 车辆窗方向类：顶缘方向光线 / 走向线颜色随上行青蓝、下行玫红、环线紫罗兰。
+    // 全市态点开别线的车时宿主 lineName 为空，按车辆自己的线路号补判环线
+    sheetDirCls() {
+      const b = this.selectedBus
+      if (!b) return ''
+      if (this.isLoop || isLoopLine(b.no)) return 'dir-loop'
+      return b.dir === 1 ? 'dir-1' : 'dir-0'
     },
     // 运行状态颜色：到站=绿 / 离站=橙 / 行驶=青 / 停靠=琥珀，与自编号、车速同一套大字+配色模式
     busStateColor() {
@@ -4549,10 +4580,11 @@ export default {
     busStateText(bus) {
       return busStateOf(bus, this.stopsByDir[bus.dir], this.routeByDir[bus.dir])
     },
-    // 运行状态配色：到站=绿 / 离站=橙 / 行驶=青 / 停靠=琥珀，与详情窗文案同口径
+    // 运行状态配色：到站=绿 / 离站=橙 / 行驶=青 / 停靠=琥珀，与详情窗文案同口径。
+    // busStateOf 返回「离站」（历史上写成「已离站」比对恒不成立），两种写法都归一到 departed
     busStateCls(bus) {
       const s = busStateOf(bus, this.stopsByDir[bus.dir], this.routeByDir[bus.dir])
-      return s === '到站' ? 'arrived' : s === '已离站' ? 'departed' : s === '行驶' ? 'moving' : 'stopped'
+      return s === '到站' ? 'arrived' : s === '离站' || s === '已离站' ? 'departed' : s === '行驶' ? 'moving' : 'stopped'
     },
     /**
      * 计算车辆当前所在站点名。
@@ -5702,7 +5734,25 @@ export default {
   box-sizing: border-box;
   box-shadow: 0 24rpx 64rpx rgba(0, 0, 0, 0.5), inset 0 1rpx 0 rgba(255, 255, 255, 0.18);
   /* 位置由 JS 直接给 left/top：不能加 transition，否则拖动跟手有延迟 */
+  overflow: hidden;
 }
+/* 顶缘方向光线：方向色渐变细线贴窗顶，与走向图配色同源（上行青 / 下行玫红 / 环线紫）。
+   站点窗（stop-sheet）不挂方向类，::before 不渲染 */
+.bus-sheet.dir-0::before,
+.bus-sheet.dir-1::before,
+.bus-sheet.dir-loop::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 24rpx;
+  right: 24rpx;
+  height: 4rpx;
+  border-radius: 0 0 6rpx 6rpx;
+  pointer-events: none;
+}
+.bus-sheet.dir-0::before { background: linear-gradient(90deg, rgba(34, 211, 238, 0.1), rgba(34, 211, 238, 0.9) 30%, rgba(6, 182, 212, 0.9) 70%, rgba(34, 211, 238, 0.1)); box-shadow: 0 0 12rpx rgba(34, 211, 238, 0.4); }
+.bus-sheet.dir-1::before { background: linear-gradient(90deg, rgba(251, 113, 133, 0.1), rgba(251, 113, 133, 0.9) 30%, rgba(244, 63, 94, 0.9) 70%, rgba(251, 113, 133, 0.1)); box-shadow: 0 0 12rpx rgba(251, 113, 133, 0.4); }
+.bus-sheet.dir-loop::before { background: linear-gradient(90deg, rgba(167, 139, 250, 0.1), rgba(167, 139, 250, 0.9) 30%, rgba(139, 92, 246, 0.9) 70%, rgba(167, 139, 250, 0.1)); box-shadow: 0 0 12rpx rgba(167, 139, 250, 0.4); }
 /* 标题栏就是拖动手柄：按住任意空白处即可移动窗口 */
 .sheet-head {
   display: flex;
@@ -6038,7 +6088,193 @@ export default {
   background: rgba(var(--ac-rgb), 0.14);
   border: 2rpx solid rgba(var(--ac-rgb), 0.32);
 }
-/* 2×2 指标网格：标签在上、数值在下；竖线分左右列，横线分上下行 */
+/* —— 车辆窗身份网格 / 遥测主带样式见下方 sheet-route ~ sheet-grid 区块 —— */
+
+/* 当前走向：连线行程条（起绿点 — 虚线 — 终琥珀点），替代干巴巴的箭头 */
+.sheet-route {
+  padding: 14rpx 0 10rpx;
+  border-bottom: 1rpx solid rgba(255, 255, 255, 0.06);
+}
+/* 走向行：起讫站一行走完，中间虚线填满剩余宽度，示意"行驶区间" */
+.sr-line {
+  display: flex;
+  align-items: center;
+  gap: 8rpx;
+  min-width: 0;
+}
+/* 起讫站圆点：起绿 / 终琥珀，比徽标更轻量 */
+.sr-dot {
+  flex: 0 0 auto;
+  width: 18rpx;
+  height: 18rpx;
+  border-radius: 50%;
+}
+.sr-start { background: #22c55e; box-shadow: 0 0 0 3rpx rgba(34, 197, 94, 0.22); }
+.sr-end { background: #f59e0b; box-shadow: 0 0 0 3rpx rgba(245, 158, 11, 0.22); }
+.sr-name {
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  font-size: 22rpx;
+  font-weight: 600;
+  color: #eef1ff;
+}
+/* 起站名按内容宽排，虚线吃掉剩余宽度；终站名不被挤压（可换行截断） */
+.sr-from {
+  flex: 0 1 auto;
+  max-width: 40%;
+}
+.sr-to {
+  flex: 1 1 0;
+  text-align: right;
+}
+/* 行程虚线：填充起讫站之间的剩余空间，颜色随当前方向 */
+.sr-dash {
+  flex: 0 1 auto;
+  width: 40rpx;
+  height: 0;
+  border-top: 2rpx dashed rgba(255, 255, 255, 0.28);
+}
+.dir-0 .sr-dash { border-top-color: rgba(34, 211, 238, 0.55); }
+.dir-1 .sr-dash { border-top-color: rgba(251, 113, 133, 0.55); }
+.dir-loop .sr-dash { border-top-color: rgba(167, 139, 250, 0.55); }
+/* —— 遥测主带：车速大数字 + 分档刻度尺 ｜ 呼吸状态灯 —— */
+.sheet-tele {
+  display: flex;
+  align-items: stretch;
+  gap: 20rpx;
+  padding: 18rpx 0 16rpx;
+  border-bottom: 1rpx solid rgba(255, 255, 255, 0.06);
+}
+.stx-speed {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10rpx;
+}
+.stx-num-row {
+  display: flex;
+  align-items: baseline;
+  gap: 8rpx;
+  white-space: nowrap;
+  overflow: hidden;
+}
+/* 车速大数字：遥测主带的主视觉，分档色 + 等宽数字，视觉权重远高于其它指标 */
+.stx-num {
+  font-size: 60rpx;
+  font-weight: 800;
+  line-height: 1;
+  letter-spacing: -1rpx;
+  font-variant-numeric: tabular-nums;
+  text-shadow: 0 2rpx 14rpx rgba(0, 0, 0, 0.35);
+}
+.stx-unit {
+  font-size: 20rpx;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.45);
+}
+/* 四段速度刻度尺：与车速榜 SPEED_BANDS 同一套分档色，当前档位点亮 + 发光 */
+.stx-scale {
+  display: flex;
+  gap: 6rpx;
+  max-width: 320rpx;
+}
+.stx-seg {
+  flex: 1 1 0;
+  height: 8rpx;
+  border-radius: 4rpx;
+  background: rgba(255, 255, 255, 0.1);
+  transition: background 0.25s, box-shadow 0.25s;
+}
+.stx-seg.on {
+  background: var(--band);
+  box-shadow: 0 0 8rpx 0 var(--band);
+}
+/* 档位标签：静止 / 低速 / 中速 / 快速，压暗不抢主数字 */
+.stx-band-label {
+  font-size: 18rpx;
+  line-height: 1;
+  color: rgba(255, 255, 255, 0.42);
+  letter-spacing: 1rpx;
+}
+.stx-div {
+  flex: 0 0 auto;
+  width: 1rpx;
+  background: rgba(255, 255, 255, 0.08);
+  margin: 4rpx 0;
+}
+/* 状态块：呼吸灯 + 状态大字，垂直居中与车速带对齐 */
+.stx-state {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 14rpx;
+  padding-right: 4rpx;
+}
+/* 窄屏（H5 桌面 rpx 按 375 基准，≤480px 视口）遥测主带允许换行：车速带占满一行，
+   状态块另起一行靠左，分隔竖线隐藏 */
+@media (max-width: 480px) {
+  .sheet-tele {
+    flex-wrap: wrap;
+    gap: 14rpx 0;
+  }
+  .stx-div {
+    display: none;
+  }
+  .stx-state {
+    flex: 1 1 100%;
+    padding-left: 4rpx;
+  }
+  .stx-scale {
+    max-width: none;
+  }
+}
+.stx-lamp-wrap {
+  position: relative;
+  width: 22rpx;
+  height: 22rpx;
+}
+/* 呼吸状态灯：外圈涟漪扩散 + 内芯常亮，颜色随运行状态 */
+.stx-lamp {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background: var(--lamp);
+  box-shadow: 0 0 10rpx 1rpx var(--lamp);
+}
+.stx-lamp::after {
+  content: '';
+  position: absolute;
+  inset: -8rpx;
+  border-radius: 50%;
+  border: 2rpx solid var(--lamp);
+  opacity: 0.55;
+  animation: lampPulse 2.2s ease-out infinite;
+}
+@keyframes lampPulse {
+  0% { transform: scale(0.55); opacity: 0.55; }
+  70% { transform: scale(1.35); opacity: 0; }
+  100% { transform: scale(1.35); opacity: 0; }
+}
+.stx-state-txt {
+  display: flex;
+  flex-direction: column;
+  gap: 6rpx;
+}
+.stx-state-v {
+  font-size: 30rpx;
+  font-weight: 800;
+  line-height: 1;
+  letter-spacing: 1rpx;
+}
+.stx-state-k {
+  font-size: 18rpx;
+  line-height: 1;
+  color: rgba(255, 255, 255, 0.4);
+}
+/* 身份档案网格：自编号（含车型副行）+ GPS 时间 + 坐标，分隔线规整 */
 .sheet-grid {
   display: flex;
   flex-wrap: wrap;
@@ -6076,10 +6312,28 @@ export default {
   font-variant-numeric: tabular-nums;
   letter-spacing: 0.3rpx;
 }
+/* 自编号：身份网格里的主值，加提亮与字距，配车型副行 */
+.sg-no {
+  font-size: 30rpx;
+  font-weight: 800;
+  color: #ffffff;
+  letter-spacing: 1rpx;
+  font-variant-numeric: tabular-nums;
+}
+/* 车型副行：小字压淡，挂在自编号下方，不再单独占一格 */
 .sg-model {
-  font-size: 24rpx;
+  font-size: 19rpx;
+  line-height: 1.3;
+  color: rgba(255, 255, 255, 0.52);
   white-space: normal;
   word-break: break-all;
+}
+/* GPS 时间：等宽数字，与坐标同字号层级 */
+.sg-time {
+  font-size: 24rpx;
+  font-weight: 700;
+  color: #eef1ff;
+  font-variant-numeric: tabular-nums;
 }
 .sg-k {
   font-size: 19rpx;
@@ -6088,7 +6342,6 @@ export default {
   white-space: nowrap;
   letter-spacing: 0.5rpx;
 }
-/* 车速单元：分档色数字 + 单位，与车速榜同一套快慢语义 */
 .sg-v {
   display: inline-flex;
   align-items: baseline;
@@ -6097,64 +6350,6 @@ export default {
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
   overflow: hidden;
-}
-.sg-num {
-  font-size: 28rpx;
-  font-weight: 800;
-  line-height: 1;
-  color: #eef1ff;
-  font-variant-numeric: tabular-nums;
-}
-.sg-u {
-  margin-left: 2rpx;
-  font-size: 18rpx;
-  font-weight: 600;
-  color: rgba(255, 255, 255, 0.46);
-}
-/* 当前走向：起绿圆点 / 终琥珀圆点，站名过长时各自省略（方向只在标题栏徽标出现，不在此重复） */
-.sheet-route {
-  padding: 14rpx 0;
-  border-bottom: 1rpx solid rgba(255, 255, 255, 0.06);
-}
-/* 走向行：起讫站一行走完 */
-.sr-line {
-  display: flex;
-  align-items: center;
-  gap: 8rpx;
-  min-width: 0;
-}
-/* 起讫站圆点：起绿 / 终琥珀，比徽标更轻量 */
-.sr-dot {
-  flex: 0 0 auto;
-  width: 18rpx;
-  height: 18rpx;
-  border-radius: 50%;
-}
-.sr-start { background: #22c55e; box-shadow: 0 0 0 3rpx rgba(34, 197, 94, 0.22); }
-.sr-end { background: #f59e0b; box-shadow: 0 0 0 3rpx rgba(245, 158, 11, 0.22); }
-.sr-name {
-  min-width: 0;
-  overflow: hidden;
-  white-space: nowrap;
-  text-overflow: ellipsis;
-  font-size: 22rpx;
-  font-weight: 600;
-  color: #eef1ff;
-}
-/* 起站名按文字实际宽度排，箭头紧跟其后；两段等宽会把箭头顶到行中间偏右 */
-.sr-from {
-  flex: 0 1 auto;
-  /* 超长起站名也要留出终站名的空间，箭头最远不越过行中点 */
-  max-width: 38%;
-}
-.sr-to {
-  /* basis 必须是 0：用 auto 会把终站名的内容宽计入收缩基准，反过来挤掉起站名 */
-  flex: 1 1 0;
-}
-.sr-arrow {
-  flex: 0 0 auto;
-  font-size: 22rpx;
-  color: rgba(255, 255, 255, 0.42);
 }
 .sheet-btns {
   display: flex;
