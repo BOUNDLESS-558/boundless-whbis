@@ -364,6 +364,7 @@ export default {
       vehicleProfile: null,
       vehicleLoading: false,
       mapVersion: 0,   // 自编号映射就绪版本号，驱动 fmtNo/busModel 重渲染
+      lineIndex: null, // 线路号 → { start, end }（static/lines/lines.json，懒加载）
       stamp: '',
       speedLimit: 60,
       loading: false,
@@ -518,6 +519,7 @@ export default {
     this.load()
     // 自编号映射加载完成后刷新车型显示（映射表懒加载，首次可能晚于面板挂载）
     onBusNumberReady(() => { this.mapVersion++ })
+    this.loadLineIndex()
   },
   methods: {
     // 模式切换：按日 ↔ 按车辆（各自保留查询状态）
@@ -663,6 +665,37 @@ export default {
     recordText(r) { return r.date ? `${r.date} ${r.recordedAt || ''}`.trim() : (r.recordedAt || '—') },
     // 车辆调配逻辑：同一台车（自编号 orgId 不变）在不同记录时间点出现在不同线路上，
     // 即视为发生调配。transfers 由采集端按「线路变化」生成：{from, to, at}。
+    // 线路起终点索引：只取 start/end 两个字段，冻结避免响应式开销
+    async loadLineIndex() {
+      try {
+        const res = await fetch(assetUrl('/static/lines/lines.json'))
+        const j = await res.json()
+        const idx = {}
+        for (const l of (j && j.lines) || []) {
+          if (l && l.no) idx[String(l.no)] = { start: l.start || '', end: l.end || '' }
+        }
+        this.lineIndex = Object.freeze(idx)
+      } catch (e) {
+        console.warn('[DataPanel] 线路索引加载失败', e)
+      }
+    },
+    // 营运方向：0 = 上行（起点→终点），1 = 下行（终点→起点）；未采到返回 ''
+    dirText(r) {
+      const d = r && r.dir
+      if (d === 0 || d === '0') return '⬆ 上行'
+      if (d === 1 || d === '1') return '⬇ 下行'
+      return ''
+    },
+    // 线路走向：按方向排列起终点；方向未知时显示「起点 ⇄ 终点」
+    routeText(r) {
+      const no = String((r && (r.lineNo || (r.lines || [])[0])) || '')
+      const l = no && this.lineIndex && this.lineIndex[no]
+      if (!l || (!l.start && !l.end)) return ''
+      const d = r.dir
+      if (d === 1 || d === '1') return `${l.end || '—'} → ${l.start || '—'}`
+      if (d === 0 || d === '0') return `${l.start || '—'} → ${l.end || '—'}`
+      return `${l.start || '—'} ⇄ ${l.end || '—'}`
+    },
     transferText(r) {
       const list = Array.isArray(r.transfers) ? r.transfers : []
       if (!list.length) return '无调配'
@@ -675,6 +708,9 @@ export default {
       if (record && record !== '—') out.push({ k: '记录时间', v: record })
       const model = this.busModel(r.orgId)
       if (model) out.push({ k: '车辆型号', v: model })
+      out.push({ k: '营运方向', v: this.dirText(r) || '暂未采集' })
+      const route = this.routeText(r)
+      if (route) out.push({ k: '线路走向', v: route, full: true })
       out.push({ k: '超速次数', v: `${r.speedCount} 次` })
       const t = this.tierOf(r)
       out.push({ k: '超速评价', v: `${t.emoji} ${t.label}`, color: t.color })

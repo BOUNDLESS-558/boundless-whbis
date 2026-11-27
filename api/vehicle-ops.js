@@ -63,6 +63,9 @@ function ensureTable(sql) {
       await sql`CREATE INDEX IF NOT EXISTS idx_vod_date ON vehicle_ops_daily (date DESC)`
       await sql`CREATE INDEX IF NOT EXISTS idx_vod_company_date ON vehicle_ops_daily (company, date DESC)`
       await sql`CREATE INDEX IF NOT EXISTS idx_vod_line_date ON vehicle_ops_daily (line_no, date DESC)`
+      // 营运方向：0 = 上行，1 = 下行（最后一次采到的方向）
+      await sql`ALTER TABLE vehicle_ops ADD COLUMN IF NOT EXISTS dir INTEGER`
+      await sql`ALTER TABLE vehicle_ops_daily ADD COLUMN IF NOT EXISTS dir INTEGER`
     })().catch((e) => { _ensureTable = null; throw e })
   }
   return _ensureTable
@@ -90,6 +93,7 @@ function toRow(r, daily = false) {
     onlineAt: r.online_at, offlineAt: r.offline_at,
     departures: Number(r.departures), transfers: r.transfers, lines: r.lines,
     samples: Number(r.samples),
+    dir: r.dir === null || r.dir === undefined ? null : Number(r.dir),
   }
   if (daily) {
     out.date = r.date instanceof Date ? r.date.toISOString().slice(0, 10) : String(r.date || '')
@@ -117,7 +121,7 @@ async function getVehicleHistory(sql, res, q) {
   if (q.to) add('date <= ?::date', q.to)
   const rows = await sql.query(
     `SELECT to_char(date, 'YYYY-MM-DD') AS date, line_no, company, max_speed, speed_count,
-            online_at, offline_at, departures, transfers, lines, samples, recorded_at
+            online_at, offline_at, departures, transfers, lines, samples, recorded_at, dir
      FROM vehicle_ops_daily
      WHERE ${where.join(' AND ')}
      ORDER BY date DESC, recorded_at DESC`,
@@ -137,6 +141,7 @@ async function getVehicleHistory(sql, res, q) {
       maxSpeed: Number(r.max_speed), speedCount: Number(r.speed_count),
       departures: Number(r.departures), transfers: r.transfers || [],
       lines: r.lines || [], samples: Number(r.samples),
+      dir: r.dir === null || r.dir === undefined ? null : Number(r.dir),
     })),
     updated: rows.length ? String(rows[0].recorded_at || '') : '',
   })
@@ -199,19 +204,20 @@ async function getDaily(sql, res, q) {
  * 各 ON CONFLICT 子句的累加 / 取极值语义与旧逐车版保持一致。
  */
 const RECORD_COLS = `org_id TEXT, line_no TEXT, company TEXT, max_speed NUMERIC, speed_count INTEGER,
-    online_at TEXT, offline_at TEXT, departures INTEGER, transfers JSONB, lines JSONB, samples INTEGER`
+    online_at TEXT, offline_at TEXT, departures INTEGER, transfers JSONB, lines JSONB, samples INTEGER, dir INTEGER`
 
 const UPSERT_CUMULATIVE = `
   INSERT INTO vehicle_ops (
     org_id, line_no, company, max_speed, speed_count,
-    online_at, offline_at, departures, transfers, lines, samples, updated_at
+    online_at, offline_at, departures, transfers, lines, samples, dir, updated_at
   )
   SELECT
     b.org_id, b.line_no, b.company, b.max_speed, b.speed_count,
-    b.online_at, b.offline_at, b.departures, b.transfers, b.lines, b.samples, now()
+    b.online_at, b.offline_at, b.departures, b.transfers, b.lines, b.samples, b.dir, now()
   FROM jsonb_to_recordset($1::jsonb) AS b(${RECORD_COLS})
   ON CONFLICT (org_id) DO UPDATE SET
     line_no = EXCLUDED.line_no,
+    dir = COALESCE(EXCLUDED.dir, vehicle_ops.dir),
     company = EXCLUDED.company,
     max_speed = GREATEST(vehicle_ops.max_speed, EXCLUDED.max_speed),
     speed_count = vehicle_ops.speed_count + EXCLUDED.speed_count,
@@ -227,15 +233,16 @@ const UPSERT_CUMULATIVE = `
 const UPSERT_DAILY = `
   INSERT INTO vehicle_ops_daily (
     date, org_id, recorded_at, line_no, company, max_speed, speed_count,
-    online_at, offline_at, departures, transfers, lines, samples, updated_at
+    online_at, offline_at, departures, transfers, lines, samples, dir, updated_at
   )
   SELECT
     $2::date, b.org_id, $3::text, b.line_no, b.company, b.max_speed, b.speed_count,
-    b.online_at, b.offline_at, b.departures, b.transfers, b.lines, b.samples, now()
+    b.online_at, b.offline_at, b.departures, b.transfers, b.lines, b.samples, b.dir, now()
   FROM jsonb_to_recordset($1::jsonb) AS b(${RECORD_COLS})
   ON CONFLICT (date, org_id) DO UPDATE SET
     recorded_at = EXCLUDED.recorded_at,
     line_no = EXCLUDED.line_no,
+    dir = COALESCE(EXCLUDED.dir, vehicle_ops_daily.dir),
     company = EXCLUDED.company,
     max_speed = GREATEST(vehicle_ops_daily.max_speed, EXCLUDED.max_speed),
     -- 天累计：每轮采集若超速则 +1（单轮 speed_count 为 0/1），不再取 MAX（永远只显示 1）
@@ -274,6 +281,7 @@ function normalizeBuses(buses) {
       transfers: Array.isArray(b && b.transfers) ? b.transfers : [],
       lines: Array.isArray(b && b.lines) ? b.lines : [],
       samples: Number(b && b.samples) || 0,
+      dir: b && (b.dir === 0 || b.dir === 1 || b.dir === '0' || b.dir === '1') ? Number(b.dir) : null,
     })
   }
   return Array.from(map.values())
