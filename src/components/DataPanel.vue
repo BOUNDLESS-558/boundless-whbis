@@ -327,9 +327,9 @@ function driverTierOf(n) {
 // 表头列 = 数据行概览格，顺序 / 样式类必须与 .dp-item-head 内的 .dp-cell 完全一致，
 // 否则窄屏 flex-wrap 换行后会出现「列名对不上内容」的错位（原先排序胶囊被误认成表头）。
 const COLUMNS = [
-  { key: 'company', label: '营运公司', cls: 'company' },
-  { key: 'lineNo', label: '线路号', cls: 'line' },
-  { key: 'orgId', label: '自编号', cls: 'org' },
+  { key: 'company', label: '营运公司', cls: 'company', title: '按徽标上的公司序号排序（一=1，二=2…）' },
+  { key: 'lineNo', label: '线路号', cls: 'line', title: '按线路数字排序；纯字母线路按 A-Z 排序' },
+  { key: 'orgId', label: '自编号', cls: 'org', title: '先按首位公司数字，再忽略 N/D/F 后的数字排序' },
   { key: 'recordedAt', label: '记录时间', cls: 'record' },
   { key: 'maxSpeed', label: '最高车速', cls: 'speed' },
   { key: 'speedCount', label: '今日超速', cls: 'over', title: '当天被抓到超速的累计次数' },
@@ -493,9 +493,8 @@ export default {
     rowBadges() {
       const m = {}
       for (const r of this.rows) {
-        const d = String(r.orgId || '').charAt(0)
-        if (d >= '1' && d <= '9') {
-          const no = Number(d)
+        const no = this.companyNoOf(r)
+        if (no >= 1 && no <= 9) {
           m[this.rowKey(r)] = { no, short: CN_ORG[no].replace(/^第/, '') + '公司', label: `武汉公交集团${CN_ORG[no]}营运公司`, foreign: false, logo: '' }
         } else {
           const c = companyOf({ no: r.lineNo, company: r.company })
@@ -661,6 +660,32 @@ export default {
       if (m) return `武汉公交集团第${m[1]}公司`
       return s || '未知公司'
     },
+    // 公司序号：与徽标上的数字同源，排序与展示必须一致
+    companyNoOf(r) {
+      const s = String((r && r.company) || '')
+      const cn = s.match(/第([一二三四五六七八九])营运公司/) || s.match(/有限责任公司([一二三四五六七八九])营运公司/)
+      if (cn) return '一二三四五六七八九'.indexOf(cn[1]) + 1
+      const ar = s.match(/第([1-9])营运公司/)
+      if (ar) return Number(ar[1])
+      const d = String((r && r.orgId) || '').charAt(0)
+      if (/[1-9]/.test(d)) return Number(d)
+      return 99 // 非集团公司统一排最后，按名称排
+    },
+    // 自编号排序键：首位的公司数字优先，忽略 N/D/F，再比剩余数字
+    orgSortKey(v) {
+      const s = String(v || '')
+      const d = s.charAt(0)
+      const c = /[1-9]/.test(d) ? Number(d) : 99
+      const rest = (/[1-9]/.test(d) ? s.slice(1) : s).replace(/[NDF]/gi, '')
+      const nums = rest.match(/\d+/g)
+      return { c, n: nums ? Number(nums.join('')) : 0, text: s }
+    },
+    // 线路排序键：含数字按数字比，纯字母线路按 A-Z 比
+    lineSortKey(v) {
+      const s = String(v || '')
+      const nums = s.match(/\d+/g)
+      return { hasNum: !!nums, n: nums ? Number(nums.join('')) : 0, text: s }
+    },
     shortTime(t) { return String(t || '—').slice(5) },
     recordText(r) { return r.date ? `${r.date} ${r.recordedAt || ''}`.trim() : (r.recordedAt || '—') },
     // 车辆调配逻辑：同一台车（自编号 orgId 不变）在不同记录时间点出现在不同线路上，
@@ -797,8 +822,15 @@ export default {
     rebuildOptions(days, companies, lines) {
       const years = [...new Set(days.map((d) => String(d).slice(0, 4)))].sort().reverse()
       this.yearOpts = [ALL, ...years]
-      this.companyOpts = [ALL, ...companies]
-      this.lineOpts = [ALL, ...lines]
+      this.companyOpts = [ALL, ...companies.slice().sort((a, b) => {
+        const na = this.companyNoOf({ company: a }), nb = this.companyNoOf({ company: b })
+        return (na - nb) || String(a).localeCompare(String(b), 'zh')
+      })]
+      this.lineOpts = [ALL, ...lines.slice().sort((a, b) => {
+        const ka = this.lineSortKey(a), kb = this.lineSortKey(b)
+        if (ka.hasNum !== kb.hasNum) return ka.hasNum ? -1 : 1
+        return (ka.hasNum && kb.hasNum ? (ka.n - kb.n) : ka.text.localeCompare(kb.text, 'en', { sensitivity: 'base' })) || ka.text.localeCompare(kb.text)
+      })]
       this.rebuildDayOpts()
     },
     rebuildDayOpts() {
@@ -833,11 +865,21 @@ export default {
       return [...list].sort((a, b) => {
         const av = a[key] || '', bv = b[key] || ''
         if (key === 'company') {
-          // 按公司序号（一、二、三…）排，而不是按中文字符串字典序
-          const na = Number(a.companyNo) || 99, nb = Number(b.companyNo) || 99
+          // 公司序号和徽标数字同源；无序号（外部公司）排最后
+          const na = this.companyNoOf(a), nb = this.companyNoOf(b)
           return ((na - nb) || String(av).localeCompare(String(bv), 'zh')) * dir
         }
-        if (key === 'lineNo' || key === 'orgId') return ((Number(av) || 0) - (Number(bv) || 0)) * dir
+        if (key === 'lineNo') {
+          const ka = this.lineSortKey(av), kb = this.lineSortKey(bv)
+          // 数字线路优先；都含数字按数值排；纯字母线路按 A-Z / Z-A
+          if (ka.hasNum !== kb.hasNum) return ka.hasNum ? -1 : 1
+          if (ka.hasNum && kb.hasNum && ka.n !== kb.n) return (ka.n - kb.n) * dir
+          return ka.text.localeCompare(kb.text, 'en', { sensitivity: 'base' }) * dir
+        }
+        if (key === 'orgId') {
+          const ka = this.orgSortKey(av), kb = this.orgSortKey(bv)
+          return ((ka.c - kb.c) || (ka.n - kb.n) || ka.text.localeCompare(kb.text)) * dir
+        }
         if (key === 'recordedAt') return String((a.date || '') + av).localeCompare(String((b.date || '') + bv)) * dir
         if (typeof av === 'number' && typeof bv === 'number') return (av - bv) * dir
         return String(av).localeCompare(String(bv)) * dir
