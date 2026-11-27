@@ -66,6 +66,20 @@ export function formatBusNo(orgId) {
 }
 
 /**
+ * 按纯数字自编号取车辆具体车型（如 XMQ6127GHEV4）。
+ * 映射表 byFull[完整编号].model 由 buspedia 车队页采集，与 byNum 同源。
+ * @param {string} orgId 纯数字自编号，如 325311
+ * @returns {string} 车型名；无映射或未就绪返回空串
+ */
+export function getBusModel(orgId) {
+  if (!orgId || !MAP) return ''
+  const full = formatBusNo(orgId)
+  if (!full || full === String(orgId)) return ''
+  const m = MAP.__byFull && (MAP.__byFull[String(full).toUpperCase()] || MAP.__byFull[full])
+  return m && m.model ? String(m.model) : ''
+}
+
+/**
  * 把完整编号（含车型字母，如 325F311 / T19H6230）反查回纯数字自编号。
  * 用于「自编号查车」：地图标签显示的是完整编号，而快照里的 busId = MD5(纯数字)。
  * 只有拿到纯数字才能正向 MD5 命中车辆；映射表未就绪/无映射时返回原输入。

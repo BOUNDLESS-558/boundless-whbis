@@ -40,8 +40,11 @@
         </view>
 
         <view class="plan-row" v-for="(p, i) in g.plans" :key="p.busId || i" :title="planTip(p, g)">
-          <!-- 左：车辆自编号（沿用车辆面板 .bus-org 字体：主色 800 等宽数字，无图标无胶囊）；右：发车时间 -->
-          <text class="plan-org" v-if="p.bus">{{ fmtNo(p.bus) }}</text>
+          <!-- 左：自编号 + 车型（沿用车辆面板字体风格）；右：发车时间 -->
+          <view class="plan-left">
+            <text class="plan-org" v-if="p.bus">{{ fmtNo(p.bus) }}</text>
+            <text class="plan-model" v-if="p.bus && busModel(p.bus)">🚌 {{ busModel(p.bus) }}</text>
+          </view>
           <view class="plan-time-wrap">
             <text class="plan-badge departed" v-if="planStatus(p) === 'departed'">已发</text>
             <text class="plan-badge pending" v-else-if="planStatus(p) === 'pending'">待发</text>
@@ -63,7 +66,7 @@ import { fetchPlanTime, decryptBusId, onBusIdReady, isBusIdReady } from '../util
 import { buildLineCode } from '../config.js'
 import { isLoopLine } from '../utils/lineIndex.js'
 import { copyTable } from '../utils/clipboard.js'
-import { formatBusNo, onBusNumberReady } from '../utils/busNumber.js'
+import { formatBusNo, getBusModel, onBusNumberReady } from '../utils/busNumber.js'
 import { orgCompanyOf } from '../utils/speedRank.js'
 import CopyPill from './CopyPill.vue'
 
@@ -168,6 +171,11 @@ export default {
     fmtNo(orgId) {
       void this.mapVersion
       return formatBusNo(orgId)
+    },
+    // 车辆具体型号（buspedia 自编号映射的 model 字段）
+    busModel(orgId) {
+      void this.mapVersion
+      return getBusModel(orgId)
     },
     // 班次稳定 id：优先 busId（MD5，跨刷新稳定），缺失时退化用 自编号|发车时刻
     planKey(p) {
@@ -552,14 +560,30 @@ export default {
   background: rgba(16, 185, 129, 0.14);
   border: 1rpx solid rgba(16, 185, 129, 0.32);
 }
+/* 左侧：自编号 + 车型，纵向排列（右侧时间保持单列） */
+.plan-left {
+  flex: 0 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
 /* 车辆自编号：直接沿用车辆面板 .bus-org 的字体风格（34rpx / 800 / 主色 / 等宽数字），
    去掉胶囊底与图标，纯文字与右侧时间共用同一套字体语言 */
 .plan-org {
-  flex: 0 0 auto;
   font-size: 34rpx;
   font-weight: 800;
   color: var(--ac-hi);
   font-variant-numeric: tabular-nums;
+}
+/* 车辆型号：自编号下方小字，过长省略 */
+.plan-model {
+  font-size: 19rpx;
+  color: rgba(var(--ac-rgb), 0.85);
+  margin-top: 2rpx;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 /* 空态（该方向无班次 / 加载中）：图标 + 文字双行居中 */
 .plan-empty {

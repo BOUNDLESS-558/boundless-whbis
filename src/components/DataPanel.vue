@@ -172,7 +172,7 @@
 
 <script>
 import { copyTable } from '../utils/clipboard.js'
-import { formatBusNo } from '../utils/busNumber.js'
+import { formatBusNo, getBusModel, onBusNumberReady } from '../utils/busNumber.js'
 import { APP_CONFIG } from '../config.js'
 import { assetUrl } from '../utils/asset.js'
 import { SPEED_BANDS, speedBandOf } from '../utils/cityBus.js'
@@ -229,6 +229,7 @@ export default {
       all: [],          // API：当前页；静态：全部
       localAll: [],     // 静态兜底的全量行
       apiMode: false,
+      mapVersion: 0,   // 自编号映射就绪版本号，驱动 fmtNo/busModel 重渲染
       stamp: '',
       speedLimit: 60,
       loading: false,
@@ -326,9 +327,14 @@ export default {
     page() { if (this.apiMode) this.load() },
     pageSize() { this.page = 1; if (this.apiMode) this.load() },
   },
-  mounted() { this.load() },
+  mounted() {
+    this.load()
+    // 自编号映射加载完成后刷新车型显示（映射表懒加载，首次可能晚于面板挂载）
+    onBusNumberReady(() => { this.mapVersion++ })
+  },
   methods: {
-    fmtNo(v) { return formatBusNo(v) },
+    fmtNo(v) { void this.mapVersion; return formatBusNo(v) },
+    busModel(v) { void this.mapVersion; return getBusModel(v) },
     shortCompany(c) {
       const s = String(c || '')
       if (s.includes('蔡城')) return '蔡城'
@@ -351,6 +357,8 @@ export default {
       const out = []
       const record = this.recordText(r)
       if (record && record !== '—') out.push({ k: '记录时间', v: record })
+      const model = this.busModel(r.orgId)
+      if (model) out.push({ k: '车辆型号', v: model })
       out.push({ k: '超速次数', v: `${r.speedCount} 次` })
       const t = this.tierOf(r)
       out.push({ k: '超速评价', v: `${t.emoji} ${t.label}`, color: t.color })
@@ -481,12 +489,12 @@ export default {
     exportRows(r) {
       return [
         r.company || '', r.lineNo || (r.lines || [])[0] || '', this.fmtNo(r.orgId),
-        this.recordText(r), String(r.maxSpeed),
+        this.busModel(r.orgId) || '', this.recordText(r), String(r.maxSpeed),
         String(r.speedCount), this.transferText(r).replace(/\n/g, '; '),
       ]
     },
     async onCopy() {
-      const columns = ['所属营运公司', '营运线路号', '自编号', '记录时间', '最高车速', '超速次数', '车辆调配记录']
+      const columns = ['所属营运公司', '营运线路号', '自编号', '车辆型号', '记录时间', '最高车速', '超速次数', '车辆调配记录']
       let list = []
       if (this.apiMode) {
         const q = this.queryParams({ all: '1' })
