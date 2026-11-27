@@ -223,6 +223,7 @@ const workers = Array.from({ length: Math.min(CONCURRENCY, jobs.length) }, async
       rec.departures++
       rec.samples++
       rec.lineNo = j.no
+      rec.dir = Number(j.dir) // 营运方向：0 上行 / 1 下行（取最后一次采到的方向）
       if (!rec.lines.includes(j.no)) {
         if (rec.lines.length) rec.transfers.push({ from: rec.lines[rec.lines.length - 1], to: j.no, at: AT })
         rec.lines.push(j.no)
@@ -269,6 +270,7 @@ for (const [orgId, rec] of Object.entries(slice)) {
     departures: 0, transfers: [], company: rec.company, lines: [], samples: 0,
   })
   prev.lineNo = rec.lineNo || prev.lineNo
+  if (rec.dir === 0 || rec.dir === 1) prev.dir = rec.dir
   if (rec.maxSpeed > prev.maxSpeed) prev.maxSpeed = rec.maxSpeed
   prev.speedCount += rec.speedCount
   if (rec.onlineAt < prev.onlineAt) prev.onlineAt = rec.onlineAt
