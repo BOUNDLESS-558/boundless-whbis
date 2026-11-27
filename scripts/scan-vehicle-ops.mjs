@@ -115,6 +115,27 @@ async function detailData(lineId) {
   return await res.json()
 }
 
+// 待发计划：/detailPlanTime 返回 data 数组，附明文 orgBusId，可确定「车辆 → 线路」配属
+async function detailPlanTime(lineId) {
+  const res = await fetch(BASE + '/detailPlanTime', {
+    method: 'POST',
+    headers: HEADERS,
+    body: JSON.stringify({ ...COMMON, lineId }),
+    signal: AbortSignal.timeout(TIMEOUT),
+  })
+  return await res.json()
+}
+
+// 车辆配属：orgId -> { orgId, lineNo, company, source:'online'|'plan', planTime }
+// 在超速判定（及低速过滤）之前先确定每车正确的营运公司与配属线路；在线营运状态优先于待发计划。
+const affil = {}
+function setAffil(orgId, lineNo, source, extra = {}) {
+  if (!orgId) return
+  const cur = affil[orgId]
+  if (cur && cur.source === 'online' && source !== 'online') return
+  affil[orgId] = { orgId, lineNo, company: companyOf(orgId), source, at: AT, ...extra }
+}
+
 function plainOf(b) {
   return dict.get(String(b.busId || b.busNo || '').toLowerCase()) || ''
 }
@@ -158,10 +179,22 @@ const workers = Array.from({ length: Math.min(CONCURRENCY, jobs.length) }, async
     const list = (payload.data && payload.data.lineBusDtoList) || []
     ok++
     if (!busesByLine[j.no]) busesByLine[j.no] = []
+    // ① 待发计划：拿明文 orgBusId → 配属线路（失败不影响在线采集）
+    try {
+      const pl = await detailPlanTime(lineId)
+      if (pl && pl.success === true && Array.isArray(pl.data)) {
+        for (const it of pl.data) {
+          const oid = String(it.orgBusId || it.orgBusNo || '') || dict.get(String(it.busId || '').toLowerCase()) || ''
+          if (oid) setAffil(oid, j.no, 'plan', { planTime: String(it.planTime || it.planStartTime || '') })
+        }
+      }
+    } catch (e) { /* 计划接口偶发失败忽略 */ }
     for (const b of list) {
       const plain = plainOf(b)
       const orgId = plain || String(b.busNo || b.busId || '')
       if (!orgId) continue
+      // ② 在线营运状态：先确定营运公司与配属线路（在超速判定与低速过滤之前，所有在线车都登记）
+      if (plain) setAffil(plain, j.no, 'online')
       const speed = numSpeed(b)
       // 低速过滤：低于 MIN_SPEED 的车辆不记录（停运/怠速/GPS 漂移等无效数据）
       if (speed < MIN_SPEED) continue
@@ -201,7 +234,7 @@ const workers = Array.from({ length: Math.min(CONCURRENCY, jobs.length) }, async
 })
 await Promise.all(workers)
 
-console.log(`采集完成：成功 ${ok} / 失败 ${fail} / 车辆样本 ${busCount}`)
+console.log(`采集完成：成功 ${ok} / 失败 ${fail} / 车辆样本 ${busCount} / 配属登记 ${Object.keys(affil).length} 辆（在线 ${Object.values(affil).filter((a) => a.source === 'online').length}）`)
 
 if (DRY) {
   console.log('--dry：未写文件')
@@ -275,7 +308,7 @@ if (OPS_API && OPS_TOKEN) {
     const res = await fetch(OPS_API, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'x-api-key': OPS_TOKEN },
-      body: JSON.stringify({ at: AT, buses: Object.values(slice) }),
+      body: JSON.stringify({ at: AT, buses: Object.values(slice), affiliations: Object.values(affil) }),
       signal: AbortSignal.timeout(30000),
     })
     const j = await res.json()

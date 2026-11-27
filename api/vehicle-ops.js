@@ -346,14 +346,33 @@ export default async function handler(req, res) {
       }
       const body = typeof req.body === 'string' ? JSON.parse(req.body || '{}') : (req.body || {})
       const buses = Array.isArray(body.buses) ? body.buses : []
-      if (!buses.length) return res.status(200).json({ ok: true, upserted: 0 })
+      const affs = Array.isArray(body.affiliations) ? body.affiliations : []
       const { date, recordedAt } = parseAt(body.at)
+      // 配属登记：在线营运状态 / 待发计划确定的 公司 + 配属线路，只更新累计表的 line_no/company，
+      // 不计超速/发车，不进按日表（避免按日视图混入低速/待发车辆）
+      let affiliated = 0
+      if (affs.length) {
+        const rows = affs.filter((a) => a && a.orgId).map((a) => ({
+          org_id: String(a.orgId), line_no: String(a.lineNo || ''), company: String(a.company || ''),
+        }))
+        if (rows.length) {
+          await sql.query(`INSERT INTO vehicle_ops (org_id, line_no, company, online_at, offline_at, updated_at)
+            SELECT b.org_id, b.line_no, b.company, $2, $2, now()
+            FROM jsonb_to_recordset($1::jsonb) AS b(org_id TEXT, line_no TEXT, company TEXT)
+            ON CONFLICT (org_id) DO UPDATE SET
+              line_no = COALESCE(NULLIF(EXCLUDED.line_no, ''), vehicle_ops.line_no),
+              company = COALESCE(NULLIF(EXCLUDED.company, ''), vehicle_ops.company),
+              updated_at = now()`, [JSON.stringify(rows), `${date} ${recordedAt}`])
+          affiliated = rows.length
+        }
+      }
+      if (!buses.length) return res.status(200).json({ ok: true, upserted: 0, affiliated })
       // 回填历史快照时只写按日表，避免把历史数据重复累加进累计表 vehicle_ops
       const dailyOnly = body.dailyOnly === true
 
       // 整轮 2 条批量 SQL，替代旧的逐车 2N 条串行写入
       const upserted = await upsertBuses(sql, buses, { date, recordedAt, dailyOnly })
-      return res.status(200).json({ ok: true, upserted })
+      return res.status(200).json({ ok: true, upserted, affiliated })
     }
 
     return res.status(405).json({ error: 'method not allowed' })
